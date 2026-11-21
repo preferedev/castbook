@@ -92,3 +92,15 @@ def test_failed_unit_retried(tmp_path) -> None:
     backend.calls.clear()
     run(book, Settings(), backend=backend, log=lambda _: None)
     assert backend.calls == ["line 1"]
+
+
+def test_emotion_changes_effective_voice() -> None:
+    from castbook.artifacts import VoiceSpec
+    from castbook.tts import _unit_voice
+
+    v = VoiceSpec(backend="k", voice="v", speed=1.0)
+    assert _unit_voice(v, "neutral").speed == 1.0
+    assert _unit_voice(v, "excited").speed == 1.15
+    assert _unit_voice(v, "sad").speed == 0.9
+    out = _unit_voice(v, "whisper")
+    assert out.speed == 0.85 and out.voice == "v"

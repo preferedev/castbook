@@ -41,8 +41,13 @@ def cast_book(
     return cast.run(book, cfg, overrides, log)
 
 
-def generate_book(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> Path:
-    out = tts.run(book, cfg, log)
+def generate_book(
+    book: BookPaths,
+    cfg: Settings,
+    chapters: set[int] | None = None,
+    log: Callable[[str], None] = print,
+) -> Path:
+    out = tts.run(book, cfg, log, chapters=chapters)
     audio.assemble_chapters(book, cfg, log)
     return out
 
@@ -55,6 +60,6 @@ def run_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) -> Bo
     book = import_book(src, cfg, log)
     analyze_book(book, cfg, log)
     cast_book(book, cfg, log=log)
-    generate_book(book, cfg, log)
+    generate_book(book, cfg, log=log)
     export_book(book, cfg, log)
     return book

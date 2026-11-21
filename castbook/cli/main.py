@@ -28,6 +28,16 @@ def _cfg(config: Path | None) -> Settings:
     return Settings.load(config)
 
 
+def _chapter_range(spec: str | None) -> set[int] | None:
+    if not spec:
+        return None
+    out: set[int] = set()
+    for part in spec.split(","):
+        lo, _, hi = part.partition("-")
+        out.update(range(int(lo), int(hi) + 1) if hi else [int(lo)])
+    return out
+
+
 def _book(cfg: Settings, book: str) -> BookPaths:
     return BookPaths(cfg.data_dir, book)
 
@@ -76,10 +86,11 @@ def cast(
 def generate(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    chapters: Annotated[str | None, typer.Option("--chapters")] = None,
 ) -> None:
-    """Synthesize all units and assemble chapter audio (resumable)."""
+    """Synthesize units and assemble chapter audio (resumable)."""
     cfg = _cfg(config)
-    generate_book(_book(cfg, book), cfg)
+    generate_book(_book(cfg, book), cfg, _chapter_range(chapters))
 
 
 @app.command()

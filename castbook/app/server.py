@@ -136,7 +136,7 @@ def create_app(cfg: Settings) -> FastAPI:
     def generate(book_id: str) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         log = _log_to(book.dir / "job.log")
-        _spawn(f"generate:{book_id}", lambda: generate_book(book, cfg, log))
+        _spawn(f"generate:{book_id}", lambda: generate_book(book, cfg, log=log))
         return {"ok": True}
 
     @app.get("/api/books/{book_id}/progress")

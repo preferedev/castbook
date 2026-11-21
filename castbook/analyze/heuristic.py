@@ -141,7 +141,6 @@ class HeuristicAttributor:
         return units
 
     def _speaker_for(self, text: str, names: dict[str, str]) -> str | None:
-        lowered = text.lower()
         if not quoted_spans(text):
             return None
         for m in TAG_AFTER.finditer(text):
@@ -157,7 +156,11 @@ class HeuristicAttributor:
             if len(raw) <= 3:
                 continue
             pat = re.escape(raw)
-            if re.search(rf"\b({SAID_VERBS})\s+(?!to\b|with\b|for\b|of\b)(?:the\s+)?{pat}", residual, re.IGNORECASE):
+            if re.search(
+                rf"\b({SAID_VERBS})\s+(?!to\b|with\b|for\b|of\b)(?:the\s+)?{pat}",
+                residual,
+                re.IGNORECASE,
+            ):
                 return cid
             if re.search(rf"\b{pat}\s+\w*\s*({SAID_VERBS})", residual, re.IGNORECASE):
                 return cid

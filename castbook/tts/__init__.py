@@ -15,6 +15,7 @@ from ..artifacts import (
     AudioManifest,
     CastingFile,
     UnitStatus,
+    VoiceSpec,
     load_artifact,
     save_artifact,
     text_hash,
@@ -36,11 +37,29 @@ def make_backend(cfg: Settings) -> Backend:
     return KokoroBackend(model, voices)
 
 
+EMOTION_SPEED = {
+    "excited": 1.15,
+    "happy": 1.05,
+    "angry": 1.10,
+    "fearful": 0.95,
+    "sad": 0.90,
+    "whisper": 0.85,
+}
+
+
+def _unit_voice(voice: VoiceSpec, emotion: str) -> VoiceSpec:
+    factor = EMOTION_SPEED.get(emotion, 1.0)
+    if factor == 1.0:
+        return voice
+    return voice.model_copy(update={"speed": max(0.7, min(1.4, voice.speed * factor))})
+
+
 def run(
     book: BookPaths,
     cfg: Settings,
     log: Callable[[str], None] = print,
     backend: Backend | None = None,
+    chapters: set[int] | None = None,
 ) -> Path:
     attribution = load_artifact(AttributionFile, book.dir)
     casting = load_artifact(CastingFile, book.dir)
@@ -52,10 +71,11 @@ def run(
     if manifest is None or manifest.input_hash != attribution.input_hash:
         manifest = AudioManifest(book_id=book.book_id, input_hash=attribution.input_hash)
 
-    total = len(attribution.units)
+    units = [u for u in attribution.units if chapters is None or u.chapter in chapters]
+    total = len(units)
     rendered = skipped = failed = 0
-    for i, unit in enumerate(attribution.units):
-        voice = casting.map.get(unit.speaker) or casting.map["narrator"]
+    for i, unit in enumerate(units):
+        voice = _unit_voice(casting.map.get(unit.speaker) or casting.map["narrator"], unit.emotion)
         unit_hash = text_hash(unit.text + voice.model_dump_json())
         existing = manifest.units.get(unit.id)
         wav = book.unit_wav(unit.id)

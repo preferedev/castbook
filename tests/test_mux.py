@@ -25,7 +25,16 @@ def test_m4b_has_chapters_and_metadata(tmp_path) -> None:
     mux_m4b([w1, w2], ["One", "Two"], BookMeta(title="T", author="A"), out, workdir)
 
     probe = subprocess.run(
-        ["ffprobe", "-v", "error", "-print_format", "json", "-show_chapters", "-show_format", str(out)],
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-print_format",
+            "json",
+            "-show_chapters",
+            "-show_format",
+            str(out),
+        ],
         capture_output=True,
         text=True,
         check=True,
