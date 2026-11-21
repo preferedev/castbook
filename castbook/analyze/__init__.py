@@ -11,6 +11,7 @@ from ..artifacts import (
     AttributionFile,
     CastFile,
     ChaptersFile,
+    Unit,
     load_artifact,
     save_artifact,
 )
@@ -53,12 +54,29 @@ def run(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> P
     save_artifact(CastFile(book_id=book.book_id, characters=cast, input_hash=input_hash), book.dir)
     log(f"[analyze] {len(cast)} characters")
 
-    all_units = []
+    prior = load_artifact(AttributionFile, book.dir)
+    done_chapters: dict[int, list[Unit]] = {}
+    if prior is not None and prior.input_hash == input_hash:
+        for u in prior.units:
+            done_chapters.setdefault(u.chapter, []).append(u)
+        if done_chapters:
+            log(f"[analyze] resuming: {len(done_chapters)} chapters already attributed")
+
+    all_units: list[Unit] = []
     for i, ch in enumerate(chapters_file.chapters):
-        units = attributor.attribute(ch, cast)
+        units = done_chapters.get(i) or attributor.attribute(ch, cast)
         all_units.extend(units)
-        if (i + 1) % 5 == 0 or i == len(chapters_file.chapters) - 1:
-            log(f"[analyze] attributed {i + 1}/{len(chapters_file.chapters)} chapters")
+        if i not in done_chapters and (i + 1) % 5 == 0:
+            save_artifact(
+                AttributionFile(
+                    book_id=book.book_id,
+                    attributor=attributor.name,
+                    units=all_units,
+                    input_hash=input_hash,
+                ),
+                book.dir,
+            )
+            log(f"[analyze] attributed {i + 1}/{len(chapters_file.chapters)} chapters (checkpoint)")
 
     new_names: set[str] = set()
     for u in all_units:
