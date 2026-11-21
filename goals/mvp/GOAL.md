@@ -56,3 +56,14 @@ eval harness — verified end to end.
 ## Time budget
 
 Session-length; phases advance on verified exit criteria, not elapsed time.
+
+## Verified results (2026-11-22)
+
+- e2e `castbook run` on Pride & Prejudice EPUB: 67 chapters, 2,247 units,
+  0 failed → `books/pp/export/pride-and-prejudice.m4b` (491 MB, 10.7 h,
+  ffprobe: 67 chapters, aac + attached cover).
+- 15 distinct voices across 24 speakers (`castbook stats pp`).
+- `pytest`: 31 tests green; `ruff check` + `mypy` strict clean.
+- Eval report: `eval/report.md` — heuristic 81% (Alice) / 50% (P&P excerpt).
+- Resume verified: per-unit TTS hash + per-chapter analyze checkpoints.
+- LLM path verified with real Qwen3-4B Q4_K_M GGUF (llama.cpp).
