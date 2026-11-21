@@ -22,7 +22,7 @@ SAID_VERBS = (
 )
 _NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:(?:de|van|von|of|the|al|bin)\s+)?[A-Z][a-z]+){0,2}"
 _NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+"
-NAME = rf"(?-i:({_NAME_TITLED}|{_NAME_PLAIN}))"
+NAME = rf"(?-i:((?:the\s+)?(?:{_NAME_TITLED}|{_NAME_PLAIN})))"
 
 TAG_AFTER = re.compile(rf"[”\"']\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
 NAME_SAYS = re.compile(rf"{NAME}\s+({SAID_VERBS})", re.IGNORECASE)
@@ -152,8 +152,14 @@ class HeuristicAttributor:
             hit = _lookup(m.group(1), names)
             if hit:
                 return hit
+        residual = quoted_free(text)
         for raw, cid in names.items():
-            if f" {raw.lower()}" in lowered and len(raw) > 3:
+            if len(raw) <= 3:
+                continue
+            pat = re.escape(raw)
+            if re.search(rf"\b({SAID_VERBS})\s+(?!to\b|with\b|for\b|of\b)(?:the\s+)?{pat}", residual, re.IGNORECASE):
+                return cid
+            if re.search(rf"\b{pat}\s+\w*\s*({SAID_VERBS})", residual, re.IGNORECASE):
                 return cid
         return None
 
@@ -213,6 +219,14 @@ def _gender_of(raw: str) -> str:
             return g
     first = re.sub(r"^[^a-z]+", "", low).split()[0] if low.split() else ""
     return FIRST_NAME_GENDER.get(first, "unknown")
+
+
+def quoted_free(text: str) -> str:
+    """Text with quoted spans blanked — the zone where speech tags live."""
+    out = text
+    for span in quoted_spans(text):
+        out = out.replace(span, " ", 1)
+    return out
 
 
 def canonical(name: str) -> str:
