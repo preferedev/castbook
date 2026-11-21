@@ -20,9 +20,9 @@ SAID_VERBS = (
     "called|laughed|sighed|smiled|frowned|nodded|interrupted|promised|urged|"
     "wondered|thought|told|spoke|went on|put in|burst out"
 )
-_NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:de|van|von|of|the)?\s*[A-Z]?[a-z]*){0,3}"
+_NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:(?:de|van|von|of|the|al|bin)\s+)?[A-Z][a-z]+){0,2}"
 _NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+"
-NAME = rf"({_NAME_PLAIN}|{_NAME_TITLED})"
+NAME = rf"(?-i:({_NAME_PLAIN}|{_NAME_TITLED}))"
 
 TAG_AFTER = re.compile(rf"[”\"']\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
 NAME_SAYS = re.compile(rf"{NAME}\s+({SAID_VERBS})", re.IGNORECASE)
@@ -72,6 +72,28 @@ STOP_NAMES = {
     "Good",
     "Come",
     "Pray",
+    "Everybody",
+    "Somebody",
+    "Nobody",
+    "Anyone",
+    "Someone",
+    "Everyone",
+    "Many",
+    "Most",
+    "Some",
+    "All",
+    "None",
+    "One",
+    "Two",
+    "Several",
+    "Mr",
+    "Mrs",
+    "Miss",
+    "Dr",
+    "Lady",
+    "Lord",
+    "Sir",
+    "Captain",
 }
 
 
