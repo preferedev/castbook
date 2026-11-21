@@ -81,8 +81,9 @@ def main() -> int:
     lines += ["", "## Misses", ""]
     for r in results:
         for m in r["misses"]:  # type: ignore[attr-defined]
+            miss = m["unit"], m["expected"], m["got"], m["text"]
             lines.append(
-                f"- **{r['name']}** `{m['unit']}` expected `{m['expected']}` got `{m['got']}` — {m['text']!r}"
+                f"- **{r['name']}** `{miss[0]}` expected `{miss[1]}` got `{miss[2]}` — {miss[3]!r}"
             )
     REPORT.write_text("\n".join(lines) + "\n")
     print(REPORT.read_text())
