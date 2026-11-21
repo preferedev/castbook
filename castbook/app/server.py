@@ -9,8 +9,9 @@ from __future__ import annotations
 import shutil
 import tempfile
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
@@ -36,7 +37,7 @@ _jobs: dict[str, threading.Thread] = {}
 _jobs_lock = threading.Lock()
 
 
-def _log_to(path: Path):
+def _log_to(path: Path) -> Callable[[str], None]:
     lock = threading.Lock()
 
     def log(msg: str) -> None:
@@ -46,7 +47,7 @@ def _log_to(path: Path):
     return log
 
 
-def _spawn(key: str, target) -> None:
+def _spawn(key: str, target: Callable[[], object]) -> None:
     with _jobs_lock:
         if key in _jobs and _jobs[key].is_alive():
             raise HTTPException(409, f"{key} already running")
@@ -63,12 +64,12 @@ def create_app(cfg: Settings) -> FastAPI:
         return (STATIC / "index.html").read_text()
 
     @app.get("/api/voices")
-    def voices() -> list[dict]:
+    def voices() -> list[dict[str, Any]]:
         return [v.model_dump() for v in LIBRARY]
 
     @app.get("/api/books")
-    def books() -> list[dict]:
-        out = []
+    def books() -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
         if not cfg.data_dir.exists():
             return out
         for d in sorted(cfg.data_dir.iterdir()):
@@ -81,7 +82,7 @@ def create_app(cfg: Settings) -> FastAPI:
         return out
 
     @app.post("/api/import")
-    def upload(file: Annotated[UploadFile, File()]) -> dict:
+    def upload(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
         suffix = Path(file.filename or "").suffix.lower()
         if suffix not in (".epub", ".txt", ".md"):
             raise HTTPException(400, f"unsupported format {suffix}")
@@ -98,7 +99,7 @@ def create_app(cfg: Settings) -> FastAPI:
         return {"book_id": book.book_id}
 
     @app.get("/api/books/{book_id}")
-    def book_detail(book_id: str) -> dict:
+    def book_detail(book_id: str) -> dict[str, Any]:
         d = cfg.data_dir / book_id
         if not d.is_dir():
             raise HTTPException(404, "unknown book")
@@ -114,13 +115,13 @@ def create_app(cfg: Settings) -> FastAPI:
         }
 
     @app.post("/api/books/{book_id}/cast")
-    def set_cast(book_id: str, overrides: dict[str, str]) -> dict:
+    def set_cast(book_id: str, overrides: dict[str, str]) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         cast_book(book, cfg, overrides=overrides)
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/analyze")
-    def analyze(book_id: str) -> dict:
+    def analyze(book_id: str) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         log = _log_to(book.dir / "job.log")
 
@@ -132,14 +133,14 @@ def create_app(cfg: Settings) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/generate")
-    def generate(book_id: str) -> dict:
+    def generate(book_id: str) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         log = _log_to(book.dir / "job.log")
         _spawn(f"generate:{book_id}", lambda: generate_book(book, cfg, log))
         return {"ok": True}
 
     @app.get("/api/books/{book_id}/progress")
-    def progress(book_id: str) -> dict:
+    def progress(book_id: str) -> dict[str, Any]:
         d = cfg.data_dir / book_id
         manifest = load_artifact(AudioManifest, d)
         attrib = load_artifact(AttributionFile, d)
@@ -159,7 +160,7 @@ def create_app(cfg: Settings) -> FastAPI:
         }
 
     @app.post("/api/books/{book_id}/export")
-    def export(book_id: str) -> dict:
+    def export(book_id: str) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         outs = export_book(book, cfg)
         files = [p.name if p.is_file() else f"{p.name}/" for p in outs]
@@ -182,7 +183,7 @@ def _require_book(cfg: Settings, book_id: str) -> BookPaths:
     return book
 
 
-def _status(d: Path, ch: ChaptersFile) -> dict:
+def _status(d: Path, ch: ChaptersFile) -> dict[str, Any]:
     manifest = load_artifact(AudioManifest, d)
     done = sum(1 for c in manifest.chapters.values() if c.status.value == "done") if manifest else 0
     stages = [

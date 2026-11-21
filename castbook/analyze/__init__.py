@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from ..artifacts import (
@@ -20,7 +21,7 @@ from .heuristic import HeuristicAttributor
 from .reconcile import reconcile_cast, speaker_id
 
 
-def make_attributor(cfg: Settings, log=print) -> Attributor:
+def make_attributor(cfg: Settings, log: Callable[[str], None] = print) -> Attributor:
     if cfg.llm.backend == "heuristic":
         return HeuristicAttributor()
     if cfg.llm.backend == "llamacpp":
@@ -39,7 +40,7 @@ def make_attributor(cfg: Settings, log=print) -> Attributor:
     raise ValueError(f"unknown llm backend {cfg.llm.backend!r}")
 
 
-def run(book: BookPaths, cfg: Settings, log=print) -> Path:
+def run(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> Path:
     chapters_file = load_artifact(ChaptersFile, book.dir)
     if chapters_file is None:
         raise FileNotFoundError(f"{book.dir}/chapters.json — run `castbook import` first")

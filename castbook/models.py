@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import httpx
@@ -66,7 +67,9 @@ def resolve_model(models_dir: Path, spec_id: str) -> Path | None:
     return path if path.exists() else None
 
 
-def pull(models_dir: Path, ids: list[str] | None = None, log=print) -> list[Path]:
+def pull(
+    models_dir: Path, ids: list[str] | None = None, log: Callable[[str], None] = print
+) -> list[Path]:
     models_dir.mkdir(parents=True, exist_ok=True)
     specs = [s for s in MANIFEST if ids is None or s.id in ids]
     missing = [i for i in (ids or []) if find(i) is None]

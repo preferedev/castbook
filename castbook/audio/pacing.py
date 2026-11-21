@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 
 import numpy as np
+import numpy.typing as npt
 import soundfile as sf
 
 from ..artifacts import Unit
@@ -21,7 +22,7 @@ PAUSE_SCENE = 0.8
 SCENE_BREAK = re.compile(r"(\*\s*){3,}|—\s*—\s*—|⁂")
 
 
-def silence(seconds: float) -> np.ndarray:
+def silence(seconds: float) -> npt.NDArray[np.float32]:
     return np.zeros(int(seconds * SAMPLE_RATE), dtype=np.float32)
 
 
@@ -31,8 +32,8 @@ def pause_after(prev: Unit, nxt: Unit) -> float:
     return PAUSE_SPEAKER if prev.speaker != nxt.speaker else PAUSE_SAME
 
 
-def assemble(units: list[Unit], wav_for: dict[str, Path]) -> np.ndarray:
-    parts: list[np.ndarray] = []
+def assemble(units: list[Unit], wav_for: dict[str, Path]) -> npt.NDArray[np.float32]:
+    parts: list[npt.NDArray[np.float32]] = []
     prev: Unit | None = None
     for u in units:
         wav = wav_for.get(u.id)

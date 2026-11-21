@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 
 from ..artifacts import Character, VoiceSpec
-from .library import DEFAULT_AMBIGUOUS, DEFAULT_NARRATOR, pool
+from .library import DEFAULT_AMBIGUOUS, DEFAULT_NARRATOR, VoiceEntry, pool
 
 
 def auto_cast(characters: list[Character], book_id: str) -> dict[str, VoiceSpec]:
@@ -32,7 +32,7 @@ def _role_rank(role: str) -> int:
     return {"protagonist": 0, "major": 1, "minor": 2, "one_off": 3}.get(role, 4)
 
 
-def _pick(choices, used, key: str):
+def _pick(choices: list[VoiceEntry], used: set[str], key: str) -> VoiceEntry:
     free = [v for v in choices if v.id not in used] or choices
     idx = _seed(key) % len(free)
     return free[idx]

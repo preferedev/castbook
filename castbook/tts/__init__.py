@@ -6,6 +6,7 @@ VoiceSpec) differs from the manifest entry, or its wav is missing.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from ..artifacts import (
@@ -35,7 +36,7 @@ def make_backend(cfg: Settings) -> Backend:
     return KokoroBackend(model, voices)
 
 
-def run(book: BookPaths, cfg: Settings, log=print) -> Path:
+def run(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> Path:
     attribution = load_artifact(AttributionFile, book.dir)
     casting = load_artifact(CastingFile, book.dir)
     if attribution is None or casting is None:

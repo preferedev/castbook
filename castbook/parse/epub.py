@@ -35,13 +35,13 @@ def _meta(book: el_epub.EpubBook, path: Path, cover_dir: Path | None) -> BookMet
         cover_dir.mkdir(parents=True, exist_ok=True)
         for item in book.get_items_of_type(ebooklib.ITEM_COVER):
             cover_path = f"cover{Path(item.get_name()).suffix or '.jpg'}"
-            (cover_dir / cover_path).write_bytes(item.get_content())
+            _write_cover(cover_dir / cover_path, item.get_content())
             break
         if cover_path is None:
             for item in book.get_items_of_type(ebooklib.ITEM_IMAGE):
                 if "cover" in item.get_name().lower():
                     cover_path = f"cover{Path(item.get_name()).suffix or '.jpg'}"
-                    (cover_dir / cover_path).write_bytes(item.get_content())
+                    _write_cover(cover_dir / cover_path, item.get_content())
                     break
 
     return BookMeta(
@@ -51,6 +51,10 @@ def _meta(book: el_epub.EpubBook, path: Path, cover_dir: Path | None) -> BookMet
         source_file=path.name,
         cover_path=cover_path,
     )
+
+
+def _write_cover(dest: Path, content: str | bytes) -> None:
+    dest.write_bytes(content.encode() if isinstance(content, str) else content)
 
 
 def _item_text(item: object) -> str:
@@ -104,7 +108,9 @@ def _toc_map(book: el_epub.EpubBook) -> dict[str, str]:
     def walk(entries: list[object]) -> None:
         for e in entries:
             if isinstance(e, tuple) and len(e) == 2:
-                walk(list(e[1]))  # type: ignore[arg-type]
+                children = e[1]
+                if isinstance(children, (list, tuple)):
+                    walk(list(children))
                 continue
             href = getattr(e, "href", "") or ""
             title = getattr(e, "title", "") or ""

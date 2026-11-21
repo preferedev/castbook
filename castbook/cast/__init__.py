@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from ..artifacts import CastFile, CastingFile, load_artifact, save_artifact
@@ -10,7 +11,12 @@ from ..workdir import BookPaths
 from .match import auto_cast
 
 
-def run(book: BookPaths, cfg: Settings, overrides: dict[str, str] | None = None, log=print) -> Path:
+def run(
+    book: BookPaths,
+    cfg: Settings,
+    overrides: dict[str, str] | None = None,
+    log: Callable[[str], None] = print,
+) -> Path:
     cast_file = load_artifact(CastFile, book.dir)
     if cast_file is None:
         raise FileNotFoundError(f"{book.dir}/cast.json — run `castbook analyze` first")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import soundfile as sf
@@ -12,6 +13,7 @@ from ..artifacts import (
     ChapterAudio,
     ChaptersFile,
     ChapterStatus,
+    Unit,
     UnitStatus,
     load_artifact,
     save_artifact,
@@ -24,14 +26,14 @@ from .loudnorm import loudnorm
 from .mux import export_mp3, mux_m4b
 
 
-def assemble_chapters(book: BookPaths, cfg: Settings, log=print) -> Path:
+def assemble_chapters(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> Path:
     attribution = load_artifact(AttributionFile, book.dir)
     manifest = load_artifact(AudioManifest, book.dir)
     chapters = load_artifact(ChaptersFile, book.dir)
     if attribution is None or manifest is None or chapters is None:
         raise FileNotFoundError(f"{book.dir} — run earlier stages first")
 
-    by_chapter: dict[int, list] = {}
+    by_chapter: dict[int, list[Unit]] = {}
     for u in attribution.units:
         by_chapter.setdefault(u.chapter, []).append(u)
 
@@ -69,7 +71,7 @@ def assemble_chapters(book: BookPaths, cfg: Settings, log=print) -> Path:
     return book.dir / "manifest.json"
 
 
-def export(book: BookPaths, cfg: Settings, log=print) -> list[Path]:
+def export(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> list[Path]:
     manifest = load_artifact(AudioManifest, book.dir)
     chapters = load_artifact(ChaptersFile, book.dir)
     if manifest is None or chapters is None:

@@ -9,8 +9,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from typing import cast as tcast
 
-from ..artifacts import Chapter, Character, Unit
+from ..artifacts import Chapter, Character, Emotion, Unit
 from ..config import LlmSettings
 from . import prompts
 from .heuristic import slugify
@@ -36,7 +37,7 @@ class LlamaCppAttributor:
         self.name = f"llamacpp:{model_path.stem}"
 
     def _chat(self, prompt: str, max_tokens: int) -> dict[str, Any]:
-        out = self._llm.create_chat_completion(
+        out: Any = self._llm.create_chat_completion(
             messages=[
                 {"role": "system", "content": "/no_think"},
                 {"role": "user", "content": prompt},
@@ -46,7 +47,7 @@ class LlamaCppAttributor:
             max_tokens=max_tokens,
         )
         text = out["choices"][0]["message"]["content"] or "{}"
-        return json.loads(_first_json(text))
+        return tcast(dict[str, Any], json.loads(_first_json(text)))
 
     def extract_cast(self, chapters: list[Chapter]) -> list[Character]:
         excerpts = []
@@ -101,7 +102,7 @@ class LlamaCppAttributor:
                 if u.speaker not in ("narrator", "ambiguous"):
                     u.kind = "dialogue"
                 emotion = str(tag.get("emotion", "neutral")).lower()
-                u.emotion = emotion if emotion in _EMOTIONS else "neutral"
+                u.emotion = tcast(Emotion, emotion if emotion in _EMOTIONS else "neutral")
         return units
 
 

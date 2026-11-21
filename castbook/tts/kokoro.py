@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import numpy as np
+import numpy.typing as npt
 import soundfile as sf
 
 from ..artifacts import VoiceSpec
@@ -24,7 +25,7 @@ class KokoroBackend(Backend):
         return Capabilities(streaming=True, languages=["en"])
 
     def synthesize(self, text: str, voice: VoiceSpec, out_wav: Path) -> float:
-        samples: list[np.ndarray] = []
+        samples: list[npt.NDArray[np.float32]] = []
         for piece in _split(text):
             audio, _ = self._kokoro.create(piece, voice=voice.voice, speed=voice.speed)
             samples.append(np.asarray(audio, dtype=np.float32))

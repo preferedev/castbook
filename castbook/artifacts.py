@@ -14,7 +14,7 @@ from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel, Field
 
-SCHEMA = 1
+SCHEMA: Literal[1] = 1
 
 RESERVED_NARRATOR = "narrator"
 RESERVED_AMBIGUOUS = "ambiguous"

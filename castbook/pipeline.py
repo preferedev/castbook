@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from . import analyze, audio, cast, parse, tts
@@ -10,7 +11,7 @@ from .config import Settings
 from .workdir import BookPaths, book_id_from
 
 
-def import_book(src: Path, cfg: Settings, log=print) -> BookPaths:
+def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) -> BookPaths:
     book = BookPaths(cfg.data_dir, book_id_from(src)).ensure()
     src = book.import_source(src)
     meta, chapters = parse.parse(src, cover_dir=book.source)
@@ -27,25 +28,30 @@ def import_book(src: Path, cfg: Settings, log=print) -> BookPaths:
     return book
 
 
-def analyze_book(book: BookPaths, cfg: Settings, log=print) -> Path:
+def analyze_book(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> Path:
     return analyze.run(book, cfg, log)
 
 
-def cast_book(book: BookPaths, cfg: Settings, overrides=None, log=print) -> Path:
+def cast_book(
+    book: BookPaths,
+    cfg: Settings,
+    overrides: dict[str, str] | None = None,
+    log: Callable[[str], None] = print,
+) -> Path:
     return cast.run(book, cfg, overrides, log)
 
 
-def generate_book(book: BookPaths, cfg: Settings, log=print) -> Path:
+def generate_book(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> Path:
     out = tts.run(book, cfg, log)
     audio.assemble_chapters(book, cfg, log)
     return out
 
 
-def export_book(book: BookPaths, cfg: Settings, log=print) -> list[Path]:
+def export_book(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> list[Path]:
     return audio.export(book, cfg, log)
 
 
-def run_book(src: Path, cfg: Settings, log=print) -> BookPaths:
+def run_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) -> BookPaths:
     book = import_book(src, cfg, log)
     analyze_book(book, cfg, log)
     cast_book(book, cfg, log=log)
