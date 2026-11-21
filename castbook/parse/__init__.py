@@ -5,12 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..artifacts import BookMeta, Chapter
-from . import epub, txt
+from . import epub, pdf, txt
 
 PARSERS = {
     ".epub": epub.parse,
     ".txt": txt.parse,
     ".md": txt.parse,
+    ".pdf": pdf.parse,
 }
 
 
