@@ -14,7 +14,7 @@ from .library import DEFAULT_AMBIGUOUS, DEFAULT_NARRATOR, VoiceEntry, pool
 
 def auto_cast(characters: list[Character], book_id: str) -> dict[str, VoiceSpec]:
     order = sorted(characters, key=lambda c: (_role_rank(c.role), c.name))
-    used: set[str] = set()
+    used: set[str] = {DEFAULT_NARRATOR, DEFAULT_AMBIGUOUS}
     out: dict[str, VoiceSpec] = {}
     for c in order:
         choices = pool(c.gender, c.age)
@@ -33,7 +33,11 @@ def _role_rank(role: str) -> int:
 
 
 def _pick(choices: list[VoiceEntry], used: set[str], key: str) -> VoiceEntry:
-    free = [v for v in choices if v.id not in used] or choices
+    free = [v for v in choices if v.id not in used]
+    if not free:
+        free = [v for v in choices if v.id not in {DEFAULT_NARRATOR, DEFAULT_AMBIGUOUS}]
+    if not free:
+        free = choices
     idx = _seed(key) % len(free)
     return free[idx]
 

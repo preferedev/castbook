@@ -119,6 +119,7 @@ class HeuristicAttributor:
                     id=slugify(canon),
                     name=canon,
                     aliases=[name] if name != canon else [],
+                    gender=_gender_of(name),
                     role="major" if n >= 10 else "minor",
                 )
             )
@@ -155,6 +156,32 @@ class HeuristicAttributor:
             if f" {raw.lower()}" in lowered and len(raw) > 3:
                 return cid
         return None
+
+
+TITLE_GENDER = {
+    "mrs.": "f", "miss": "f", "lady": "f",
+    "mr.": "m", "lord": "m", "sir": "m", "captain": "m", "dr.": "m",
+}
+FIRST_NAME_GENDER = {
+    "elizabeth": "f", "jane": "f", "lydia": "f", "kitty": "f", "mary": "f",
+    "maria": "f", "charlotte": "f", "catherine": "f", "emma": "f",
+    "anne": "f", "caroline": "f", "georgiana": "f", "harriet": "f",
+    "isabella": "f", "louisa": "f", "margaret": "f", "eleanor": "f",
+    "marianne": "f", "fanny": "f", "julia": "f", "susan": "f",
+    "john": "m", "charles": "m", "george": "m", "edward": "m",
+    "william": "m", "henry": "m", "james": "m", "robert": "m",
+    "frederick": "m", "frank": "m", "edmund": "m", "philip": "m",
+    "colonel": "m",
+}
+
+
+def _gender_of(raw: str) -> str:
+    low = raw.lower().strip(",.;:!?")
+    for prefix, g in TITLE_GENDER.items():
+        if low.startswith(prefix + " "):
+            return g
+    first = re.sub(r"^[^a-z]+", "", low).split()[0] if low.split() else ""
+    return FIRST_NAME_GENDER.get(first, "unknown")
 
 
 def canonical(name: str) -> str:
