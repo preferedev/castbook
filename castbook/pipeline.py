@@ -57,10 +57,15 @@ def export_book(book: BookPaths, cfg: Settings, log: Callable[[str], None] = pri
     return audio.export(book, cfg, log)
 
 
-def run_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) -> BookPaths:
+def run_book(
+    src: Path,
+    cfg: Settings,
+    log: Callable[[str], None] = print,
+    speed: float = 1.0,
+) -> BookPaths:
     book = import_book(src, cfg, log)
     analyze_book(book, cfg, log)
     cast_book(book, cfg, log=log)
-    generate_book(book, cfg, log=log)
+    generate_book(book, cfg, log=log, speed=speed)
     export_book(book, cfg, log)
     return book

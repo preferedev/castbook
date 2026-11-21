@@ -33,6 +33,13 @@ un-rendered units are synthesized.
 | `castbook models list\|pull` | model management |
 | `castbook serve -p 8484` | local web UI |
 
+## Docker
+
+```bash
+docker build -t castbook .
+docker run -v $PWD/data:/data castbook doctor
+```
+
 ## Web UI
 
 `castbook serve` then open `http://localhost:8484`: import a file, audition voices

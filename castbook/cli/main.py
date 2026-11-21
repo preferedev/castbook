@@ -26,6 +26,23 @@ from ..pipeline import (
 from ..workdir import BookPaths
 
 app = typer.Typer(help="Turn an ebook into a full-cast audiobook.", no_args_is_help=True)
+
+
+def _version(value: bool) -> None:
+    if value:
+        from .. import __version__
+
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: Annotated[bool, typer.Option("--version", callback=_version, is_eager=True)] = False,
+) -> None:
+    pass
+
+
 models_app = typer.Typer(help="Download and list model weights.")
 app.add_typer(models_app, name="models")
 
@@ -206,10 +223,11 @@ def doctor(
 def run_cmd(
     file: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    speed: Annotated[float, typer.Option("--speed", min=0.5, max=2.0)] = 1.0,
 ) -> None:
     """Full pipeline: import → analyze → cast → generate → export."""
     cfg = _cfg(config)
-    book = run_book(file, cfg)
+    book = run_book(file, cfg, speed=speed)
     typer.echo(f"done: {book.export}")
 
 
