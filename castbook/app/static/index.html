@@ -110,9 +110,20 @@ async function openBook(id) {
       <td class="muted">${esc(role)}</td>
       <td><select data-speaker="${sp}">${voices.map(v =>
         `<option value="${v.id}" ${v.id === cur ? "selected" : ""}>${v.id} — ${esc(v.description)}</option>`
-      ).join("")}</select></td></tr>`);
+      ).join("")}</select></td>
+      <td><button class="ghost" data-preview="${sp}" type="button">▶</button></td></tr>`);
   }
   $("cast-table").innerHTML = rows.join("");
+  document.querySelectorAll("[data-preview]").forEach(b => b.onclick = async () => {
+    const sel = b.closest("tr").querySelector("select");
+    b.textContent = "…";
+    const r = await fetch("/api/preview", {method:"POST",
+      headers:{"content-type":"application/json"},
+      body: JSON.stringify({voice: sel.value, text: `A line spoken by ${b.dataset.preview}.`})});
+    const blob = await r.blob();
+    new Audio(URL.createObjectURL(blob)).play();
+    b.textContent = "▶";
+  });
   refreshProgress();
 }
 
