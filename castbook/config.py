@@ -64,9 +64,14 @@ class Settings(BaseModel):
     @classmethod
     def load(cls, path: Path | None = None) -> Settings:
         path = path or Path(os.environ.get("CASTBOOK_CONFIG", "config.toml"))
+        overrides: dict[str, object] = {}
+        if d := os.environ.get("CASTBOOK_DATA_DIR"):
+            overrides["data_dir"] = d
+        if d := os.environ.get("CASTBOOK_MODELS_DIR"):
+            overrides["models_dir"] = d
         if path.exists():
-            return cls.model_validate(tomllib.loads(path.read_text()))
-        return cls()
+            return cls.model_validate({**tomllib.loads(path.read_text()), **overrides})
+        return cls.model_validate(overrides)
 
     def save_default(self, path: Path) -> Path:
         path.write_text(DEFAULT_CONFIG)
