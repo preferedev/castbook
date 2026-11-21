@@ -20,7 +20,7 @@ MANIFEST: list[ModelSpec] = [
         id="qwen3-4b-q4",
         kind="llm",
         url=(
-            "https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507-GGUF/resolve/main/"
+            "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/"
             "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
         ),
         filename="Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
