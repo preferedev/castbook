@@ -186,6 +186,41 @@ def create_app(cfg: Settings) -> FastAPI:
             save_artifact(manifest, book.dir)
         return {"ok": True, "fixed": fixed}
 
+    @app.get("/api/books/{book_id}/units")
+    def units(book_id: str) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        attrib = load_artifact(AttributionFile, book.dir)
+        if attrib is None:
+            raise HTTPException(404, "run analyze first")
+        manifest = load_artifact(AudioManifest, book.dir)
+        done = manifest.units if manifest else {}
+        return {
+            "units": [
+                {
+                    "id": u.id,
+                    "chapter": u.chapter,
+                    "text": u.text,
+                    "speaker": u.speaker,
+                    "has_audio": done.get(u.id) is not None
+                    and done[u.id].status == UnitStatus.done,
+                }
+                for u in attrib.units
+            ]
+        }
+
+    @app.get("/api/books/{book_id}/audio/{unit_id}")
+    def unit_audio(book_id: str, unit_id: str) -> FileResponse:
+        book = _require_book(cfg, book_id)
+        wav = book.unit_wav(unit_id)
+        if not wav.exists():
+            raise HTTPException(404, "not rendered")
+        return FileResponse(wav, media_type="audio/wav")
+
+    @app.get("/reader/{book_id}", response_class=HTMLResponse)
+    def reader(book_id: str) -> HTMLResponse:
+        page = STATIC / "reader.html"
+        return HTMLResponse(page.read_text().replace("__BOOK_ID__", book_id))
+
     @app.get("/api/books/{book_id}/progress")
     def progress(book_id: str) -> dict[str, Any]:
         d = cfg.data_dir / book_id
