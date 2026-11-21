@@ -177,6 +177,29 @@ def voices(
         typer.echo(f"{v.id:16} {v.gender or '?':3} {v.description}")
 
 
+@app.command()
+def doctor(
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Check the environment: ffmpeg, models, data dir."""
+    import shutil
+
+    cfg = _cfg(config)
+    ok = True
+    for name, found in [
+        ("ffmpeg", shutil.which("ffmpeg")),
+        ("ffprobe", shutil.which("ffprobe")),
+        ("data dir", cfg.data_dir.is_dir() and str(cfg.data_dir)),
+    ]:
+        status = "ok" if found else "MISSING"
+        ok &= bool(found)
+        typer.echo(f"{name:12} {status}")
+    for m in models_mod.MANIFEST:
+        present = (cfg.models_dir / m.filename).exists()
+        typer.echo(f"{m.id:22} {'ok' if present else 'not downloaded'}")
+    raise typer.Exit(0 if ok else 1)
+
+
 @app.command("run")
 def run_cmd(
     file: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
