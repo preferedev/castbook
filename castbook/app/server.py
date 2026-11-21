@@ -23,11 +23,14 @@ from ..artifacts import (
     CastingFile,
     ChaptersFile,
     UnitStatus,
+    VoiceSpec,
     load_artifact,
+    save_artifact,
 )
 from ..cast.library import LIBRARY
 from ..config import Settings
 from ..pipeline import analyze_book, cast_book, export_book, generate_book, import_book
+from ..tts.backend import Backend
 from ..workdir import BookPaths
 
 STATIC = Path(__file__).parent / "static"
@@ -139,6 +142,50 @@ def create_app(cfg: Settings) -> FastAPI:
         _spawn(f"generate:{book_id}", lambda: generate_book(book, cfg, log=log))
         return {"ok": True}
 
+    @app.post("/api/preview")
+    def preview(spec: dict[str, Any]) -> FileResponse:
+        voice = str(spec.get("voice", "af_sarah"))
+        text = str(spec.get("text") or "A quick preview of this voice.")
+        out = cfg.data_dir / ".previews" / f"{voice}-{abs(hash(text))}.wav"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        if not out.exists():
+            backend = _preview_backend(cfg)
+            backend.synthesize(text[:300], VoiceSpec(backend="kokoro", voice=voice), out)
+        return FileResponse(out, media_type="audio/wav")
+
+    @app.get("/api/books/{book_id}/review")
+    def review(book_id: str) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        attrib = load_artifact(AttributionFile, book.dir)
+        if attrib is None:
+            raise HTTPException(404, "run analyze first")
+        return {
+            "units": [
+                {"id": u.id, "chapter": u.chapter, "text": u.text[:300]}
+                for u in attrib.units
+                if u.speaker == "ambiguous"
+            ]
+        }
+
+    @app.post("/api/books/{book_id}/speakers")
+    def set_speakers(book_id: str, fixes: dict[str, str]) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        attrib = load_artifact(AttributionFile, book.dir)
+        if attrib is None:
+            raise HTTPException(404, "run analyze first")
+        fixed = 0
+        for u in attrib.units:
+            if u.id in fixes:
+                u.speaker = fixes[u.id]
+                fixed += 1
+        save_artifact(attrib, book.dir)
+        manifest = load_artifact(AudioManifest, book.dir)
+        if manifest is not None:
+            for uid in fixes:
+                manifest.units.pop(uid, None)
+            save_artifact(manifest, book.dir)
+        return {"ok": True, "fixed": fixed}
+
     @app.get("/api/books/{book_id}/progress")
     def progress(book_id: str) -> dict[str, Any]:
         d = cfg.data_dir / book_id
@@ -174,6 +221,20 @@ def create_app(cfg: Settings) -> FastAPI:
         return FileResponse(path, filename=path.name)
 
     return app
+
+
+_backend: Backend | None = None
+_backend_lock = threading.Lock()
+
+
+def _preview_backend(cfg: Settings) -> Backend:
+    global _backend
+    with _backend_lock:
+        if _backend is None:
+            from ..tts import make_backend
+
+            _backend = make_backend(cfg)
+        return _backend
 
 
 def _require_book(cfg: Settings, book_id: str) -> BookPaths:
