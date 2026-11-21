@@ -152,6 +152,31 @@ def review(
         typer.echo(f"  {u.id}  ch{u.chapter}  {u.text[:80]!r}")
 
 
+@app.command()
+def voices(
+    play: Annotated[str | None, typer.Option("--play", help="synthesize a sample")] = None,
+    text: Annotated[str, typer.Option("--text")] = "A quick preview of this voice.",
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """List the voice library; --play writes a sample WAV for a voice id."""
+    from ..cast.library import LIBRARY
+
+    cfg = _cfg(config)
+    if play:
+        from ..artifacts import VoiceSpec
+        from ..tts import make_backend
+
+        if play not in {v.id for v in LIBRARY}:
+            raise typer.BadParameter(f"unknown voice {play!r}")
+        out = cfg.data_dir / "previews" / f"{play}.wav"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        make_backend(cfg).synthesize(text, VoiceSpec(backend="kokoro", voice=play), out)
+        typer.echo(str(out))
+        return
+    for v in LIBRARY:
+        typer.echo(f"{v.id:16} {v.gender or '?':3} {v.description}")
+
+
 @app.command("run")
 def run_cmd(
     file: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
