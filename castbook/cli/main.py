@@ -93,10 +93,11 @@ def generate(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     chapters: Annotated[str | None, typer.Option("--chapters")] = None,
+    speed: Annotated[float, typer.Option("--speed", min=0.5, max=2.0)] = 1.0,
 ) -> None:
     """Synthesize units and assemble chapter audio (resumable)."""
     cfg = _cfg(config)
-    generate_book(_book(cfg, book), cfg, _chapter_range(chapters))
+    generate_book(_book(cfg, book), cfg, _chapter_range(chapters), speed=speed)
 
 
 @app.command()
