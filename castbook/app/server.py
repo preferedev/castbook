@@ -178,6 +178,7 @@ def create_app(cfg: Settings) -> FastAPI:
             if u.id in fixes:
                 u.speaker = fixes[u.id]
                 fixed += 1
+        attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous"]
         save_artifact(attrib, book.dir)
         manifest = load_artifact(AudioManifest, book.dir)
         if manifest is not None:

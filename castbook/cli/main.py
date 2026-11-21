@@ -138,6 +138,7 @@ def review(
             if u.id in fixes:
                 u.speaker = fixes[u.id]
                 fixed += 1
+        attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous"]
         save_artifact(attrib, b.dir)
         manifest = load_artifact(AudioManifest, b.dir)
         if manifest is not None:
