@@ -11,6 +11,8 @@ from .. import models as models_mod
 from ..artifacts import (
     AttributionFile,
     AudioManifest,
+    CastingFile,
+    ChaptersFile,
     load_artifact,
     save_artifact,
 )
@@ -217,6 +219,34 @@ def doctor(
         present = (cfg.models_dir / m.filename).exists()
         typer.echo(f"{m.id:22} {'ok' if present else 'not downloaded'}")
     raise typer.Exit(0 if ok else 1)
+
+
+@app.command()
+def stats(
+    book: str,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Print book metrics: words, units, voices, rendered audio time."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    chapters = load_artifact(ChaptersFile, b.dir)
+    attrib = load_artifact(AttributionFile, b.dir)
+    casting = load_artifact(CastingFile, b.dir)
+    manifest = load_artifact(AudioManifest, b.dir)
+    if chapters:
+        typer.echo(f"chapters:  {len(chapters.chapters)}")
+        typer.echo(f"words:     {sum(c.word_count for c in chapters.chapters):,}")
+    if attrib:
+        ambiguous = sum(1 for u in attrib.units if u.speaker == "ambiguous")
+        typer.echo(f"units:     {len(attrib.units):,} ({ambiguous} ambiguous)")
+    if casting:
+        voices = {v.voice for v in casting.map.values()}
+        typer.echo(f"speakers:  {len(casting.map)} on {len(voices)} voices")
+    if manifest:
+        done = [e for e in manifest.units.values() if e.status == "done"]
+        typer.echo(
+            f"rendered:  {len(done):,} units, {sum(e.duration_s for e in done) / 3600:.1f} h"
+        )
 
 
 @app.command("run")
