@@ -14,6 +14,5 @@ models/
 castbook.toml
 config.toml
 
-# eval artifacts that are large or generated
-eval/report.md
+# eval workdir artifacts
 eval/work/
