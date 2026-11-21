@@ -3,7 +3,7 @@
 Turn any ebook into a full-cast audiobook — every character gets a consistent
 voice, a narrator reads the rest. Free, open-source, local-first.
 
-EPUB and TXT in, chaptered M4B out. Python CLI plus a minimal local web UI.
+EPUB, PDF and TXT in, chaptered M4B out. Python CLI plus a minimal local web UI.
 
 ## Quickstart
 
@@ -22,11 +22,12 @@ un-rendered units are synthesized.
 
 | command | what it does |
 |---|---|
-| `castbook import <file>` | parse EPUB/TXT into `chapters.json` |
+| `castbook import <file>` | parse EPUB/PDF/TXT into `chapters.json` |
 | `castbook analyze <book>` | attribute every line to a speaker (LLM or heuristic fallback) |
 | `castbook cast <book>` | auto-assign voices; `--map name=voice` to override |
-| `castbook generate <book>` | synthesize audio (resumable) |
+| `castbook generate <book>` | synthesize audio (resumable; `--chapters 1-3,7` for partial) |
 | `castbook export <book>` | mux chaptered M4B (+ `--format mp3`) |
+| `castbook review <book>` | list ambiguous units; `--set unit=speaker` to fix |
 | `castbook run <file>` | all of the above |
 | `castbook books` | list imported books |
 | `castbook models list\|pull` | model management |
@@ -34,7 +35,8 @@ un-rendered units are synthesized.
 
 ## Web UI
 
-`castbook serve` then open `http://localhost:8484`: import a file, review and
+`castbook serve` then open `http://localhost:8484`: import a file, audition voices
+with the ▶ button, review and
 override voice casting, generate, download the M4B.
 
 ## Attribution
