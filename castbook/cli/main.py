@@ -8,6 +8,12 @@ from typing import Annotated
 import typer
 
 from .. import models as models_mod
+from ..artifacts import (
+    AttributionFile,
+    AudioManifest,
+    load_artifact,
+    save_artifact,
+)
 from ..config import Settings
 from ..pipeline import (
     analyze_book,
@@ -103,6 +109,47 @@ def export(
     cfg = _cfg(config)
     cfg.export.format = format
     export_book(_book(cfg, book), cfg)
+
+
+@app.command()
+def review(
+    book: str,
+    set_speaker: Annotated[
+        list[str] | None, typer.Option("--set", help="unit_id=speaker overrides")
+    ] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """List ambiguous units and apply speaker overrides."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    attrib = load_artifact(AttributionFile, b.dir)
+    if attrib is None:
+        typer.echo("run `castbook analyze` first")
+        raise typer.Exit(1)
+    fixes = {}
+    for spec in set_speaker or []:
+        uid, _, speaker = spec.partition("=")
+        if not speaker:
+            raise typer.BadParameter("--set takes unit_id=speaker")
+        fixes[uid] = speaker
+    if fixes:
+        fixed = 0
+        for u in attrib.units:
+            if u.id in fixes:
+                u.speaker = fixes[u.id]
+                fixed += 1
+        save_artifact(attrib, b.dir)
+        manifest = load_artifact(AudioManifest, b.dir)
+        if manifest is not None:
+            for uid in fixes:
+                manifest.units.pop(uid, None)
+            save_artifact(manifest, b.dir)
+        typer.echo(f"fixed {fixed} units (re-run `castbook generate` to render them)")
+        return
+    ambiguous = [u for u in attrib.units if u.speaker == "ambiguous"]
+    typer.echo(f"{len(ambiguous)} ambiguous units")
+    for u in ambiguous[:50]:
+        typer.echo(f"  {u.id}  ch{u.chapter}  {u.text[:80]!r}")
 
 
 @app.command("run")
