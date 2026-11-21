@@ -94,6 +94,7 @@ async function loadBooks() {
       </div>
       <div class="row" style="margin-top:.5rem">
         <button class="ghost" onclick="openBook('${b.book_id}')">Open</button>
+        <a class="ghost" href="/reader/${b.book_id}">Read</a>
         ${b.exports.map(f => `<a href="/api/books/${b.book_id}/download/${f}">${esc(f)}</a>`).join("")}
       </div>
     </section>`).join("");

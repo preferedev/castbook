@@ -55,6 +55,23 @@ def _unit_voice(voice: VoiceSpec, emotion: str) -> VoiceSpec:
     return voice.model_copy(update={"speed": max(0.7, min(1.4, voice.speed * factor))})
 
 
+def _load_lexicon(book: BookPaths) -> dict[str, str]:
+    f = book.dir / "lexicon.json"
+    if f.exists():
+        import json
+
+        return {str(k): str(v) for k, v in json.load(f.open()).items()}
+    return {}
+
+
+def _apply_lexicon(text: str, lex: dict[str, str]) -> str:
+    import re
+
+    for word, repl in lex.items():
+        text = re.sub(rf"\b{re.escape(word)}\b", repl, text)
+    return text
+
+
 def run(
     book: BookPaths,
     cfg: Settings,
@@ -68,6 +85,7 @@ def run(
         raise FileNotFoundError(f"{book.dir} — run `castbook analyze` and `castbook cast` first")
 
     backend = backend or make_backend(cfg)
+    lexicon = _load_lexicon(book)
     manifest = load_artifact(AudioManifest, book.dir)
     if manifest is None or manifest.input_hash != attribution.input_hash:
         manifest = AudioManifest(book_id=book.book_id, input_hash=attribution.input_hash)
@@ -77,7 +95,8 @@ def run(
     rendered = skipped = failed = 0
     for i, unit in enumerate(units):
         voice = _unit_voice(casting.map.get(unit.speaker) or casting.map["narrator"], unit.emotion)
-        unit_hash = text_hash(unit.text + voice.model_dump_json())
+        text = _apply_lexicon(unit.text, lexicon)
+        unit_hash = text_hash(text + voice.model_dump_json())
         existing = manifest.units.get(unit.id)
         wav = book.unit_wav(unit.id)
         if (
@@ -89,7 +108,7 @@ def run(
             skipped += 1
             continue
         try:
-            duration = backend.synthesize(unit.text, voice, wav)
+            duration = backend.synthesize(text, voice, wav)
             manifest.units[unit.id] = AudioEntry(
                 path=wav.name,
                 duration_s=round(duration, 3),
