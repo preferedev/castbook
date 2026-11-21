@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# runtime artifacts
+books/
+models/
+castbook.toml
+config.toml
+
+# eval artifacts that are large or generated
+eval/report.md
+eval/work/
