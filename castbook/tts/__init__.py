@@ -36,13 +36,18 @@ def make_backend(cfg: Settings) -> Backend:
     return KokoroBackend(model, voices)
 
 
-def run(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> Path:
+def run(
+    book: BookPaths,
+    cfg: Settings,
+    log: Callable[[str], None] = print,
+    backend: Backend | None = None,
+) -> Path:
     attribution = load_artifact(AttributionFile, book.dir)
     casting = load_artifact(CastingFile, book.dir)
     if attribution is None or casting is None:
         raise FileNotFoundError(f"{book.dir} — run `castbook analyze` and `castbook cast` first")
 
-    backend = make_backend(cfg)
+    backend = backend or make_backend(cfg)
     manifest = load_artifact(AudioManifest, book.dir)
     if manifest is None or manifest.input_hash != attribution.input_hash:
         manifest = AudioManifest(book_id=book.book_id, input_hash=attribution.input_hash)

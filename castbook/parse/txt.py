@@ -18,7 +18,7 @@ HEADING = re.compile(
     r"#{1,6}\s+\S"  # markdown heading
     r"|(?:chapter|part|book|prologue|epilogue|act|scene|section)\b[^\n]{0,60}"  # worded
     r"|[IVXLC]{1,10}\.?\s*$"  # bare roman numeral
-    r"|[A-Z][A-Z '\u2019\-]{4,60}$"  # short ALL-CAPS line
+    r"|(?-i:[A-Z][A-Z '\u2019\-]{4,60}$)"  # short ALL-CAPS line (case-sensitive)
     r")",
     re.IGNORECASE,
 )
