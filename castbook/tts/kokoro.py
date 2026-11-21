@@ -33,7 +33,7 @@ class KokoroBackend(Backend):
             raise ValueError("kokoro produced no audio")
         data = np.concatenate(samples)
         out_wav.parent.mkdir(parents=True, exist_ok=True)
-        tmp = out_wav.with_suffix(".wav.tmp")
+        tmp = out_wav.with_name(out_wav.stem + ".tmp.wav")
         sf.write(str(tmp), data, SAMPLE_RATE)
         tmp.replace(out_wav)
         return len(data) / SAMPLE_RATE
