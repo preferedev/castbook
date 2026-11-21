@@ -48,8 +48,8 @@ EMOTION_SPEED = {
 }
 
 
-def _unit_voice(voice: VoiceSpec, emotion: str) -> VoiceSpec:
-    factor = EMOTION_SPEED.get(emotion, 1.0)
+def _unit_voice(voice: VoiceSpec, emotion: str, speed: float = 1.0) -> VoiceSpec:
+    factor = EMOTION_SPEED.get(emotion, 1.0) * speed
     if factor == 1.0:
         return voice
     return voice.model_copy(update={"speed": max(0.7, min(1.4, voice.speed * factor))})
@@ -96,10 +96,7 @@ def run(
     rendered = skipped = failed = 0
     for i, unit in enumerate(units):
         base = casting.map.get(unit.speaker) or casting.map["narrator"]
-        factor = EMOTION_SPEED.get(unit.emotion, 1.0) * speed
-        voice = base
-        if factor != 1.0:
-            voice = base.model_copy(update={"speed": max(0.7, min(1.4, base.speed * factor))})
+        voice = _unit_voice(base, unit.emotion, speed)
         text = _apply_lexicon(unit.text, lexicon)
         unit_hash = text_hash(text + voice.model_dump_json())
         existing = manifest.units.get(unit.id)
