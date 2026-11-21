@@ -12,6 +12,7 @@ uv venv && uv pip install -e '.[dev]'
 castbook models pull kokoro-v1 kokoro-voices-v1   # ~350 MB, required
 castbook models pull qwen3-4b-q4                  # ~2.5 GB, optional — better attribution
 castbook run book.epub          # parse → analyze → cast → generate → export
+castbook run examples/lighthouse.txt   # or try the bundled sample
 ```
 
 Output lands in `books/<book-id>/export/`. Stages resume where they left off;
