@@ -11,7 +11,7 @@ titles used for them, gender ("m","f","nb","unknown"), rough age, role
 ("protagonist","major","minor","one_off"), and a one-line voice/vibe note
 (e.g. "warm middle-aged female, measured, gentle").
 
-Return ONLY JSON: {"characters": [{"name","aliases","gender","age","role","vibe"}]}
+Return ONLY JSON: {{"characters": [{{"name","aliases","gender","age","role","vibe"}}]}}
 
 EXCERPTS:
 {excerpts}
@@ -30,7 +30,7 @@ For each numbered passage, decide who should speak it:
 Optionally add an emotion from: neutral, angry, sad, joyful, fearful,
 whispered, shouted, sarcastic.
 
-Return ONLY JSON: {"units": [{"i": <number>, "speaker": "...", "emotion": "neutral"}]}
+Return ONLY JSON: {{"units": [{{"i": <number>, "speaker": "...", "emotion": "neutral"}}]}}
 
 PASSAGES:
 {passages}

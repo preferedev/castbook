@@ -38,12 +38,13 @@ def make_backend(cfg: Settings) -> Backend:
 
 
 EMOTION_SPEED = {
-    "excited": 1.15,
-    "happy": 1.05,
+    "joyful": 1.05,
     "angry": 1.10,
+    "shouted": 1.15,
+    "sarcastic": 1.02,
     "fearful": 0.95,
     "sad": 0.90,
-    "whisper": 0.85,
+    "whispered": 0.85,
 }
 
 

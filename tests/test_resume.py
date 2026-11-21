@@ -100,7 +100,7 @@ def test_emotion_changes_effective_voice() -> None:
 
     v = VoiceSpec(backend="k", voice="v", speed=1.0)
     assert _unit_voice(v, "neutral").speed == 1.0
-    assert _unit_voice(v, "excited").speed == 1.15
+    assert _unit_voice(v, "shouted").speed == 1.15
     assert _unit_voice(v, "sad").speed == 0.9
-    out = _unit_voice(v, "whisper")
+    out = _unit_voice(v, "whispered")
     assert out.speed == 0.85 and out.voice == "v"
