@@ -63,6 +63,13 @@
   <div class="muted" id="prog-label" style="margin:.25rem 0"></div>
   <pre id="log" style="display:none"></pre>
   <div id="downloads" class="row" style="margin-top:.5rem"></div>
+
+  <details id="review-details" style="margin-top:1rem">
+    <summary class="muted">Ambiguous units <b id="review-count"></b> — assign a speaker</summary>
+    <table><tbody id="review-table"></tbody></table>
+    <button id="save-review" class="ghost">Save speakers</button>
+    <span class="muted" id="review-status"></span>
+  </details>
 </section>
 
 <script>
@@ -98,6 +105,7 @@ async function openBook(id) {
   $("cast-section").style.display = "";
   $("cast-title").textContent = id;
   $("cast-meta").textContent = `${d.units} units · ${d.needs_review.length} need review`;
+  loadReview(id);
   const rows = [];
   const speakers = new Set(Object.keys(d.casting));
   for (const c of d.characters) speakers.add(c.id);
