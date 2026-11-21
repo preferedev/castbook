@@ -22,7 +22,7 @@ SAID_VERBS = (
 )
 _NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:(?:de|van|von|of|the|al|bin)\s+)?[A-Z][a-z]+){0,2}"
 _NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+"
-NAME = rf"(?-i:({_NAME_PLAIN}|{_NAME_TITLED}))"
+NAME = rf"(?-i:({_NAME_TITLED}|{_NAME_PLAIN}))"
 
 TAG_AFTER = re.compile(rf"[”\"']\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
 NAME_SAYS = re.compile(rf"{NAME}\s+({SAID_VERBS})", re.IGNORECASE)
