@@ -178,7 +178,7 @@ $("import").onclick = async () => {
     form.append("file", f);
     $("import-status").textContent = `importing ${f.name}…`;
     try { await api("/api/import", {method: "POST", body: form}); }
-    catch (e) { $("import-status").textContent = e.message; return; }
+    catch (e) { $("import-status").textContent = e.message; loadBooks(); return; }
   }
   $("import-status").textContent = "imported";
   $("file").value = "";
