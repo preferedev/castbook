@@ -381,7 +381,7 @@ def create_app(cfg: Settings) -> FastAPI:
         if not out.exists():
             backend = _preview_backend(cfg)
             backend.synthesize(
-                text[:300], VoiceSpec(backend="kokoro", voice=voice, speed=speed), out
+                text[:300], VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed), out
             )
         return FileResponse(out, media_type="audio/wav")
 
