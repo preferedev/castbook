@@ -268,6 +268,14 @@ def create_app(cfg: Settings) -> FastAPI:
         )
         return {"ok": True, "popped": removed}
 
+    @app.get("/api/books/{book_id}/audio/{chapter}")
+    def chapter_audio(book_id: str, chapter: int) -> FileResponse:
+        book = _require_book(cfg, book_id)
+        wav = book.dir / "audio" / f"ch{chapter:03d}.wav"
+        if not wav.exists():
+            raise HTTPException(404, "chapter not rendered")
+        return FileResponse(wav, media_type="audio/wav")
+
     @app.post("/api/preview")
     def preview(spec: dict[str, Any]) -> FileResponse:
         voice = str(spec.get("voice", "af_sarah"))
