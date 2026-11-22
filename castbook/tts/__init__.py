@@ -6,6 +6,7 @@ VoiceSpec) differs from the manifest entry, or its wav is missing.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -87,6 +88,7 @@ def run(
     speed: float = 1.0,
     limit: int | None = None,
     workers: int = 1,
+    dry_run: bool = False,
 ) -> Path:
     attribution = load_artifact(AttributionFile, book.dir)
     casting = load_artifact(CastingFile, book.dir)
@@ -98,7 +100,6 @@ def run(
     manifest = load_artifact(AudioManifest, book.dir)
     if manifest is None or manifest.input_hash != attribution.input_hash:
         manifest = AudioManifest(book_id=book.book_id, input_hash=attribution.input_hash)
-
     units = [u for u in attribution.units if chapters is None or u.chapter in chapters]
     if limit is not None:
         if limit < 1:
@@ -108,7 +109,7 @@ def run(
         raise ValueError(f"workers must be >= 1, got {workers}")
     if injected_backend:
         workers = 1  # injected backend instances are not thread-shared
-    if workers <= 1 and backend is None:
+    if not dry_run and workers <= 1 and backend is None:
         backend = make_backend(cfg)
     total = len(units)
     rendered = skipped = failed = done_i = 0
@@ -138,6 +139,13 @@ def run(
             skipped += 1
         else:
             pending.append(unit)
+
+    if dry_run:
+        log(f"[tts] {total} units: {len(pending)} pending, {skipped} cached")
+        return book.dir / "manifest.json"
+    if pending:
+        manifest.started_at = time.time()
+        save_artifact(manifest, book.dir)
 
     if workers > 1 and pending:
         import os
@@ -171,6 +179,7 @@ def run(
                         duration_s=round(dur, 3),
                         status=UnitStatus.done,
                         unit_hash=uh,
+                        done_at=time.time(),
                     )
                     rendered += 1
                 except Exception as e:
@@ -200,6 +209,7 @@ def run(
                     duration_s=round(dur, 3),
                     status=UnitStatus.done,
                     unit_hash=uh,
+                    done_at=time.time(),
                 )
                 rendered += 1
             except Exception as e:

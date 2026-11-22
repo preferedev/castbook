@@ -59,9 +59,19 @@ def generate_book(
     speed: float = 1.0,
     limit: int | None = None,
     workers: int = 1,
+    dry_run: bool = False,
 ) -> Path:
-    out = tts.run(book, cfg, log, chapters=chapters, speed=speed, limit=limit, workers=workers)
-    if limit is None:
+    out = tts.run(
+        book,
+        cfg,
+        log,
+        chapters=chapters,
+        speed=speed,
+        limit=limit,
+        workers=workers,
+        dry_run=dry_run,
+    )
+    if limit is None and not dry_run:
         audio.assemble_chapters(book, cfg, log)
     return out
 

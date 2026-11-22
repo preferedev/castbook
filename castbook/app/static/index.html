@@ -68,6 +68,7 @@
     <button id="play-ch" class="ghost" title="play rendered chapter audio">▶ audio</button>
     <button id="preview-gen" class="ghost">Preview 50</button>
     <button id="export" class="ghost">Export</button>
+    <button id="align" class="ghost" title="word-level karaoke timestamps">Align</button>
   </div>
   <div class="bar" style="margin-top:.75rem"><i id="prog" style="width:0%"></i></div>
   <div class="muted" id="prog-label" style="margin:.25rem 0"></div>
@@ -179,7 +180,12 @@ async function refreshProgress() {
     const p = await api(`/api/books/${current}/progress`);
     const pct = p.total ? Math.round(100 * p.done / p.total) : 0;
     $("prog").style.width = pct + "%";
-    $("prog-label").textContent = `${p.done}/${p.total} units rendered` + (p.failed ? ` · ${p.failed} failed` : "");
+    let eta = "";
+    if (p.busy && p.eta_s != null) {
+      const m = Math.round(p.eta_s / 60);
+      eta = ` · ~${m < 1 ? "<1" : m} min left`;
+    }
+    $("prog-label").textContent = `${p.done}/${p.total} units rendered` + (p.failed ? ` · ${p.failed} failed` : "") + eta;
     if (p.log) { $("log").style.display = ""; $("log").textContent = p.log; }
     if (p.busy) {
       clearTimeout(pollTimer);
@@ -258,6 +264,7 @@ $("play-ch").onclick = () => {
   const ch = m ? +m[0] : 0;
   new Audio(`/api/books/${current}/chapters/${ch}/audio`).play();
 };
+$("align").onclick = () => api(`/api/books/${current}/align`, {method: "POST"}).then(refreshProgress);
 $("preview-gen").onclick = () => api(`/api/books/${current}/generate?limit=50`, {method: "POST"}).then(refreshProgress);
 $("merge-btn").onclick = async () => {
   const src = $("merge-src").value, dst = $("merge-dst").value;
