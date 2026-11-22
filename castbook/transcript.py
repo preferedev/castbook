@@ -5,7 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .artifacts import AttributionFile, AudioManifest, CastFile, load_artifact
+from .artifacts import (
+    AttributionFile,
+    AudioManifest,
+    CastFile,
+    ChapterStatus,
+    UnitStatus,
+    load_artifact,
+)
+from .audio.pacing import pause_after
 from .workdir import BookPaths
 
 
@@ -33,16 +41,22 @@ def write_transcript(book: BookPaths, out_dir: Path, fmt: str = "srt") -> list[P
     out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     for ch_index, units in sorted(by_chapter.items()):
+        ch_audio = manifest.chapters.get(str(ch_index))
+        if ch_audio is not None and ch_audio.status != ChapterStatus.done:
+            continue
         t = 0.0
+        prev = None
         cues: list[tuple[float, float, str, str]] = []
         for u in units:
             entry = manifest.units.get(u.id)
-            dur = entry.duration_s if entry else 0.0
-            if entry is None:
+            if entry is None or entry.status != UnitStatus.done:
                 continue
+            if prev is not None:
+                t += pause_after(prev, u)
             speaker = speakers.get(u.speaker, u.speaker)
-            cues.append((t, t + dur, speaker, u.text))
-            t += dur
+            cues.append((t, t + entry.duration_s, speaker, u.text))
+            t += entry.duration_s
+            prev = u
         if not cues:
             continue
         if fmt == "vtt":
