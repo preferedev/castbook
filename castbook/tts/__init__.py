@@ -145,6 +145,7 @@ def run(
         from concurrent.futures import ThreadPoolExecutor
 
         tls = threading.local()
+        tls.backend = make_backend(cfg)  # fail fast before spawning workers
 
         def render_t(unit: Unit) -> tuple[str, float, str, str, str]:
             if not hasattr(tls, "backend"):
