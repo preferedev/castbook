@@ -38,6 +38,7 @@ MAX_UPLOAD = 200 * 1024 * 1024
 
 _jobs: dict[str, threading.Thread] = {}
 _jobs_lock = threading.Lock()
+_import_lock = threading.Lock()
 
 
 def _log_to(path: Path) -> Callable[[str], None]:
@@ -101,7 +102,8 @@ def create_app(cfg: Settings) -> FastAPI:
                         raise HTTPException(413, "file too large")
                     out.write(chunk)
             try:
-                book = import_book(tmp_path, cfg)
+                with _import_lock:
+                    book = import_book(tmp_path, cfg)
             except ValueError as e:
                 raise HTTPException(422, str(e)) from e
         finally:
