@@ -55,6 +55,21 @@
   <div id="gb-results"></div>
 </details>
 
+<details id="readnow-details">
+  <summary class="muted">Read now — paste text or an article URL, hear it instantly</summary>
+  <div style="margin-top:.5rem">
+    <textarea id="read-text" rows="4" style="width:100%" placeholder="Paste any text here…"></textarea>
+    <div class="row" style="margin-top:.3rem">
+      <input id="read-url" placeholder="…or an article URL" size="34">
+      <select id="read-voice"></select>
+      <label class="muted">speed <input id="read-speed" type="number" value="1.0" min="0.5" max="2" step="0.1" style="width:3.4rem"></label>
+      <button id="read-go">Listen</button>
+      <span class="muted" id="read-status"></span>
+    </div>
+    <audio id="read-player" controls style="display:none;margin-top:.4rem"></audio>
+  </div>
+</details>
+
 <div id="books"></div>
 
 <details id="models-details" style="margin-top:1rem">
@@ -131,7 +146,38 @@ async function api(path, opts) {
   return r.json();
 }
 
-async function loadVoices() { voices = await api("/api/voices"); }
+async function loadVoices() {
+  voices = await api("/api/voices");
+  $("read-voice").innerHTML = voices.map(v => `<option value="${v.id}">${v.id}</option>`).join("");
+}
+
+let readId = null, readIdx = 0, readPoll = null;
+async function readNow() {
+  const text = $("read-text").value.trim(), url = $("read-url").value.trim();
+  if (!text && !url) return;
+  $("read-status").textContent = "synthesizing…";
+  const r = await api("/api/read", {method: "POST", headers: {"content-type": "application/json"},
+    body: JSON.stringify({text, url, voice: $("read-voice").value, speed: +$("read-speed").value || 1})});
+  readId = r.id; readIdx = 0;
+  const a = $("read-player");
+  a.style.display = ""; a.onended = () => { readIdx++; advanceRead(); };
+  if (readPoll) clearInterval(readPoll);
+  readPoll = setInterval(async () => {
+    const s = await api(`/api/read/${readId}/status`);
+    $("read-status").textContent = `${s.done}/${s.total} chunks`;
+    if (s.done >= s.total) clearInterval(readPoll);
+    if (a.paused && !a.src) advanceRead();
+  }, 1500);
+  advanceRead();
+}
+async function advanceRead() {
+  if (readId === null) return;
+  const s = await api(`/api/read/${readId}/status`);
+  if (readIdx >= s.total) return;
+  const a = $("read-player");
+  if (readIdx < s.done) { a.src = tok(`/api/read/${readId}/audio/${readIdx}`); a.play(); }
+  else setTimeout(advanceRead, 1200);
+}
 
 async function loadModels() {
   const models = await api("/api/models");
@@ -500,6 +546,7 @@ async function deleteBook(id) {
   loadBooks();
 }
 
+$("read-go").onclick = readNow;
 loadVoices().then(loadBooks);
 </script>
 </body>
