@@ -34,6 +34,7 @@ def build_catalog(cfg: Settings, base_url: str, token: str | None = None) -> str
                     ".m4b": "audio/mp4",
                     ".mp3": "audio/mpeg",
                     ".zip": "application/zip",
+                    ".epub": "application/epub+zip",
                 }.get(f.suffix.lower())
                 if mime:
                     href = f"{base}/api/books/{bid}/download/{quote(f.name)}{qs}"
