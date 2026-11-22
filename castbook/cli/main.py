@@ -380,6 +380,49 @@ def estimate(
 
 
 @app.command()
+def lexicon(
+    book: Annotated[str | None, typer.Argument()] = None,
+    set_: Annotated[
+        list[str] | None,
+        typer.Option("--set", help="word=pronunciation entries to add/replace"),
+    ] = None,
+    rm: Annotated[list[str] | None, typer.Option("--rm", help="words to remove")] = None,
+    global_: Annotated[
+        bool, typer.Option("--global", "-g", help="edit the global lexicon")
+    ] = False,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Show or edit pronunciation overrides (word → spoken form)."""
+    import json
+
+    cfg = _cfg(config)
+    if global_:
+        cfg.data_dir.mkdir(parents=True, exist_ok=True)
+        lex_path = cfg.data_dir / "lexicon.json"
+    else:
+        if book is None:
+            typer.echo("pass a book id or --global")
+            raise typer.Exit(1)
+        lex_path = _book(cfg, book).dir / "lexicon.json"
+    entries: dict[str, str] = json.loads(lex_path.read_text()) if lex_path.exists() else {}
+    for item in set_ or []:
+        word, sep, pron = item.partition("=")
+        if not sep or not word.strip() or not pron.strip():
+            raise typer.BadParameter("--set needs word=pronunciation")
+        entries[word.strip()] = pron.strip()
+    for word in rm or []:
+        entries.pop(word.strip(), None)
+    if set_ or rm:
+        tmp = lex_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(entries, indent=2, ensure_ascii=False))
+        tmp.replace(lex_path)
+    if not entries:
+        typer.echo("(empty)")
+    for w, p in sorted(entries.items()):
+        typer.echo(f"{w:24} → {p}")
+
+
+@app.command()
 def meta(
     book: str,
     title: Annotated[str | None, typer.Option("--title")] = None,
