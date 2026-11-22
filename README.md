@@ -26,9 +26,12 @@ un-rendered units are synthesized.
 | `castbook import <file>` | parse EPUB/PDF/TXT into `chapters.json` |
 | `castbook analyze <book>` | attribute every line to a speaker (LLM or heuristic fallback) |
 | `castbook cast <book>` | auto-assign voices; `--map name=voice` to override |
-| `castbook generate <book>` | synthesize audio (resumable; `--chapters 1-3,7` for partial) |
-| `castbook export <book>` | mux chaptered M4B (+ `--format mp3`) |
+| `castbook generate <book>` | synthesize audio (resumable; `--chapters 1-3,7`, `--limit 50` preview, `--align` word timestamps) |
+| `castbook export <book>` | mux chaptered M4B (+ `--format mp3`/`both`) |
 | `castbook review <book>` | list ambiguous units; `--set unit=speaker` to fix |
+| `castbook merge <book> <a> <b>` | fold duplicate speaker `a` into `b` |
+| `castbook align <book>` | word-level timestamps for reader karaoke (needs `[align]` extra) |
+| `castbook reset <book>` | wipe a book's artifacts to start over |
 | `castbook run <file>` | all of the above |
 | `castbook books` | list imported books |
 | `castbook models list\|pull` | model management |
@@ -43,9 +46,15 @@ docker run -v $PWD/data:/data castbook doctor
 
 ## Web UI
 
-`castbook serve` then open `http://localhost:8484`: import a file, audition voices
+`castbook serve` then open `http://localhost:8484`: import a file (or drag-and-drop), audition voices
 with the ▶ button, review and
-override voice casting, generate, download the M4B.
+override voice casting, generate (or "Preview 50" for a quick sample), download the M4B.
+The reader view highlights the spoken word when `castbook align` has run, remembers
+your position, and supports space/←/→/↑/↓ shortcuts.
+
+Voice assignments persist across books (`data/voice-memory.json`) — a character
+keeps their voice everywhere they appear. Pronunciation overrides live in
+`data/lexicon.json` (global) and `<book>/lexicon.json` (per-book, wins on conflicts).
 
 ## Attribution
 

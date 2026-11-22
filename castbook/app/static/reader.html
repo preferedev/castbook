@@ -23,6 +23,7 @@
   <button id="prev">⏮</button><button id="play">▶</button><button id="next">⏭</button>
   <span id="pos" style="font-size:.8rem;color:#aaa"></span>
   <select id="spd"><option>1</option><option>1.25</option><option>1.5</option><option>2</option></select>
+  <select id="chap" style="max-width:9rem"></select>
 </div>
 <script>
 const BOOK = "__BOOK_ID__";
@@ -52,6 +53,17 @@ async function boot() {
   };
   const rendered = units.filter(u => u.has_audio).length;
   $("pos").textContent = `${rendered}/${units.length} rendered`;
+  const chs = [...new Set(units.map(u => u.chapter))];
+  $("chap").innerHTML = chs.map(c => `<option value="${c}">ch ${c + 1}</option>`).join("");
+  $("chap").onchange = e => {
+    const i = units.findIndex(u => u.chapter === +e.target.value);
+    if (i >= 0) { $(`u${i}`).scrollIntoView({block: "start"}); if (units[i].has_audio) playAt(i); }
+  };
+  const saved = localStorage.getItem(`castbook-pos-${BOOK}`);
+  if (saved) {
+    const {i, t} = JSON.parse(saved);
+    if (units[i]?.has_audio) { playAt(i); audio.currentTime = t; }
+  }
 }
 
 const nextPlayable = i => units.findIndex((u, j) => j > i && u.has_audio);
@@ -65,6 +77,12 @@ function spanWords(i) {
   el.innerHTML = (who ? who.outerHTML : "") +
     words.map(w => `<span class="w">${esc(w[0])}</span>`).join(" ");
 }
+
+function savePos() {
+  if (cur >= 0) localStorage.setItem(`castbook-pos-${BOOK}`, JSON.stringify({i: cur, t: audio.currentTime}));
+}
+setInterval(savePos, 2000);
+window.addEventListener("beforeunload", savePos);
 
 audio.ontimeupdate = () => {
   const words = cur >= 0 && align[units[cur].id];
@@ -89,6 +107,7 @@ function playAt(i) {
   const el = $(`u${i}`);
   spanWords(i);
   el.classList.add("playing");
+  $("chap").value = String(units[i].chapter);
   el.scrollIntoView({block: "center", behavior: "smooth"});
   audio.src = `/api/books/${BOOK}/audio/${units[i].id}`;
   audio.playbackRate = +$("spd").value;
