@@ -111,7 +111,7 @@ class HeuristicAttributor:
                 counts[m.group(2)] += 1
         characters = []
         for name, n in counts.most_common(40):
-            canon = canonical(name)
+            canon = identity(name)
             if canon in STOP_NAMES or len(canon) < 2:
                 continue
             characters.append(
@@ -230,6 +230,12 @@ def quoted_free(text: str) -> str:
     for span in quoted_spans(text):
         out = out.replace(span, " ", 1)
     return out
+
+
+def identity(name: str) -> str:
+    """Surface form → display name; strips articles, keeps honorifics."""
+    name = name.strip().strip(",.;:!?")
+    return re.sub(r"^(the|a|an)\s+", "", name, flags=re.IGNORECASE)
 
 
 def canonical(name: str) -> str:
