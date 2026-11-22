@@ -378,6 +378,40 @@ def estimate(
 
 
 @app.command()
+def meta(
+    book: str,
+    title: Annotated[str | None, typer.Option("--title")] = None,
+    author: Annotated[str | None, typer.Option("--author")] = None,
+    language: Annotated[str | None, typer.Option("--lang")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Show or edit a book's title/author/language."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    ch = load_artifact(ChaptersFile, b.dir)
+    if ch is None:
+        typer.echo("not imported")
+        raise typer.Exit(1)
+    if title is not None:
+        ch.meta.title = title
+    if author is not None:
+        ch.meta.author = author
+    if language is not None:
+        if ch.meta.language != language:
+            manifest = load_artifact(AudioManifest, b.dir)
+            if manifest is not None:
+                manifest.units.clear()
+                save_artifact(manifest, b.dir)
+                typer.echo("audio invalidated — re-render with `castbook generate`")
+        ch.meta.language = language
+    if title is not None or author is not None or language is not None:
+        save_artifact(ch, b.dir)
+    typer.echo(f"title:    {ch.meta.title}")
+    typer.echo(f"author:   {ch.meta.author}")
+    typer.echo(f"language: {ch.meta.language}")
+
+
+@app.command()
 def clean(
     yes: Annotated[bool, typer.Option("--yes", "-y", help="skip confirmation")] = False,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
