@@ -168,9 +168,9 @@ async function openBook(id) {
     rows.push(`<tr>
       <td>${esc(char?.name || sp)}${sp === "narrator" || sp === "ambiguous" ? " <span class=muted>(reserved)</span>" : ""}</td>
       <td class="muted">${esc(role)}</td>
-      <td><select data-speaker="${sp}">${voices.map(v =>
+      <td>${voices.length ? `<select data-speaker="${sp}">${voices.map(v =>
         `<option value="${v.id}" ${v.id === cur ? "selected" : ""}>${v.id} — ${esc(v.description)}</option>`
-      ).join("")}</select>
+      ).join("")}</select>` : `<input data-speaker="${sp}" data-voice-text value="${esc(cur)}" placeholder="voice description" style="width:16rem">`}
         <input class="spd" data-sp="${sp}" type="number" min="0.5" max="2" step="0.05" value="${d.casting[sp]?.speed ?? 1}" style="width:4rem" title="speed">
         <input class="mix" data-sp="${sp}" placeholder="mix a:0.7+b:0.3" style="width:9rem" title="custom voice spec" value="${/\+/.test(d.casting[sp]?.voice || '') ? esc(d.casting[sp].voice) : ''}"></td>
       <td><button class="ghost" data-preview="${sp}" type="button">▶</button></td></tr>`);
@@ -181,7 +181,7 @@ async function openBook(id) {
   $("merge-src").innerHTML = opts;
   $("merge-dst").innerHTML = opts;
   document.querySelectorAll("[data-preview]").forEach(b => b.onclick = async () => {
-    const sel = b.closest("tr").querySelector("select");
+    const sel = b.closest("tr").querySelector("select, input[data-voice-text]");
     const mix = b.closest("tr").querySelector("input.mix").value.trim();
     const spd = +b.closest("tr").querySelector("input.spd").value;
     b.textContent = "…";
@@ -200,7 +200,7 @@ async function openBook(id) {
 
 async function saveCast() {
   const overrides = {};
-  document.querySelectorAll("#cast-table select").forEach(s => {
+  document.querySelectorAll("#cast-table select, #cast-table input[data-voice-text]").forEach(s => {
     const spd = +document.querySelector(`input.spd[data-sp="${s.dataset.speaker}"]`).value;
     const mix = document.querySelector(`input.mix[data-sp="${s.dataset.speaker}"]`).value.trim();
     const voice = mix || s.value;
@@ -302,7 +302,7 @@ async function loadReview(id) {
   const r = await api(`/api/books/${id}/review`);
   const units = r.units || [];
   $("review-count").textContent = `(${units.length})`;
-  const names = [...document.querySelectorAll("#cast-table select")]
+  const names = [...document.querySelectorAll("#cast-table select, #cast-table input[data-voice-text]")]
     .map(x => x.dataset.speaker).concat(["narrator"]);
   $("review-table").innerHTML = units.map(u =>
     `<tr><td class="muted" style="font-size:.8rem">ch${u.chapter}</td>` +
