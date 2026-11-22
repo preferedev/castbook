@@ -45,7 +45,8 @@ def parse(path: Path, cover_dir: Path | None = None) -> tuple[BookMeta, list[Cha
     title = _exth(head, 503) or _fullname(head) or path.stem.replace("_", " ").title()
     author = _exth(head, 100) or "Unknown"
 
-    extra_flags = _u16(head, 16 + 0xF2) if len(head) > 16 + 0xF2 + 2 else 0
+    # Extra Record Data Flags: record offset 0xF2 (last field of a 0xE4 MOBI header)
+    extra_flags = _u16(head, 0xF2) if len(head) > 0xF4 else 0
     raw = b"".join(
         _strip_trailer(records[i]) if extra_flags else records[i]
         for i in range(1, min(count + 1, len(records)))
