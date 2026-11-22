@@ -52,7 +52,9 @@ def write_transcript(
         ch_audio = manifest.chapters.get(str(ch_index))
         if ch_audio is not None and ch_audio.status != ChapterStatus.done:
             continue
+        ch_dur = ch_audio.duration_s if ch_audio is not None else 0.0
         if want is not None and not any(u.speaker == want for u in units):
+            offset += ch_dur
             continue
         t = 0.0
         prev = None
@@ -69,11 +71,11 @@ def write_transcript(
             t += entry.duration_s
             prev = u
         if not cues:
+            offset += ch_dur
             continue
         if single:
             merged.extend((a + offset, b + offset, sp, tx) for a, b, sp, tx in cues)
-            if ch_audio is not None:
-                offset += ch_audio.duration_s
+            offset += ch_dur
             continue
         if fmt == "vtt":
             body = "WEBVTT\n\n" + "\n\n".join(

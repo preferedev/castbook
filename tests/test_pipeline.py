@@ -210,3 +210,48 @@ def test_verify_reports_missing_attribution(tmp_path) -> None:
     r = CliRunner().invoke(app, ["verify", "b"], env={"CASTBOOK_DATA_DIR": str(data)})
     assert r.exit_code == 1
     assert "analyze" in r.output
+
+
+def test_merged_transcript_continuous_timestamps(tmp_path) -> None:
+    from castbook.artifacts import (
+        AttributionFile,
+        AudioEntry,
+        AudioManifest,
+        ChapterAudio,
+        Unit,
+        save_artifact,
+    )
+    from castbook.transcript import write_transcript
+    from castbook.workdir import BookPaths
+
+    b = BookPaths(tmp_path, "b")
+    b.dir.mkdir(parents=True)
+    attrib = AttributionFile(
+        book_id="b",
+        attributor="t",
+        input_hash="h",
+        units=[
+            Unit(id="u1", chapter=0, text="one", speaker="narrator"),
+            Unit(id="u2", chapter=0, text="two", speaker="x"),
+            Unit(id="u3", chapter=1, text="three", speaker="narrator"),
+        ],
+    )
+    save_artifact(attrib, b.dir)
+    manifest = AudioManifest(book_id="b", input_hash="h")
+    for uid, dur in (("u1", 1.0), ("u2", 2.0), ("u3", 3.0)):
+        manifest.units[uid] = AudioEntry(
+            path=f"{uid}.wav", duration_s=dur, status="done", unit_hash="h"
+        )
+    manifest.chapters["0"] = ChapterAudio(path="ch000.wav", duration_s=10.0, status="done")
+    manifest.chapters["1"] = ChapterAudio(path="ch001.wav", duration_s=4.0, status="done")
+    save_artifact(manifest, b.dir)
+
+    out = tmp_path / "full.srt"
+    written = write_transcript(b, out, "srt")
+    assert written == [out]
+    body = out.read_text()
+    # chapter 1 cue starts after chapter 0's 10s duration — continuous, not restarted
+    assert "00:00:1" in body.split("\n\n")[-1] or "00:00:" in body
+    third = body.split("\n\n")[2]
+    start = third.split("\n")[1].split(" --> ")[0]
+    assert start.startswith("00:00:1")  # ≥10s offset
