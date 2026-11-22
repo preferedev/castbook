@@ -277,9 +277,7 @@ def estimate_render(book: BookPaths, cfg: Settings) -> dict[str, float | int | s
     attribution = load_artifact(AttributionFile, book.dir)
     casting = load_artifact(CastingFile, book.dir)
     if attribution is None or casting is None:
-        raise FileNotFoundError(
-            f"{book.dir} — run `castbook analyze` and `castbook cast` first"
-        )
+        raise FileNotFoundError(f"{book.dir} — run `castbook analyze` and `castbook cast` first")
     lexicon = _load_lexicon(book, cfg)
     manifest = load_artifact(AudioManifest, book.dir)
     if manifest is None or manifest.input_hash != attribution.input_hash:
