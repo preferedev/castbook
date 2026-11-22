@@ -252,9 +252,11 @@ class HeuristicAttributor:
                     and total
                     and quoted / total < 0.3
                     and not any(
-                        re.search(r"[.!?]\s*['\u2019\"\u201d\u00bb\u201c]?\s*$", sp)
-                        and len(sp.split()) >= 4
-                        for sp in _QUOTED.findall(" ".join(u.text for u, _ in run))
+                        re.search(r"[.!?]\s*$", m.group(1).rstrip())
+                        and len(m.group(1).split()) >= 4
+                        for u, _ in run
+                        for m in _QUOTED.finditer(u.text)
+                        if m.start() == 0 or not u.text[m.start() - 1].isalpha()
                     )
                 ):
                     resolved[i] = "narrator"
