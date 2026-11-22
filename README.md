@@ -70,6 +70,10 @@ un-rendered units are synthesized.
 | `castbook verify <book>` | health check: coverage, failed units, chapter gaps, stale export |
 | `castbook import <files> --lang fr` | override detected language (misdetected epubs) |
 | `castbook export <book> --split 8` | split the M4B into parts of at most N hours |
+| `castbook watch <dir> [--chain]` | auto-import (and optionally analyze/cast) ebooks dropped in a folder |
+| `castbook open <book> [--chapter N]` | open the read-along page in a browser |
+| `castbook books --json` | machine-readable library listing |
+| `castbook transcript <book> --merge` | one SRT/VTT/TXT with continuous timestamps |
 
 Pass `--quality fast\|balanced\|studio` to `castbook run` to pick an
 LLM+TTS backend pair without editing config.toml.
