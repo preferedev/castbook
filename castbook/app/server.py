@@ -384,6 +384,26 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         cast_book(book, cfg, overrides=voices, speeds=speeds)
         return {"ok": True}
 
+    @app.get("/api/books/{book_id}/voicepack")
+    def get_voicepack(book_id: str) -> dict[str, Any]:
+        from ..cast.voicepack import export_pack
+
+        book = _require_book(cfg, book_id)
+        try:
+            return export_pack(book)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.post("/api/books/{book_id}/voicepack")
+    def put_voicepack(book_id: str, pack: dict[str, Any]) -> dict[str, Any]:
+        from ..cast.voicepack import apply_pack
+
+        book = _require_book(cfg, book_id)
+        try:
+            return apply_pack(book, pack, cfg.tts.backend)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
     @app.post("/api/books/{book_id}/clone")
     def clone_voice(
         book_id: str,
