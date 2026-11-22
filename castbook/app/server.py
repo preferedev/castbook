@@ -119,6 +119,10 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             html = html.replace("</head>", f'<meta name="cb-token" content="{token}"></head>')
         return html
 
+    @app.get("/static/manifest.json")
+    def webmanifest() -> FileResponse:
+        return FileResponse(STATIC / "manifest.json", media_type="application/manifest+json")
+
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
         return _page("index.html")
