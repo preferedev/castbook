@@ -47,6 +47,7 @@ from ..pipeline import (
     export_book,
     generate_book,
     import_book,
+    search_units,
     set_cover,
 )
 from ..reader import MAX_READ_CHARS, article_text, split_for_reading
@@ -869,6 +870,11 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 manifest.units.pop(uid, None)
             save_artifact(manifest, book.dir)
         return {"ok": True, "fixed": fixed}
+
+    @app.get("/api/books/{book_id}/search")
+    def search(book_id: str, q: str = Query(min_length=1)) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        return {"matches": search_units(book.dir, q)}
 
     @app.get("/api/books/{book_id}/units")
     def units(book_id: str) -> dict[str, Any]:

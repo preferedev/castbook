@@ -133,6 +133,12 @@
   <pre id="log" style="display:none"></pre>
   <div id="downloads" class="row" style="margin-top:.5rem"></div>
 
+  <div class="row" style="margin-top:1rem">
+    <input id="q" placeholder="who said…" style="width:14rem" title="find text in the book and who says it">
+    <button id="q-btn" class="ghost">Find</button>
+  </div>
+  <div id="q-results" class="muted" style="font-size:.8rem;margin-top:.25rem"></div>
+
   <details id="lex-details" style="margin-top:1rem">
     <summary>Pronunciation lexicon</summary>
     <textarea id="lex-txt" rows="6" style="width:100%;font-family:monospace" placeholder='{"Cheshire":"CHEH-shur"}'></textarea>
@@ -451,6 +457,17 @@ async function loadLexicon(id) {
   $("lex-txt").value = Object.keys(r.book).length ? JSON.stringify(r.book, null, 2) : "";
   $("lex-meta").textContent = Object.keys(r.global).length ? ` · ${Object.keys(r.global).length} global entries` : "";
 }
+async function runSearch() {
+  const q = $("q").value.trim();
+  if (!q) return;
+  const r = await api(`/api/books/${current}/search?q=` + encodeURIComponent(q));
+  $("q-results").innerHTML = r.matches.length
+    ? r.matches.map(m => `<div>ch${m.chapter} · <b>${esc(m.speaker)}</b> — “${esc(m.excerpt)}”</div>`).join("")
+    : "no matches";
+}
+$("q-btn").onclick = runSearch;
+$("q").addEventListener("keydown", e => { if (e.key === "Enter") runSearch(); });
+
 $("lex-save").onclick = async () => {
   let body;
   try { body = JSON.parse($("lex-txt").value || "{}"); } catch { $("lex-meta").textContent = " · invalid JSON"; return; }

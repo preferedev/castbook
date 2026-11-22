@@ -27,6 +27,7 @@ from ..pipeline import (
     generate_book,
     import_book,
     run_book,
+    search_units,
     set_cover,
 )
 from ..workdir import BookPaths
@@ -563,6 +564,23 @@ def merge(
         typer.echo(str(e))
         raise typer.Exit(1) from e
     typer.echo(f"merged {src} → {dst} ({n} units re-attributed)")
+
+
+@app.command()
+def search(
+    book: str,
+    text: Annotated[str, typer.Argument(help="substring to find in unit text")],
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Who said it: list (chapter, speaker, excerpt) for every unit containing text."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    hits = search_units(b.dir, text)
+    if not hits:
+        typer.echo("no matches")
+        raise typer.Exit(1)
+    for h in hits:
+        typer.echo(f"ch{h['chapter']:<4} {h['speaker']:24} {h['excerpt']}")
 
 
 @app.command()

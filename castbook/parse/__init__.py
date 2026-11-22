@@ -18,14 +18,25 @@ PARSERS = {
     ".azw3": mobi.parse,
 }
 
-# Project Gutenberg license blocks would otherwise be read aloud
-_GB_START = re.compile(r"\*+\s*START OF (?:THE|THIS) PROJECT GUTENBERG[^\n]*", re.I)
-_GB_END = re.compile(r"\*+\s*END OF (?:THE|THIS) PROJECT GUTENBERG[^\n]*", re.I)
+# Project Gutenberg license blocks would otherwise be read aloud. The trailing
+# title is bounded and must end on '*' so a marker glued to story text (PDFs
+# lose the newline) can't eat the paragraph after it.
+_GB_START = re.compile(r"\*+\s*START OF (?:THE|THIS) PROJECT GUTENBERG[^*\n]{0,140}?\*+", re.I)
+_GB_END = re.compile(r"\*+\s*END OF (?:THE|THIS) PROJECT GUTENBERG[^*\n]{0,140}?\*+", re.I)
 
 
 def _strip_gutenberg(chapters: list[Chapter]) -> list[Chapter]:
+    # In a Gutenberg file everything before the START marker / after the END
+    # marker is boilerplate — including whole separate license chapters.
+    start_ch = next((i for i, c in enumerate(chapters) if _GB_START.search(c.text)), 0)
+    end_ch = next(
+        (i for i in range(len(chapters) - 1, start_ch - 1, -1) if _GB_END.search(chapters[i].text)),
+        None,
+    )
     out = []
-    for c in chapters:
+    for i, c in enumerate(chapters):
+        if (start_ch is not None and i < start_ch) or (end_ch is not None and i > end_ch):
+            continue
         text = c.text
         if m := _GB_START.search(text):
             text = text[m.end() :].lstrip(" *\n")
@@ -33,6 +44,8 @@ def _strip_gutenberg(chapters: list[Chapter]) -> list[Chapter]:
             text = text[: m.start()]
         if text.strip():
             out.append(c.model_copy(update={"text": text, "word_count": len(text.split())}))
+    for i, c in enumerate(out):  # indexes double as positions in export — renumber
+        c.index = i
     return out
 
 

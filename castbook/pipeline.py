@@ -7,7 +7,14 @@ from collections.abc import Callable
 from pathlib import Path
 
 from . import analyze, audio, cast, parse, tts
-from .artifacts import ChaptersFile, file_hash, load_artifact, save_artifact
+from .artifacts import (
+    AttributionFile,
+    CastFile,
+    ChaptersFile,
+    file_hash,
+    load_artifact,
+    save_artifact,
+)
 from .config import Settings
 from .workdir import BookPaths, book_id_from
 
@@ -161,3 +168,34 @@ def run_book(
     generate_book(book, cfg, log=log, speed=speed, workers=workers)
     export_book(book, cfg, log, layout=layout)
     return book
+
+
+def search_units(book_dir: Path, query: str, limit: int = 50) -> list[dict[str, object]]:
+    """Case-insensitive substring search over attributed units → who said it, where."""
+    attrib = load_artifact(AttributionFile, book_dir)
+    if attrib is None:
+        return []
+    cast = load_artifact(CastFile, book_dir)
+    names = {c.id: c.name for c in cast.characters} if cast else {}
+    q = query.lower()
+    out: list[dict[str, object]] = []
+    for u in attrib.units:
+        i = u.text.lower().find(q)
+        if i < 0:
+            continue
+
+        start, end = max(0, i - 60), min(len(u.text), i + len(query) + 60)
+        excerpt = (
+            ("…" if start else "") + u.text[start:end].strip() + ("…" if end < len(u.text) else "")
+        )
+        out.append(
+            {
+                "chapter": u.chapter,
+                "speaker_id": u.speaker,
+                "speaker": names.get(u.speaker, u.speaker),
+                "excerpt": excerpt,
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
