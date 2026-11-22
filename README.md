@@ -23,9 +23,9 @@ un-rendered units are synthesized.
 
 | command | what it does |
 |---|---|
-| `castbook import <file>` | parse EPUB/PDF/TXT into `chapters.json` |
-| `castbook analyze <book>` | attribute every line to a speaker (LLM or heuristic fallback) |
-| `castbook cast <book>` | auto-assign voices; `--map name=voice` to override |
+| `castbook import <file> [<file>…]` | import one or more ebooks (EPUB/PDF/TXT/MD) → `chapters.json` |
+| `castbook analyze <book>` | attribute every line (`--backend heuristic\|llamacpp` to override config) |
+| `castbook cast <book>` | auto-assign voices; `--map name=voice`, `--speed name=rate` to override |
 | `castbook generate <book>` | synthesize audio (resumable; `--chapters 1-3,7`, `--limit 50` preview, `--align` word timestamps) |
 | `castbook export <book>` | mux chaptered M4B (+ `--format mp3`/`both`) |
 | `castbook review <book>` | list ambiguous units; `--set unit=speaker` to fix |
@@ -33,7 +33,7 @@ un-rendered units are synthesized.
 | `castbook align <book>` | word-level timestamps for reader karaoke (needs `[align]` extra) |
 | `castbook reset <book>` | wipe a book's artifacts to start over |
 | `castbook run <file>` | all of the above |
-| `castbook books` | list imported books |
+| `castbook books` | list books with render progress |
 | `castbook models list\|pull` | model management |
 | `castbook serve -p 8484` | local web UI |
 
@@ -46,9 +46,9 @@ docker run -v $PWD/data:/data castbook doctor
 
 ## Web UI
 
-`castbook serve` then open `http://localhost:8484`: import a file (or drag-and-drop), audition voices
+`castbook serve` then open `http://localhost:8484`: import files (multi-select or drag-and-drop), audition voices
 with the ▶ button, review and
-override voice casting, generate (or "Preview 50" for a quick sample), download the M4B.
+override voice casting (including per-speaker speed and merging duplicate speakers), generate (or "Preview 50" for a quick sample), export runs in the background — download the M4B when it lands.
 The reader view highlights the spoken word when `castbook align` has run, remembers
 your position, and supports space/←/→/↑/↓ shortcuts.
 
