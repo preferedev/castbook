@@ -220,7 +220,9 @@ def create_app(cfg: Settings) -> FastAPI:
     @app.get("/reader/{book_id}", response_class=HTMLResponse)
     def reader(book_id: str) -> HTMLResponse:
         page = STATIC / "reader.html"
-        return HTMLResponse(page.read_text().replace("__BOOK_ID__", book_id))
+        import json as _json
+
+        return HTMLResponse(page.read_text().replace('"__BOOK_ID__"', _json.dumps(book_id)))
 
     @app.get("/api/books/{book_id}/progress")
     def progress(book_id: str) -> dict[str, Any]:
