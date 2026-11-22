@@ -64,6 +64,7 @@ def _http(e: net.FetchError) -> HTTPException:
 
 _jobs: dict[str, threading.Thread] = {}
 _cancels: dict[str, threading.Event] = {}
+_run_all_current: str | None = None
 _jobs_lock = threading.Lock()
 _import_lock = threading.Lock()
 
@@ -403,6 +404,8 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     @app.delete("/api/books/{book_id}")
     def delete_book(book_id: str) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
+        if _run_all_current == book_id:
+            raise HTTPException(409, "run-all is processing this book")
         with _jobs_lock:
             busy = [k for k, t in _jobs.items() if k.endswith(f":{book_id}") and t.is_alive()]
         if busy:
@@ -603,22 +606,34 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         )
         if not book_ids:
             raise HTTPException(404, "no imported books")
+        if any(k.startswith("job:") and t.is_alive() for k, t in _jobs.items()):
+            raise HTTPException(409, "a per-book job is running — cancel it first")
 
         def work() -> None:
+            global _run_all_current
             cancel = _cancels["run-all"]
             for bid in book_ids:
                 if cancel.is_set():
                     return
+                if not (cfg.data_dir / bid).is_dir():
+                    continue  # deleted mid-run
+                if (t := _jobs.get(f"job:{bid}")) is not None and t.is_alive():
+                    log(f"[run-all] {bid} has its own job running — skipped")
+                    continue
                 book = BookPaths(cfg.data_dir, bid)
                 log(f"[run-all] === {bid} ===")
-                analyze_book(book, job_cfg, log)
-                cast_book(book, job_cfg, log=log)
-                if cancel.is_set():
-                    return
-                generate_book(book, job_cfg, log=log, cancel=cancel)
-                if not cancel.is_set():
-                    outs = export_book(book, job_cfg, log=log)
-                    log(f"[run-all] {bid}: {', '.join(p.name for p in outs)}")
+                _run_all_current = bid
+                try:
+                    analyze_book(book, job_cfg, log)
+                    cast_book(book, job_cfg, log=log)
+                    if cancel.is_set():
+                        return
+                    generate_book(book, job_cfg, log=log, cancel=cancel)
+                    if not cancel.is_set():
+                        outs = export_book(book, job_cfg, log=log)
+                        log(f"[run-all] {bid}: {', '.join(p.name for p in outs)}")
+                finally:
+                    _run_all_current = None
             log("[run-all] library complete")
 
         _spawn("run-all", work, log)
@@ -630,7 +645,11 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         path = cfg.data_dir / "run-all.log"
         if path.exists():
             text = path.read_text(errors="replace")
-        return {"lines": text.splitlines()[-lines:], "running": "run-all" in _jobs}
+        t = _jobs.get("run-all")
+        return {
+            "lines": text.splitlines()[-lines:],
+            "running": t is not None and t.is_alive(),
+        }
 
     @app.post("/api/run-all/cancel")
     def run_all_cancel() -> dict[str, Any]:
