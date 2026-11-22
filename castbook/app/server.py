@@ -98,7 +98,7 @@ def create_app(cfg: Settings) -> FastAPI:
     def voices() -> list[dict[str, Any]]:
         from ..cast.library import POCKET_LIBRARY
 
-        lib = POCKET_LIBRARY if cfg.tts.backend == "pocket" else LIBRARY
+        lib = {"kokoro": LIBRARY, "pocket": POCKET_LIBRARY}.get(cfg.tts.backend, [])
         return [v.model_dump() for v in lib]
 
     @app.get("/api/books")
