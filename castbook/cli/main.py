@@ -575,6 +575,9 @@ def serve(
         shown = f"[{host}]" if ":" in host else host
         url = f"http://{shown}:{port}" + (f"?token={token}" if token else "")
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    shown = f"[{host}]" if ":" in host else host
+    tqs = f"?token={token}" if token else ""
+    typer.echo(f"OPDS catalog (e-reader apps): http://{shown}:{port}/api/opds{tqs}")
     uvicorn.run(create_app(cfg, token=token), host=host, port=port, log_level="info")
 
 
