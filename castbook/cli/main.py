@@ -77,6 +77,9 @@ def import_cmd(
         typer.Argument(help="local files (.epub/.txt/.pdf/…) or http(s) ebook URLs"),
     ],
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    chain: Annotated[
+        bool, typer.Option("--chain", help="also run analyze + cast after each import")
+    ] = False,
 ) -> None:
     """Copy books into the library and parse them into chapters."""
     cfg = _cfg(config)
@@ -85,6 +88,9 @@ def import_cmd(
         for path in paths:
             book = import_book(path, cfg)
             typer.echo(f"book id: {book.book_id}")
+            if chain:
+                analyze_book(book, cfg)
+                cast_book(book, cfg)
     finally:
         for d in tmp_dirs:
             shutil.rmtree(d, ignore_errors=True)
