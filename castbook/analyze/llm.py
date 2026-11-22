@@ -137,17 +137,20 @@ def _tail(text: str, n: int = 160) -> str:
     return text[-n:].replace("\n", " ")
 
 
-_VERBS = "said|asked|replied|cried|exclaimed|answered|whispered|added|observed|continued|returned"
+_VERBS = (
+    "said|asked|replied|cried|exclaimed|answered|whispered|added|observed|continued|returned|"
+    "dit|demanda|r\u00e9pondit|reprit|ajouta|murmura|cria|exclama|sagte|fragte|antwortete|rief"
+)
 _NAME = r"(?:[A-Z][a-zA-Z'.\-]+\s+){0,2}[A-Z][a-zA-Z'.\-]+"
 _SAID = re.compile(
-    rf"[\"“”].{{0,400}}[\"“”]\s*,?\s*(?:{_VERBS})\s+"
-    rf"({_NAME})(?:[.,;!?:)\"“”]|\s+to\s|$)"
-    rf"|\b({_NAME})\s+(?:{_VERBS})\b.{{0,80}}[\"“]"
+    rf"[\"“”«»„].{{0,400}}[\"“”«»]\s*,?\s*(?:{_VERBS})\s+"
+    rf"({_NAME})(?:[.,;!?:)\"“”«»]|\s+to\s|$)"
+    rf"|\b({_NAME})\s+(?:{_VERBS})\b.{{0,80}}[\"“«„]"
 )
 
 
 def _said_speaker(text: str, cast: list[Character]) -> str | None:
-    if '"' not in text and "\u201c" not in text:
+    if not any(c in text for c in '"\u201c\u00ab\u201e'):
         return None
     for m in _SAID.finditer(text):
         name = (m.group(1) or m.group(2) or "").strip().rstrip(".").lower()
