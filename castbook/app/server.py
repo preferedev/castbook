@@ -153,6 +153,10 @@ def create_app(cfg: Settings) -> FastAPI:
     @app.delete("/api/books/{book_id}")
     def delete_book(book_id: str) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
+        with _jobs_lock:
+            busy = [k for k, t in _jobs.items() if k.endswith(f":{book_id}") and t.is_alive()]
+        if busy:
+            raise HTTPException(409, f"job still running: {busy[0].split(':')[0]}")
         shutil.rmtree(book.dir)
         return {"ok": True}
 
@@ -315,8 +319,10 @@ def _preview_backend(cfg: Settings) -> Backend:
 
 
 def _require_book(cfg: Settings, book_id: str) -> BookPaths:
+    root = cfg.data_dir.resolve()
     book = BookPaths(cfg.data_dir, book_id)
-    if not book.dir.is_dir():
+    d = book.dir.resolve()
+    if d == root or root not in d.parents or not d.is_dir():
         raise HTTPException(404, "unknown book")
     return book
 
