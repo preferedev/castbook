@@ -71,7 +71,7 @@ const nextPlayable = i => units.findIndex((u, j) => j > i && u.has_audio);
 const prevPlayable = i => { for (let j = i - 1; j >= 0; j--) if (units[j].has_audio) return j; return -1; };
 
 function spanWords(i) {
-  const words = align[units[i].id];
+  const words = (align[units[i].id] || {}).w;
   if (!words) return;
   const el = $(`u${i}`);
   const who = el.querySelector(".who");
@@ -86,7 +86,7 @@ setInterval(savePos, 2000);
 window.addEventListener("beforeunload", savePos);
 
 audio.ontimeupdate = () => {
-  const words = cur >= 0 && align[units[cur].id];
+  const words = cur >= 0 && align[units[cur].id] && align[units[cur].id].w;
   if (!words) return;
   const t = audio.currentTime;
   let idx = -1;
@@ -133,8 +133,13 @@ document.addEventListener("keydown", e => {
   if (e.code === "Space") { e.preventDefault(); $("play").click(); }
   else if (e.code === "ArrowRight") $("next").click();
   else if (e.code === "ArrowLeft") $("prev").click();
-  else if (e.code === "ArrowUp") { e.preventDefault(); $("spd").value = Math.min(2, +$("spd").value + 0.25); audio.playbackRate = +$("spd").value; }
-  else if (e.code === "ArrowDown") { e.preventDefault(); $("spd").value = Math.max(1, +$("spd").value - 0.25); audio.playbackRate = +$("spd").value; }
+  else if (e.code === "ArrowUp" || e.code === "ArrowDown") {
+    e.preventDefault();
+    const opts = [...$("spd").options].map(o => +o.value);
+    const i = opts.indexOf(+($("spd").value || 1));
+    const j = Math.max(0, Math.min(opts.length - 1, i + (e.code === "ArrowUp" ? 1 : -1)));
+    $("spd").value = String(opts[j]); audio.playbackRate = opts[j];
+  }
 });
 boot();
 </script>

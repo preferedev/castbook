@@ -69,17 +69,26 @@ def run(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> P
         raise FileNotFoundError(f"{book.dir} — run `castbook generate` first")
 
     path = book.dir / "align.json"
-    done: dict[str, list[list[float | str]]] = json.loads(path.read_text()) if path.exists() else {}
+    done: dict[str, dict[str, object]] = json.loads(path.read_text()) if path.exists() else {}
     pending = [
         u
         for u in attrib.units
-        if u.id not in done
+        if (
+            u.id not in done
+            or not isinstance(done[u.id], dict)
+            or done[u.id].get("h") != manifest.units[u.id].unit_hash
+            if u.id in manifest.units
+            else True
+        )
         and u.id in manifest.units
         and manifest.units[u.id].status == UnitStatus.done
         and book.unit_wav(u.id).exists()
     ]
     for i, u in enumerate(pending):
-        done[u.id] = align_unit(book.unit_wav(u.id), u.text)
+        done[u.id] = {
+            "h": manifest.units[u.id].unit_hash,
+            "w": align_unit(book.unit_wav(u.id), u.text),
+        }
         if (i + 1) % 25 == 0 or i + 1 == len(pending):
             path.write_text(json.dumps(done))
             log(f"[align] {i + 1}/{len(pending)} units")
