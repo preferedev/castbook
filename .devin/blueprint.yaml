@@ -2,8 +2,9 @@
 initialize: |
   sudo apt-get update && sudo apt-get install -y ffmpeg
   curl -LsSf https://astral.sh/uv/install.sh | sh
+  echo "PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH" >> $ENVRC
 maintenance: |
-  uv venv .venv && .venv/bin/uv pip install -e '.[dev]'
+  uv venv .venv && uv pip install -e '.[dev]'
 knowledge:
   - name: lint
     contents: |
