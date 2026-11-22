@@ -9,7 +9,7 @@ from ..artifacts import CastFile, CastingFile, load_artifact, save_artifact
 from ..config import Settings
 from ..workdir import BookPaths
 from .library import load_memory, save_memory
-from .match import _valid_voice, auto_cast
+from .match import _valid_ids, _valid_voice, auto_cast
 
 
 def run(
@@ -23,10 +23,21 @@ def run(
     if cast_file is None:
         raise FileNotFoundError(f"{book.dir}/cast.json — run `castbook analyze` first")
 
-    mapping = auto_cast(cast_file.characters, book.book_id, memory=load_memory(cfg.data_dir))
+    backend = cfg.tts.backend
+    mapping = auto_cast(
+        cast_file.characters,
+        book.book_id,
+        memory=load_memory(cfg.data_dir),
+        backend=backend,
+    )
+    valid = _valid_ids(backend)
     for speaker, voice_id in (overrides or {}).items():
-        if speaker in mapping and _valid_voice(voice_id):
+        if Path(voice_id).exists() and Path(voice_id).suffix.lower() in {".wav", ".mp3", ".flac"}:
+            log(f"[cast] voice clone {speaker} <- {voice_id} (only clone voices you may use)")
+        if speaker in mapping and _valid_voice(voice_id, valid):
             mapping[speaker].voice = voice_id
+        elif speaker not in mapping:
+            log(f"[cast] no such speaker: {speaker!r}")
     for speaker, speed in (speeds or {}).items():
         if speaker in mapping and 0 < speed <= 2:
             mapping[speaker].speed = speed
