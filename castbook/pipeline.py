@@ -6,13 +6,22 @@ from collections.abc import Callable
 from pathlib import Path
 
 from . import analyze, audio, cast, parse, tts
-from .artifacts import ChaptersFile, file_hash, save_artifact
+from .artifacts import ChaptersFile, file_hash, load_artifact, save_artifact
 from .config import Settings
 from .workdir import BookPaths, book_id_from
 
 
 def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) -> BookPaths:
-    book = BookPaths(cfg.data_dir, book_id_from(src)).ensure()
+    book_id = book_id_from(src)
+    src_hash = file_hash(src)
+    existing = load_artifact(ChaptersFile, cfg.data_dir / book_id)
+    if existing is not None and existing.input_hash != src_hash:
+        n = 2
+        while (cfg.data_dir / f"{book_id}-{n}").exists():
+            n += 1
+        log(f"[import] {book_id!r} exists with different content — importing as {book_id}-{n}")
+        book_id = f"{book_id}-{n}"
+    book = BookPaths(cfg.data_dir, book_id).ensure()
     src = book.import_source(src)
     meta, chapters = parse.parse(src, cover_dir=book.source)
     save_artifact(
@@ -20,7 +29,7 @@ def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) ->
             book_id=book.book_id,
             meta=meta,
             chapters=chapters,
-            input_hash=file_hash(src),
+            input_hash=src_hash,
         ),
         book.dir,
     )
