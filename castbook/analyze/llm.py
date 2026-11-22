@@ -120,6 +120,9 @@ class LlamaCppAttributor:
                     emotion = str(tag.get("emotion", "neutral")).lower()
                     u.emotion = tcast(Emotion, emotion if emotion in _EMOTIONS else "neutral")
             prev_speaker, prev_text = batch[-1].speaker, batch[-1].text
+        for u in units:  # narration without quotes can only be the narrator's
+            if u.kind == "narration" and u.speaker not in ("narrator", "ambiguous"):
+                u.speaker = "narrator"
         for u in units:  # rescue: '"quote," X said' mislabeled as narration
             if u.speaker in ("narrator", "ambiguous"):
                 rescue = _said_speaker(u.text, cast)
