@@ -1,5 +1,5 @@
 # Castbook attribution eval
-_2026-11-22T17:06:58+00:00Z — heuristic_
+_2026-11-22T17:09:43+00:00Z — heuristic_
 
 | book | units | labeled | correct | accuracy | ambiguous |
 |---|---|---|---|---|---|
@@ -7,7 +7,7 @@ _2026-11-22T17:06:58+00:00Z — heuristic_
 | dorian-gray | 21 | 16 | 13 | 81% | 0 |
 | dr-jekyll-and-mr-hyde | 28 | 20 | 19 | 95% | 0 |
 | great-expectations | 46 | 34 | 32 | 94% | 2 |
-| huckleberry-finn | 27 | 20 | 17 | 85% | 1 |
+| huckleberry-finn | 27 | 20 | 18 | 90% | 0 |
 | jane-eyre | 26 | 20 | 18 | 90% | 0 |
 | moby-dick | 36 | 20 | 16 | 80% | 2 |
 | pride-and-prejudice | 34 | 20 | 15 | 75% | 1 |
@@ -23,7 +23,6 @@ _2026-11-22T17:06:58+00:00Z — heuristic_
 - **dr-jekyll-and-mr-hyde** `ch001-u0027` expected `mr.-enfield` got `mr-utterson` — 'Mr. Utterson sighed deeply but said never a word; and the young man\npresently re'
 - **great-expectations** `ch001-u0005` expected `magwitch` got `ambiguous` — '“Hold your noise!” cried a terrible voice, as a man started up from\namong the gr'
 - **great-expectations** `ch001-u0037` expected `pip` got `abel-magwitch` — '“My sister, sir,—Mrs. Joe Gargery,—wife of Joe Gargery, the blacksmith,\nsir.”'
-- **huckleberry-finn** `ch008-u0003` expected `jim` got `ambiguous` — '“Doan’ hurt me—don’t! I hain’t ever done no harm to a ghos’. I alwuz\nliked dead '
 - **huckleberry-finn** `ch008-u0006` expected `jim` got `huckleberry-finn` — '“What’s de use er makin’ up de camp fire to cook strawbries en sich\ntruck? But y'
 - **huckleberry-finn** `ch008-u0019` expected `jim` got `huckleberry-finn` — '“No! W’y, what has you lived on? But you got a gun. Oh, yes, you got a\ngun. Dat’'
 - **jane-eyre** `ch023-u0020` expected `jane-eyre` got `rochester` — '“I am no bird; and no net ensnares me; I am a free human being with an\nindepende'

@@ -166,6 +166,12 @@ class HeuristicAttributor:
                 in_quote = False
                 narr_break = True
                 pending = _trailing_says(u.text, names)
+                if pending is None and "I" in names:
+                    others = [c.id for c in cast if c.id != names["I"]]
+                    if len(others) == 1 and re.search(
+                        r"\b(?:he|she)\b[^.!?]*\b(?:me|us)\b", u.text, re.IGNORECASE
+                    ):
+                        pending = others[0]
                 continue
             if u.paragraph != cur_para:
                 in_quote = False
