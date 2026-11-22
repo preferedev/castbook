@@ -35,7 +35,7 @@ _NAME_PLAIN = (
 )
 _NAME_TITLED = (
     r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain|Mme?\.?|Mlle\.?|Herr|"
-    r"Frau|Fr\u00e4ulein)\s+" + _WORD
+    r"Frau|Fr\u00e4ulein)\s+" + _WORD + r"(?:\s+" + _WORD + r"){0,2}"
 )
 NAME = rf"(?-i:((?:the\s+)?(?:{_NAME_TITLED}|{_NAME_PLAIN})))"
 
