@@ -55,6 +55,16 @@ def assemble_chapters(book: BookPaths, cfg: Settings, log: Callable[[str], None]
                     break
             if not stale:
                 continue
+        missing = [u.id for u in units if u.id not in wav_for]
+        if missing:
+            manifest.chapters[str(index)] = ChapterAudio(
+                path="", duration_s=0.0, status=ChapterStatus.failed
+            )
+            log(
+                f"[audio] chapter {index}: {len(missing)} units unrendered — "
+                "chapter excluded from export; re-run `castbook generate`"
+            )
+            continue
         raw = out.with_suffix(".raw.wav")
         data = pacing.assemble(units, wav_for)
         sf.write(str(raw), data, SAMPLE_RATE)
