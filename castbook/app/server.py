@@ -253,22 +253,21 @@ def create_app(cfg: Settings) -> FastAPI:
         if attribution is None or manifest is None:
             raise HTTPException(409, "nothing to regenerate")
         unit_ids = {u.id for u in attribution.units if u.chapter in sel}
-        removed = 0
-        for uid in unit_ids:
-            if manifest.units.pop(uid, None) is not None:
-                removed += 1
-        for cid in [str(c) for c in sel]:
-            manifest.chapters.pop(cid, None)
-        save_artifact(manifest, book.dir)
-        log = _log_to(book.dir / "job.log")
-        _spawn(
-            f"generate:{book_id}",
-            lambda: generate_book(book, cfg, log=log, chapters=sel),
-            log,
-        )
-        return {"ok": True, "popped": removed}
+        popped = sum(1 for uid in unit_ids if uid in manifest.units)
 
-    @app.get("/api/books/{book_id}/audio/{chapter}")
+        def work() -> None:
+            for uid in unit_ids:
+                manifest.units.pop(uid, None)
+            for cid in [str(c) for c in sel]:
+                manifest.chapters.pop(cid, None)
+            save_artifact(manifest, book.dir)
+            generate_book(book, cfg, log=log, chapters=sel)
+
+        log = _log_to(book.dir / "job.log")
+        _spawn(f"generate:{book_id}", work, log)
+        return {"ok": True, "popped": popped}
+
+    @app.get("/api/books/{book_id}/chapters/{chapter}/audio")
     def chapter_audio(book_id: str, chapter: int) -> FileResponse:
         book = _require_book(cfg, book_id)
         wav = book.dir / "audio" / f"ch{chapter:03d}.wav"

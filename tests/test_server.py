@@ -74,3 +74,43 @@ def test_preview_serves_audio(client_setup) -> None:  # type: ignore[no-untyped-
 def test_unknown_book_404(client_setup) -> None:  # type: ignore[no-untyped-def]
     client, _ = client_setup
     assert client.get("/api/books/nope").status_code == 404
+
+
+def test_regenerate_pops_chapter_units(client_setup, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    client, tmp_path = client_setup
+    book_id = _import_txt(client, tmp_path)
+    book = BookPaths(tmp_path / "books", book_id)
+    cfg = Settings(data_dir=tmp_path / "books")
+    analyze_book(book, cfg)
+    from castbook.artifacts import (
+        AttributionFile,
+        AudioEntry,
+        AudioManifest,
+        load_artifact,
+        save_artifact,
+    )
+
+    attrib = load_artifact(AttributionFile, book.dir)
+    assert attrib is not None
+    manifest = AudioManifest(book_id=book_id, input_hash=attrib.input_hash)
+    for u in attrib.units:
+        manifest.units[u.id] = AudioEntry(
+            path=f"{u.id}.wav", duration_s=0.1, status="done", unit_hash=f"h-{u.id}"
+        )
+    save_artifact(manifest, book.dir)
+    spawned = []
+    monkeypatch.setattr("castbook.app.server.generate_book", lambda *a, **k: spawned.append(k))
+    r = client.post(f"/api/books/{book_id}/regenerate?chapters=1")
+    assert r.status_code == 200
+    assert r.json()["popped"] == len([u for u in attrib.units if u.chapter == 1])
+    import time
+
+    for _ in range(50):
+        if spawned:
+            break
+        time.sleep(0.1)
+    m2 = load_artifact(AudioManifest, book.dir)
+    assert all(u.chapter != 1 or u.id not in m2.units for u in attrib.units)
+    assert spawned and spawned[0]["chapters"] == {1}
+    r = client.post(f"/api/books/{book_id}/regenerate?chapters=")
+    assert r.status_code in (409, 422)

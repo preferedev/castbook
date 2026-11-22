@@ -256,7 +256,7 @@ $("regen").onclick = () => {
 $("play-ch").onclick = () => {
   const m = $("gen-chapters").value.trim().match(/\d+/);
   const ch = m ? +m[0] : 0;
-  new Audio(`/api/books/${current}/audio/${ch}`).play();
+  new Audio(`/api/books/${current}/chapters/${ch}/audio`).play();
 };
 $("preview-gen").onclick = () => api(`/api/books/${current}/generate?limit=50`, {method: "POST"}).then(refreshProgress);
 $("merge-btn").onclick = async () => {
