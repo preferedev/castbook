@@ -133,10 +133,11 @@ def _tail(text: str, n: int = 160) -> str:
 
 
 _VERBS = "said|asked|replied|cried|exclaimed|answered|whispered|added|observed|continued|returned"
+_NAME = r"(?:[A-Z][a-z]+\.?\s+){0,2}[A-Z][a-z]+\.?"
 _SAID = re.compile(
     rf"[\"“”].{{0,400}}[\"“”]\s*,?\s*(?:{_VERBS})\s+"
-    rf"([A-Z][a-zA-Z'. ]+?)(?:[.,;!?:)\"“”]|\s+to\s|$)"
-    rf"|\b([A-Z][a-zA-Z'. ]+?)\s+(?:{_VERBS})\b.{{0,80}}[\"“]"
+    rf"({_NAME})(?:[.,;!?:)\"“”]|\s+to\s|$)"
+    rf"|\b({_NAME})\s+(?:{_VERBS})\b.{{0,80}}[\"“]"
 )
 
 
@@ -144,15 +145,27 @@ def _said_speaker(text: str, cast: list[Character]) -> str | None:
     if '"' not in text and "\u201c" not in text:
         return None
     for m in _SAID.finditer(text):
-        name = (m.group(1) or m.group(2) or "").strip().lower()
+        name = (m.group(1) or m.group(2) or "").strip().rstrip(".").lower()
         if not name:
             continue
-        for c in cast:
-            candidates = {c.name, *c.aliases}
-            if any(
-                name == str(o).lower() or name.endswith(" " + str(o).split()[-1].lower())
-                for o in candidates
-            ):
+        found = _exact_speaker(name, cast) or _surname_speaker(name, cast)
+        if found:
+            return found
+    return None
+
+
+def _exact_speaker(name: str, cast: list[Character]) -> str | None:
+    for c in cast:
+        if any(name == str(o).lower() for o in {c.name, *c.aliases}):
+            return c.name.lower()
+    return None
+
+
+def _surname_speaker(name: str, cast: list[Character]) -> str | None:
+    for c in cast:
+        for o in {c.name, *c.aliases}:
+            surname = str(o).split()[-1].lower()
+            if name.endswith(" " + surname):
                 return c.name.lower()
     return None
 
