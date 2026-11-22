@@ -52,18 +52,22 @@ def apply_pack(book: BookPaths, pack: dict[str, Any], backend: str) -> dict[str,
     from ..analyze.heuristic import slugify
 
     aliases: dict[str, str] = pack.get("aliases", {})
-    known = {c.id for c in cast.characters}
     book_aliases: dict[str, str] = {}
     for c in cast.characters:
         for a in c.aliases:
-            known.add(slugify(a))
             book_aliases[slugify(a)] = c.id
     applied: list[str] = []
     skipped: list[str] = []
+    mismatched: list[str] = []
     for sid, entry in (pack.get("speakers") or {}).items():
-        target = sid if sid in {c.id for c in cast.characters} else aliases.get(sid)
-        if target is None or target not in casting.map:
-            target = book_aliases.get(sid)
+        if entry.get("backend") and entry["backend"] != backend:
+            mismatched.append(sid)
+            continue
+        candidates = [sid] + [a for a, owner in aliases.items() if owner == sid]
+        target = next(
+            (c for c in candidates if c in casting.map),
+            next((book_aliases[c] for c in candidates if c in book_aliases), None),
+        )
         if target is None or target not in casting.map:
             skipped.append(sid)
             continue
@@ -83,4 +87,4 @@ def apply_pack(book: BookPaths, pack: dict[str, Any], backend: str) -> dict[str,
         casting.map[target] = spec
         applied.append(target)
     save_artifact(casting, book.dir)
-    return {"applied": applied, "skipped": skipped}
+    return {"applied": applied, "skipped": skipped, "mismatched": mismatched}
