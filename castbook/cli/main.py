@@ -629,7 +629,10 @@ def books(
         )
         total = len(attrib.units) if attrib else 0
         rendered = f" · {done}/{total} rendered" if manifest else " · not rendered"
-        typer.echo(f"{d.name:30} {title}{rendered}")
+        review = (
+            f" · {len(attrib.needs_review)} to review" if attrib and attrib.needs_review else ""
+        )
+        typer.echo(f"{d.name:30} {title}{rendered}{review}")
 
 
 @models_app.command("list")
