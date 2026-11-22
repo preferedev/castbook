@@ -16,6 +16,10 @@ pip install -e '.[pocket]'   # torch CPU wheel first: pip install torch --index-
 # then set backend = "pocket" under [tts] in config.toml — the model auto-downloads from HF.
 # clone a voice: castbook cast <book> --map "<speaker>=/path/to/clip.wav" (requires HF terms
 # accepted for kyutai/pocket-tts); catalog voices need no auth.
+
+# quality tier (GPU only — check 'castbook doctor' for your tier):
+pip install -e '.[qwen]'     # Qwen3-TTS VoiceDesign: every character gets a designed voice
+# then backend = "qwen" under [tts]. Each character's vibe note becomes the voice description.
 castbook models pull qwen3-4b-q4                  # ~2.5 GB, optional — better attribution
 castbook run book.epub          # parse → analyze → cast → generate → export
 castbook run examples/lighthouse.txt   # or try the bundled sample
