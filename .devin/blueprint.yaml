@@ -1,0 +1,16 @@
+# ffmpeg for mux; uv for fast installs; project editable with dev extras.
+initialize: |
+  sudo apt-get update && sudo apt-get install -y ffmpeg
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+maintenance: |
+  uv venv .venv && .venv/bin/uv pip install -e '.[dev]'
+knowledge:
+  - name: lint
+    contents: |
+      .venv/bin/ruff format --check . && .venv/bin/ruff check .
+  - name: test
+    contents: |
+      .venv/bin/pytest -q
+  - name: serve
+    contents: |
+      CASTBOOK_DATA_DIR=$PWD/books .venv/bin/castbook serve -p 8484
