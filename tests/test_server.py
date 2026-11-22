@@ -1,5 +1,6 @@
 """Web API: import, review list, speaker overrides, voice preview."""
 
+import time
 from pathlib import Path
 
 import numpy as np
@@ -184,6 +185,7 @@ def test_import_from_url(client_setup) -> None:  # type: ignore[no-untyped-def]
     (tmp_path / "book.txt").write_text("CHAPTER I\n\nHello, said Alice.\n" * 5)
     monkeypatch2 = __import__("pytest").MonkeyPatch()
     monkeypatch2.setattr("castbook.net.assert_public_host", lambda url: None)
+    monkeypatch2.setattr("castbook.net.assert_public_peer", lambda resp, url: None)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         port = srv.server_address[1]
@@ -300,3 +302,26 @@ def test_download_nested_and_traversal(client_setup) -> None:  # type: ignore[no
     assert r.status_code == 200 and r.content == b"mp3"
     r = client.get(f"/api/books/{book_id}/download/..%2F..%2Fsecret.txt")
     assert r.status_code == 404
+
+
+def test_read_now_flow(client_setup) -> None:  # type: ignore[no-untyped-def]
+    client, _tmp_path = client_setup
+    r = client.post("/api/read", json={"text": "Hello world. " * 30})
+    assert r.status_code == 200
+    read_id, total = r.json()["id"], r.json()["total"]
+    for _ in range(100):
+        s = client.get(f"/api/read/{read_id}/status").json()
+        if s["done"] >= total:
+            break
+        time.sleep(0.05)
+    assert s["done"] == total
+    a = client.get(f"/api/read/{read_id}/audio/0")
+    assert a.status_code == 200 and len(a.content) > 100
+    assert client.get("/api/read/deadbeef/status").status_code == 404
+    assert client.post("/api/read", json={}).status_code == 400
+
+
+def test_read_rejects_nonpublic_url(client_setup) -> None:  # type: ignore[no-untyped-def]
+    client, _ = client_setup
+    r = client.post("/api/read", json={"url": "http://169.254.169.254/latest"})
+    assert r.status_code == 400

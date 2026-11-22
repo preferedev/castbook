@@ -59,12 +59,30 @@ def open_url(url: str, timeout: float = 60) -> Any:
         raise FetchError(f"fetch failed: {e.reason}", status=502) from e
 
 
+def assert_public_peer(resp: Any, url: str) -> None:
+    """Verify the actually-connected peer IP is public — DNS can rebind
+    between the assert_public_host check and connect() (TOCTOU). Skipped
+    when a configured proxy carries the request: the peer is the proxy."""
+    parsed = urllib.parse.urlparse(url)
+    # mirror urllib's ProxyHandler exactly: scheme key only, bypass on netloc
+    if urllib.request.getproxies().get(parsed.scheme) and not urllib.request.proxy_bypass(
+        parsed.netloc
+    ):
+        return
+    sock = getattr(getattr(resp.fp, "raw", None), "_sock", None)
+    if sock is not None:
+        ip = ipaddress.ip_address(sock.getpeername()[0])
+        if not ip.is_global:
+            raise FetchError("url resolved to a non-public address")
+
+
 def fetch_book_url(url: str, tmp_dir: Path, max_size: int = MAX_UPLOAD) -> Path:
     """Download an ebook URL into tmp_dir; raises FetchError."""
     if not url.lower().startswith(("http://", "https://")):
         raise FetchError("url must start with http:// or https://")
     resp = open_url(url)
     with resp:
+        assert_public_peer(resp, resp.geturl())
         name = Path(urllib.parse.urlparse(resp.geturl()).path).name or "book.epub"
         suffix = Path(name).suffix.lower()
         if suffix not in SUPPORTED_SUFFIXES:

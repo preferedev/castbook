@@ -6,8 +6,10 @@ artifacts, so the UI survives a server restart.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import secrets
 import shutil
 import tempfile
 import threading
@@ -40,6 +42,7 @@ from ..config import Settings
 from ..models import MANIFEST, resolve_model
 from ..models import pull as models_pull
 from ..pipeline import analyze_book, cast_book, export_book, generate_book, import_book
+from ..reader import MAX_READ_CHARS, article_text, split_for_reading
 from ..tts.backend import Backend
 from ..workdir import BookPaths
 
@@ -585,6 +588,93 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             )
         return FileResponse(out, media_type="audio/wav")
 
+    @app.post("/api/read")
+    def read_now(spec: dict[str, Any]) -> dict[str, Any]:
+        """Speechify-style: paste text or a URL, hear it now (single voice)."""
+        text = str(spec.get("text") or "").strip()
+        url = str(spec.get("url") or "").strip()
+        if url:
+            try:
+                with net.open_url(url, timeout=30) as resp:
+                    net.assert_public_peer(resp, resp.geturl())
+                    raw = resp.read(MAX_READ_CHARS + 1)
+            except net.FetchError as e:
+                raise _http(e) from e
+            if len(raw) > MAX_READ_CHARS:
+                raise HTTPException(413, "page too large")
+            body = raw.decode("utf-8", "replace")
+            text = article_text(body) if "<" in body[:200] else body
+        text = text[:MAX_READ_CHARS].strip()
+        chunks = split_for_reading(text)
+        if not chunks:
+            raise HTTPException(400, "nothing to read")
+        if len(chunks) > 400:
+            raise HTTPException(413, "too long")
+        voice = str(spec.get("voice") or "af_sarah")
+        speed = float(spec.get("speed") or 1.0)
+        speed = speed if 0 < speed <= 2 else 1.0
+        read_id = secrets.token_hex(6)
+        reads_root = cfg.data_dir / "_reads"
+        reads_root.mkdir(parents=True, exist_ok=True)
+        stale = sorted(reads_root.iterdir(), key=lambda p: p.stat().st_mtime)
+        for old in stale[:-31]:  # keep the newest 32 reads
+            job = _jobs.get(f"read:{old.name}")
+            if job is not None and job.is_alive():
+                continue
+            shutil.rmtree(old, ignore_errors=True)
+        d = reads_root / read_id
+        d.mkdir(parents=True)
+        status: dict[str, Any] = {"done": 0, "total": len(chunks)}
+
+        def save_status() -> None:
+            tmp = d / "status.json.tmp"
+            tmp.write_text(json.dumps(status))
+            tmp.replace(d / "status.json")
+
+        save_status()
+
+        def work() -> None:
+            try:
+                backend = _preview_backend(cfg)
+                vspec = VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed)
+                cancel = _cancels.get(f"read:{read_id}")
+                for i, chunk in enumerate(chunks):
+                    if cancel is not None and cancel.is_set():
+                        break
+                    backend.synthesize(chunk, vspec, d / f"{i:04}.wav")
+                    status["done"] = i + 1
+                    save_status()
+            except Exception as e:
+                status["error"] = str(e)
+                save_status()
+                raise
+
+        _spawn(f"read:{read_id}", work, _log_to(d / "read.log"))
+        return {"id": read_id, "total": len(chunks)}
+
+    @app.get("/api/read/{read_id}/status")
+    def read_status(read_id: str) -> dict[str, Any]:
+        f = _read_dir(cfg, read_id) / "status.json"
+        if not f.exists():
+            raise HTTPException(404, "no such read")
+        try:
+            return json.loads(f.read_text())  # type: ignore[no-any-return]
+        except json.JSONDecodeError:
+            raise HTTPException(503, "status updating") from None
+
+    @app.get("/api/read/{read_id}/audio/{i}")
+    def read_audio(read_id: str, i: int) -> FileResponse:
+        f = _read_dir(cfg, read_id) / f"{i:04}.wav"
+        if not f.exists():
+            raise HTTPException(404)
+        return FileResponse(f, media_type="audio/wav")
+
+    @app.post("/api/read/{read_id}/cancel")
+    def read_cancel(read_id: str) -> dict[str, Any]:
+        _read_dir(cfg, read_id)
+        _cancels.setdefault(f"read:{read_id}", threading.Event()).set()
+        return {"ok": True}
+
     @app.get("/api/books/{book_id}/review")
     def review(book_id: str) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
@@ -765,6 +855,12 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
 
 _backend: Backend | None = None
 _backend_lock = threading.Lock()
+
+
+def _read_dir(cfg: Settings, read_id: str) -> Path:
+    if not re.fullmatch(r"[0-9a-f]{12}", read_id):
+        raise HTTPException(404, "no such read")
+    return cfg.data_dir / "_reads" / read_id
 
 
 def _preview_backend(cfg: Settings) -> Backend:
