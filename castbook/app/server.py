@@ -877,6 +877,12 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     def chapter_transcript(book_id: str, chapter: int, fmt: str | None = None) -> FileResponse:
         book = _require_book(cfg, book_id)
         tr_dir = book.dir / "transcript"
+        if chapter == -1:
+            for ext in [fmt] if fmt else ["srt", "vtt", "txt"]:
+                f = tr_dir / f"full.{ext}"
+                if f.exists():
+                    return FileResponse(f)
+            raise HTTPException(404, "no merged transcript — run with ?merged=1")
         for ext in [fmt] if fmt else ["srt", "vtt", "txt"]:
             f = tr_dir / f"ch{chapter:03d}.{ext}"
             if f.exists():
@@ -885,18 +891,19 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
 
     @app.post("/api/books/{book_id}/transcript")
     def make_transcript(
-        book_id: str, fmt: str = "srt", speaker: str | None = None
+        book_id: str, fmt: str = "srt", speaker: str | None = None, merged: bool = False
     ) -> dict[str, Any]:
         from ..transcript import write_transcript
 
         book = _require_book(cfg, book_id)
         if fmt not in ("srt", "vtt", "txt"):
             raise HTTPException(400, "fmt must be srt, vtt or txt")
+        out = book.dir / "transcript" / f"full.{fmt}" if merged else book.dir / "transcript"
         try:
-            written = write_transcript(book, book.dir / "transcript", fmt, speaker=speaker)
+            written = write_transcript(book, out, fmt, speaker=speaker)
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
-        first = int(written[0].stem[2:]) if written else None
+        first = int(written[0].stem[2:]) if written and not merged else None
         return {"ok": True, "count": len(written), "first_chapter": first}
 
     @app.post("/api/preview")
