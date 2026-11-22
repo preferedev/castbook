@@ -24,10 +24,25 @@ class KokoroBackend(Backend):
     def capabilities(self) -> Capabilities:
         return Capabilities(streaming=True, languages=["en"])
 
+    def _voice_vector(self, name: str) -> str | npt.NDArray[np.float32]:
+        if "+" not in name:
+            return name
+        parts: list[npt.NDArray[np.float32]] = []
+        total = 0.0
+        for spec in name.split("+"):
+            vname, _, w = spec.partition(":")
+            weight = float(w) if w else 1.0
+            parts.append(weight * np.asarray(self._kokoro.get_voice_style(vname)))
+            total += weight
+        if total <= 0:
+            raise ValueError(f"bad voice mix {name!r}")
+        return sum(parts) / total  # type: ignore[return-value]
+
     def synthesize(self, text: str, voice: VoiceSpec, out_wav: Path) -> float:
         samples: list[npt.NDArray[np.float32]] = []
+        vec = self._voice_vector(voice.voice)
         for piece in _split(text):
-            audio, _ = self._kokoro.create(piece, voice=voice.voice, speed=voice.speed)
+            audio, _ = self._kokoro.create(piece, voice=vec, speed=voice.speed)
             samples.append(np.asarray(audio, dtype=np.float32))
         if not samples:
             raise ValueError("kokoro produced no audio")

@@ -25,7 +25,7 @@ un-rendered units are synthesized.
 |---|---|
 | `castbook import <file> [<file>…]` | import one or more ebooks (EPUB/PDF/TXT/MD) → `chapters.json` |
 | `castbook analyze <book>` | attribute every line (`--backend heuristic\|llamacpp` to override config) |
-| `castbook cast <book>` | auto-assign voices; `--map name=voice`, `--speed name=rate` to override |
+| `castbook cast <book>` | auto-assign voices; `--map name=voice` (mix voices as `a:0.7+b:0.3`), `--speed name=rate` |
 | `castbook generate <book>` | synthesize audio (resumable; `--chapters 1-3,7`, `--limit 50` preview, `--align` word timestamps) |
 | `castbook export <book>` | mux chaptered M4B (+ `--format mp3`/`both`) |
 | `castbook review <book>` | list ambiguous units; `--set unit=speaker` to fix |
