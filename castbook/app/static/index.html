@@ -89,6 +89,7 @@
   </table>
   <div class="row" style="margin-top:.75rem">
     <button id="save-cast" class="ghost">Save casting</button>
+    <label class="muted" style="font-size:.8rem" title="single-voice: everyone reads as the narrator"><input type="checkbox" id="flat-cast"> 1 voice</label>
     <button id="pack-export" class="ghost" title="download casting as a shareable voice pack">⤓ pack</button>
     <button id="pack-import" class="ghost" title="apply a voice pack file">⤒ pack</button>
     <input type="file" id="pack-file" accept=".json" hidden>
@@ -303,7 +304,7 @@ async function saveCast() {
     const voice = mix || s.value;
     overrides[s.dataset.speaker] = spd > 0 && spd !== 1 ? {voice, speed: spd} : voice;
   });
-  await api(`/api/books/${current}/cast`, {
+  await api(`/api/books/${current}/cast${$("flat-cast").checked ? "?flat=true" : ""}`, {
     method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(overrides)});
 }
 
