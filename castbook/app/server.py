@@ -157,8 +157,15 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             global _backend
             with _backend_lock:
                 _backend = None
-        else:
-            recast = []
+        strength = tts.get("emotion_strength")
+        if strength is not None:
+            try:
+                v = float(strength)
+            except (TypeError, ValueError):
+                raise HTTPException(422, "emotion_strength must be a number") from None
+            if not 0.0 <= v <= 2.0:
+                raise HTTPException(422, "emotion_strength must be 0..2")
+            cfg.tts.emotion_strength = v
         cfg.save()
         out = cfg.model_dump(mode="json")
         out["recast"] = recast
