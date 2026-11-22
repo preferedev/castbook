@@ -292,9 +292,7 @@ class HeuristicAttributor:
                 pool = parties or cast_ids
                 dash_owners = _other_owners(run, names)
                 cands = [
-                    p
-                    for p in pool
-                    if p not in _addressed(run, names) and p not in dash_owners
+                    p for p in pool if p not in _addressed(run, names) and p not in dash_owners
                 ]
                 if len(cands) == 1:
                     resolved[i] = cands[0]
@@ -585,7 +583,28 @@ def _dash_speakers(text: str, names: dict[str, str]) -> set[str]:
 _NAME_SCAN = re.compile(NAME)
 
 _ART_STOP = frozenset(
-    ["le", "la", "les", "l'", "d'", "de", "du", "des", "un", "une", "der", "die", "das", "dem", "den", "ein", "eine", "the", "a", "an"]
+    [
+        "le",
+        "la",
+        "les",
+        "l'",
+        "d'",
+        "de",
+        "du",
+        "des",
+        "un",
+        "une",
+        "der",
+        "die",
+        "das",
+        "dem",
+        "den",
+        "ein",
+        "eine",
+        "the",
+        "a",
+        "an",
+    ]
 )
 
 
