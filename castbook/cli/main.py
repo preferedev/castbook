@@ -114,7 +114,8 @@ def generate(
     chapters: Annotated[str | None, typer.Option("--chapters")] = None,
     speed: Annotated[float, typer.Option("--speed", min=0.5, max=2.0)] = 1.0,
     limit: Annotated[
-        int | None, typer.Option("--limit", help="render only the first N units (no assembly)")
+        int | None,
+        typer.Option("--limit", min=1, help="render only the first N units (no assembly)"),
     ] = None,
 ) -> None:
     """Synthesize units and assemble chapter audio (resumable)."""

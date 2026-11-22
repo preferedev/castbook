@@ -95,6 +95,8 @@ def run(
 
     units = [u for u in attribution.units if chapters is None or u.chapter in chapters]
     if limit is not None:
+        if limit < 1:
+            raise ValueError(f"limit must be >= 1, got {limit}")
         units = units[:limit]
     total = len(units)
     rendered = skipped = failed = 0

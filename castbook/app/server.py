@@ -13,7 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from ..artifacts import (
@@ -168,7 +168,7 @@ def create_app(cfg: Settings) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/generate")
-    def generate(book_id: str, limit: int | None = None) -> dict[str, Any]:
+    def generate(book_id: str, limit: Annotated[int | None, Query(ge=1)] = None) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         log = _log_to(book.dir / "job.log")
         _spawn(f"generate:{book_id}", lambda: generate_book(book, cfg, log=log, limit=limit))
