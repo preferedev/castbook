@@ -26,9 +26,16 @@ class QwenBackend(Backend):
     name = "qwen3-tts-voicedesign"
 
     def __init__(self, model_id: str = DEFAULT_MODEL) -> None:
+        import torch
         from qwen_tts import Qwen3TTSModel  # type: ignore[import-not-found]
 
-        self._model = Qwen3TTSModel.from_pretrained(model_id)
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
+        self._model = Qwen3TTSModel.from_pretrained(model_id, device_map=device)
 
     def capabilities(self) -> Capabilities:
         return Capabilities(
@@ -40,6 +47,11 @@ class QwenBackend(Backend):
 
     def synthesize(self, text: str, voice: VoiceSpec, out_wav: Path) -> float:
         instruct = voice.voice  # voice slot holds the design description
+        if voice.emotion != "neutral":
+            instruct += f", {voice.emotion} delivery"
+        import torch
+
+        torch.manual_seed(voice.seed)  # same seed -> same designed voice every unit
         samples: list[npt.NDArray[np.float32]] = []
         sr = 0
         for piece in _split(text):
