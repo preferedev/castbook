@@ -870,6 +870,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             if manifest is not None:
                 popped = len(manifest.units)
                 manifest.units.clear()
+                manifest.chapters.clear()
                 save_artifact(manifest, book.dir)
         return {"ok": True, "meta": m.model_dump(), "audio_invalidated": popped}
 

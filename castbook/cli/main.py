@@ -468,6 +468,7 @@ def meta(
             manifest = load_artifact(AudioManifest, b.dir)
             if manifest is not None:
                 manifest.units.clear()
+                manifest.chapters.clear()
                 save_artifact(manifest, b.dir)
                 typer.echo("audio invalidated — re-render with `castbook generate`")
         ch.meta.language = language
