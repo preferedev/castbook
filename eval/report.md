@@ -1,5 +1,5 @@
 # Castbook attribution eval
-_2026-11-22T15:37:26+00:00Z — heuristic_
+_2026-11-22T15:41:30+00:00Z — heuristic_
 
 | book | units | labeled | correct | accuracy | ambiguous |
 |---|---|---|---|---|---|
