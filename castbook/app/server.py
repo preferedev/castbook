@@ -855,14 +855,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         raise HTTPException(404, "no transcript — run `castbook transcript`")
 
     @app.post("/api/books/{book_id}/transcript")
-    def make_transcript(book_id: str, fmt: str = "srt") -> dict[str, Any]:
+    def make_transcript(
+        book_id: str, fmt: str = "srt", speaker: str | None = None
+    ) -> dict[str, Any]:
         from ..transcript import write_transcript
 
         book = _require_book(cfg, book_id)
         if fmt not in ("srt", "vtt", "txt"):
             raise HTTPException(400, "fmt must be srt, vtt or txt")
         try:
-            written = write_transcript(book, book.dir / "transcript", fmt)
+            written = write_transcript(book, book.dir / "transcript", fmt, speaker=speaker)
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
         first = int(written[0].stem[2:]) if written else None
