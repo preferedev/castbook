@@ -46,6 +46,7 @@ un-rendered units are synthesized.
 | `castbook books` | list books with render progress |
 | `castbook models list\|pull` | model management |
 | `castbook serve -p 8484` | local web UI (`--host 0.0.0.0` shares on LAN behind a printed token) |
+| `castbook transcript <book>` | per-chapter SRT/VTT/TXT with speaker labels (`--fmt`, `-o`) |
 
 ## Docker
 
@@ -56,7 +57,7 @@ docker run -v $PWD/data:/data castbook doctor
 
 ## Web UI
 
-`castbook serve` then open `http://localhost:8484`: pick the TTS backend in the header (kokoro/pocket/qwen — switching drops stale castings so you recast), pull models from the Models panel, import files (multi-select or drag-and-drop), audition voices
+`castbook serve` then open `http://localhost:8484`: pick the TTS backend in the header (kokoro/pocket/qwen — switching drops stale castings so you recast), pull models from the Models panel, import files (multi-select, drag-and-drop, or an http(s) ebook URL — private-network URLs are refused), audition voices
 with the ▶ button, review and
 override voice casting (including per-speaker speed, `voiceA:0.7+voiceB:0.3` mixes, and merging duplicate speakers), generate (or "Preview 50" for a quick sample), play any rendered chapter with ▶ audio, re-render just a range with ↻, and export in the background — download the M4B when it lands.
 The reader view highlights the spoken word when `castbook align` has run, remembers
