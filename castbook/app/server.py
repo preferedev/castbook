@@ -334,7 +334,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     @app.post("/api/books/{book_id}/cover")
     async def set_book_cover(book_id: str, file: Annotated[UploadFile, File()]) -> dict[str, str]:
         book = _require_book(cfg, book_id)
-        data = await file.read()
+        data = await file.read(20 * 1024 * 1024 + 1)
         if len(data) > 20 * 1024 * 1024:
             raise HTTPException(413, "cover image too large")
         tmp = book.dir / ".cover-upload"
