@@ -276,7 +276,9 @@ async function openBook(id) {
     const n = d.unit_counts?.[sp] ?? 0;
     const role = char ? `${char.role} · ${char.gender} · ${char.vibe || ""}` : "";
     rows.push(`<tr>
-      <td>${esc(char?.name || sp)}${sp === "narrator" || sp === "ambiguous" ? " <span class=muted>(reserved)</span>" : ""}</td>
+      <td>${sp === "narrator" || sp === "ambiguous"
+        ? `${esc(char?.name || sp)} <span class=muted>(reserved)</span>`
+        : `<input data-rename="${sp}" value="${esc(char?.name || sp)}" title="rename character" style="width:10rem">`}</td>
       <td class="muted">${esc(role)}${n ? ` · ${n} units` : ""}${d.speaker_stats?.[sp]?.minutes ? ` · ~${d.speaker_stats[sp].minutes} min` : ""}</td>
       <td>${voices.length ? `<select data-speaker="${sp}">${voices.map(v =>
         `<option value="${v.id}" ${v.id === cur ? "selected" : ""}>${v.id} — ${esc(v.description)}</option>`
@@ -298,6 +300,11 @@ async function openBook(id) {
       (c.rendered ? ` <a href="${tok(`/api/books/${id}/chapters/${c.index}/audio`)}" target="_blank">▶</a>` : "") +
       `</div>`).join("");
   }).catch(() => {});
+  document.querySelectorAll("[data-rename]").forEach(inp => inp.onchange = async () => {
+    const name = inp.value.trim();
+    if (!name) return;
+    await api(`/api/books/${current}/rename?speaker=${inp.dataset.rename}&name=` + encodeURIComponent(name), {method: "POST"});
+  });
   document.querySelectorAll("[data-preview]").forEach(b => b.onclick = async () => {
     const sel = b.closest("tr").querySelector("select, input[data-voice-text]");
     const mix = b.closest("tr").querySelector("input.mix").value.trim();
