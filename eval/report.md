@@ -1,5 +1,5 @@
 # Castbook attribution eval
-_2026-11-22T19:05:08+00:00Z — heuristic_
+_2026-11-22T19:15:39+00:00Z — heuristic_
 
 | book | units | labeled | correct | accuracy | ambiguous |
 |---|---|---|---|---|---|
@@ -9,7 +9,7 @@ _2026-11-22T19:05:08+00:00Z — heuristic_
 | great-expectations | 46 | 34 | 32 | 94% | 2 |
 | huckleberry-finn | 27 | 20 | 18 | 90% | 0 |
 | jane-eyre | 26 | 20 | 18 | 90% | 0 |
-| le-papa-de-simon | 29 | 20 | 12 | 60% | 4 |
+| le-papa-de-simon | 29 | 20 | 12 | 60% | 7 |
 | moby-dick | 36 | 20 | 19 | 95% | 2 |
 | pride-and-prejudice | 34 | 20 | 15 | 75% | 1 |
 | rumpelstilzchen | 16 | 16 | 11 | 69% | 0 |
@@ -29,12 +29,12 @@ _2026-11-22T19:05:08+00:00Z — heuristic_
 - **huckleberry-finn** `ch008-u0019` expected `jim` got `huckleberry-finn` — '“No! W’y, what has you lived on? But you got a gun. Oh, yes, you got a\ngun. Dat’'
 - **jane-eyre** `ch023-u0020` expected `jane-eyre` got `rochester` — '“I am no bird; and no net ensnares me; I am a free human being with an\nindepende'
 - **jane-eyre** `ch023-u0024` expected `jane-eyre` got `rochester` — '“You play a farce, which I merely laugh at.”'
-- **le-papa-de-simon** `ch000-u0004` expected `simon` got `gars` — '«\xa0Simon.\xa0»\n Le gars lui cria\xa0: —'
-- **le-papa-de-simon** `ch000-u0007` expected `simon` got `gars` — '«\xa0Si, j’en ai un. »\n — Où est-il\xa0? demanda le gars. Simon se tut\xa0; il ne savait '
+- **le-papa-de-simon** `ch000-u0004` expected `simon` got `ambiguous` — '«\xa0Simon.\xa0»\n Le gars lui cria\xa0: —'
+- **le-papa-de-simon** `ch000-u0007` expected `simon` got `ambiguous` — '«\xa0Si, j’en ai un. »\n — Où est-il\xa0? demanda le gars. Simon se tut\xa0; il ne savait '
 - **le-papa-de-simon** `ch000-u0010` expected `enfants` got `ambiguous` — '«\xa0Pas de papa\xa0! pas de papa\xa0! »\n Mais Simon tout à coup cessa de sangloter. Une '
 - **le-papa-de-simon** `ch000-u0014` expected `simon` got `ambiguous` — '«\xa0Je vais me noyer parce que je n’ai point de papa. »\n Il faisait très chaud, tr'
 - **le-papa-de-simon** `ch000-u0016` expected `philippe` got `simon` — '«\xa0Qu’est-ce qui te fait donc tant de chagrin, mon bonhomme\xa0?\xa0»\n Simon se retourn'
-- **le-papa-de-simon** `ch000-u0022` expected `simon` got `gars` — '«\xa0C’est mon papa tout de même. »\n — Ça se peut bien, dit le gars en ricanant, ma'
+- **le-papa-de-simon** `ch000-u0022` expected `simon` got `ambiguous` — '«\xa0C’est mon papa tout de même. »\n — Ça se peut bien, dit le gars en ricanant, ma'
 - **le-papa-de-simon** `ch000-u0026` expected `philippe` got `blanchotte` — '«\xa0Va dire à ta maman que j’irai lui parler ce soir.\xa0» \n Puis il poussa l’enfant '
 - **le-papa-de-simon** `ch000-u0029` expected `simon` got `blanchotte` — '«\xa0Mon papa, dit-il d’une voix claire, c’est Philippe Remy, le forgeron, et il a '
 - **moby-dick** `ch036-u0020` expected `ahab` got `ambiguous` — '“All ye mast-headers have before now heard me give orders about a white\nwhale. L'
@@ -43,7 +43,7 @@ _2026-11-22T19:05:08+00:00Z — heuristic_
 - **pride-and-prejudice** `ch001-u0015` expected `elizabeth` got `kitty` — '“Tomorrow fortnight.”'
 - **pride-and-prejudice** `ch001-u0018` expected `bennet` got `kitty` — '“Impossible, Mr. Bennet, impossible, when I am not acquainted with him myself; h'
 - **pride-and-prejudice** `ch001-u0019` expected `bennet` got `kitty` — '“I honour your circumspection. A fortnight’s acquaintance is certainly very litt'
-- **rumpelstilzchen** `ch000-u0001` expected `mueller` got `koenig` — 'Es war einmal ein Müller, der war arm, aber er hatte eine schöne Tochter. Nun tr'
+- **rumpelstilzchen** `ch000-u0001` expected `mueller` got `rumpelstilzchen` — 'Es war einmal ein Müller, der war arm, aber er hatte eine schöne Tochter. Nun tr'
 - **rumpelstilzchen** `ch000-u0007` expected `koenig` got `rumpelstilzchen` — '„die mußt du noch in dieser Nacht verspinnen: gelingt dirs aber, so sollst du me'
 - **rumpelstilzchen** `ch000-u0009` expected `rumpelstilzchen` got `koenig` — '„So versprich mir, wenn du Königin wirst, dein erstes Kind.“ „Wer weiß wie das n'
 - **rumpelstilzchen** `ch000-u0014` expected `tochter` got `koenig` — '„heißt du vielleicht Rippenbiest oder Hammelswade oder Schnürbein?“ aber es antw'
@@ -54,22 +54,3 @@ _2026-11-22T19:05:08+00:00Z — heuristic_
 - **treasure-island** `ch001-u0002` expected `long-john-silver` got `jim-hawkins` — '“Yes, my lad,” said he;'
 - **treasure-island** `ch001-u0004` expected `long-john-silver` got `jim-hawkins` — '“Oh!” said he, quite loud, and offering his hand.'
 - **treasure-island** `ch001-u0029` expected `long-john-silver` got `jim-hawkins` — '“Keel-hauling, was you? And a mighty suitable thing, too, and you may\nlay to tha'
-
-## Hybrid run
-
-_2026-11-22 — heuristic + LLM (Qwen3-4B) on uncertain units_
-
-| book | accuracy |
-|---|---|
-| alice-in-wonderland | 95% |
-| dorian-gray | 88% |
-| dr-jekyll-and-mr-hyde | 95% |
-| great-expectations | 100% |
-| huckleberry-finn | 80% |
-| jane-eyre | 100% |
-| moby-dick | 100% |
-| pride-and-prejudice | 85% |
-| sherlock-holmes | 86% |
-| treasure-island | 92% |
-
-Average 92.1% vs 89.3% heuristic-only.
