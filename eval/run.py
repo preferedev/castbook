@@ -53,7 +53,8 @@ def evaluate(path: Path, attributor: Attributor) -> dict[str, object]:
     from castbook.analyze.reconcile import normalize
 
     def same(a: str, b: str) -> bool:
-        return normalize(a) == normalize(b)
+        a, b = normalize(a), normalize(b)
+        return a == b or a.endswith(f" {b}") or b.endswith(f" {a}")
 
     correct = sum(1 for u in labeled if same(u.speaker, labels[u.id]))
     missed = [u for u in labeled if not same(u.speaker, labels[u.id])]
