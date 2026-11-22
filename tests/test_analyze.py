@@ -20,11 +20,12 @@ def test_normalize_speaker_shared_surname() -> None:
     from castbook.artifacts import Character
 
     cast = [
-        Character(id="a", name="Mr. Bennet", aliases=[]),
-        Character(id="b", name="Mrs. Bennet", aliases=[]),
+        Character(id="a", name="Mr Bennet", aliases=[]),
+        Character(id="b", name="Mrs Bennet", aliases=[]),
     ]
-    assert _normalize_speaker("mrs. bennet", cast) == "mrs. bennet"
-    assert _normalize_speaker("mr. bennet", cast) == "mr. bennet"
+    # exact match misses on the period; surname match must not grab Mr. Bennet
+    assert _normalize_speaker("mrs. bennet", cast) == "mrs bennet"
+    assert _normalize_speaker("mr. bennet", cast) == "mr bennet"
     cast2 = [
         Character(id="a", name="Mr. Bennet", aliases=[]),
         Character(id="b", name="Lady Catherine", aliases=["Lady Catherine de Bourgh"]),
