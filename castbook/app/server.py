@@ -6,6 +6,7 @@ artifacts, so the UI survives a server restart.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -874,7 +875,8 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         speed = speed if 0 < speed <= 2 else 1.0
         emotion = str(spec.get("emotion", "neutral"))
         text = str(spec.get("text") or "A quick preview of this voice.")
-        out = cfg.data_dir / ".previews" / f"{voice}-{speed}-{emotion}-{abs(hash(text))}.wav"
+        text_key = hashlib.sha256(text[:300].encode()).hexdigest()[:16]
+        out = cfg.data_dir / ".previews" / f"{voice}-{speed}-{emotion}-{text_key}.wav"
         out.parent.mkdir(parents=True, exist_ok=True)
         if not out.exists():
             backend = _preview_backend(cfg)
