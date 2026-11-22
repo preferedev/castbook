@@ -455,8 +455,8 @@ def stats(
             a[1] += len(u.text.split())
             a[2] += len(u.text) / 15 / 60
         typer.echo(f"\n{'speaker':24} {'units':>6} {'words':>7} {'~min':>7}")
-        for sp, (n_units, n_words, mins) in sorted(agg.items(), key=lambda kv: -kv[1][2]):
-            typer.echo(f"{sp:24} {int(n_units):>6} {int(n_words):>7} {mins:>7.1f}")
+        for sp, (u_cnt, w_cnt, mins) in sorted(agg.items(), key=lambda kv: -kv[1][2]):
+            typer.echo(f"{sp:24} {int(u_cnt):>6} {int(w_cnt):>7} {mins:>7.1f}")
     if casting:
         voices = {v.voice for v in casting.map.values()}
         typer.echo(f"speakers:  {len(casting.map)} on {len(voices)} voices")
