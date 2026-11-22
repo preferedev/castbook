@@ -16,7 +16,7 @@ from ..artifacts import Chapter, Character, Emotion, Unit
 from ..config import LlmSettings
 from . import prompts
 from .heuristic import slugify
-from .units import split_units
+from .units import QUOTE_RE, split_units
 
 BATCH = 12
 EXCERPT_CHARS = 1800
@@ -120,9 +120,10 @@ class LlamaCppAttributor:
                     emotion = str(tag.get("emotion", "neutral")).lower()
                     u.emotion = tcast(Emotion, emotion if emotion in _EMOTIONS else "neutral")
             prev_speaker, prev_text = batch[-1].speaker, batch[-1].text
-        for u in units:  # narration without quotes can only be the narrator's
-            if u.kind == "narration" and u.speaker not in ("narrator", "ambiguous"):
+        for u in units:  # no quoted span = narration; only the narrator voices it
+            if u.speaker not in ("narrator", "ambiguous") and not QUOTE_RE.search(u.text):
                 u.speaker = "narrator"
+                u.kind = "narration"
         for u in units:  # rescue: '"quote," X said' mislabeled as narration
             if u.speaker in ("narrator", "ambiguous"):
                 rescue = _said_speaker(u.text, cast)
