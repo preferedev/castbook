@@ -95,3 +95,60 @@ def test_preset_detection_by_handle_not_punctuation() -> None:
     assert _looks_like_preset("paul")
     assert _looks_like_preset("af_heart")
     assert _looks_like_preset("a+b")
+
+
+def test_voicepack_roundtrip(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from castbook.artifacts import CastFile, CastingFile, VoiceSpec, save_artifact
+    from castbook.cast.voicepack import apply_pack, export_pack
+    from castbook.workdir import BookPaths
+
+    b1 = BookPaths(tmp_path / "books", "b1")
+    b1.dir.mkdir(parents=True)
+    chars = _chars()
+    save_artifact(CastFile(book_id="b1", characters=chars, input_hash="h"), b1.dir)
+    m = auto_cast(chars, "b1")
+    m["elizabeth"] = VoiceSpec(backend="kokoro", voice="af_bella", speed=1.2)
+    save_artifact(CastingFile(book_id="b1", map=m, input_hash="h"), b1.dir)
+
+    pack = export_pack(b1)
+    assert pack["speakers"]["elizabeth"]["voice"] == "af_bella"
+    assert pack["aliases"]["lizzy"] == "elizabeth"
+
+    # second book: same character under a different id via alias match
+    b2 = BookPaths(tmp_path / "books", "b2")
+    b2.dir.mkdir(parents=True)
+    chars2 = [Character(id="lizzy", name="Lizzy", aliases=["Elizabeth"], gender="f", role="major")]
+    save_artifact(CastFile(book_id="b2", characters=chars2, input_hash="h"), b2.dir)
+    m2 = auto_cast(chars2, "b2")
+    save_artifact(CastingFile(book_id="b2", map=m2, input_hash="h"), b2.dir)
+
+    res = apply_pack(b2, pack, "kokoro")
+    assert "lizzy" in res["applied"]
+    assert "narrator" in res["applied"]  # cast ids match casting.map, not characters
+    assert "darcy" in res["skipped"]
+    from castbook.artifacts import load_artifact
+
+    assert load_artifact(CastingFile, b2.dir).map["lizzy"].voice == "af_bella"
+
+
+def test_voicepack_rejects_foreign_backend(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from castbook.artifacts import CastFile, CastingFile, save_artifact
+    from castbook.cast.voicepack import apply_pack
+    from castbook.workdir import BookPaths
+
+    b = BookPaths(tmp_path / "books", "b3")
+    b.dir.mkdir(parents=True)
+    chars = [Character(id="mara", name="Mara", gender="f", role="major")]
+    save_artifact(CastFile(book_id="b3", characters=chars, input_hash="h"), b.dir)
+    save_artifact(CastingFile(book_id="b3", map=auto_cast(chars, "b3"), input_hash="h"), b.dir)
+    pack = {
+        "schema": 1,
+        "backend": "kokoro",
+        "speakers": {
+            "mara": {"backend": "kokoro", "voice": "af_bella", "seed": 1, "speed": 1.0},
+            "mystery": {"backend": "kokoro", "voice": "am_echo", "seed": 1, "speed": 1.0},
+        },
+    }
+    res = apply_pack(b, pack, "pocket")
+    assert res["applied"] == []
+    assert set(res["mismatched"]) == {"mara", "mystery"}
