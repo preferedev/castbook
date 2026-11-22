@@ -875,6 +875,7 @@ def books(
                 {
                     "book_id": d.name,
                     "title": title,
+                    "language": chapters.meta.language if chapters else None,
                     "stage": stage,
                     "units": total,
                     "rendered": done,
