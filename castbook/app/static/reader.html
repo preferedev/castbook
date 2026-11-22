@@ -98,6 +98,16 @@ async function boot() {
     const i = units.findIndex(u => u.chapter === +e.target.value);
     if (i >= 0) { $(`u${i}`).scrollIntoView({block: "start"}); if (units[i].has_audio) playAt(i); }
   };
+  const wantCh = new URLSearchParams(location.search).get("ch");
+  if (wantCh !== null) {
+    const i = units.findIndex(u => u.chapter === +wantCh);
+    if (i >= 0) {
+      $(`u${i}`).scrollIntoView({block: "start"});
+      $("chap").value = String(units[i].chapter);
+      if (units[i].has_audio) playAt(i);
+    }
+    return;
+  }
   const saved = localStorage.getItem(`castbook-pos-${BOOK}`);
   if (saved) {
     const {i, t} = JSON.parse(saved);

@@ -524,6 +524,25 @@ def watch(
         typer.echo("stopped")
 
 
+@app.command(name="open")
+def open_book(
+    book: str,
+    port: Annotated[int, typer.Option("--port", "-p")] = 8484,
+    chapter: Annotated[int | None, typer.Option("--chapter")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Open a book's read-along page in the browser (server must be running)."""
+    import webbrowser
+
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    url = f"http://localhost:{port}/reader/{b.book_id}"
+    if chapter is not None:
+        url += f"?ch={chapter}"
+    typer.echo(url)
+    webbrowser.open(url)
+
+
 @app.command()
 def clean(
     yes: Annotated[bool, typer.Option("--yes", "-y", help="skip confirmation")] = False,
