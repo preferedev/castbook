@@ -55,20 +55,30 @@ def run(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> P
     input_hash = chapters_file.input_hash
 
     prior_cast = load_artifact(CastFile, book.dir)
-    if prior_cast is not None and prior_cast.input_hash == input_hash:
+    if (
+        prior_cast is not None
+        and prior_cast.input_hash == input_hash
+        and prior_cast.attributor == attributor.name
+    ):
         cast = prior_cast.characters
         log(f"[analyze] reusing cast: {len(cast)} characters")
     else:
         log(f"[analyze] extracting cast with {attributor.name}")
         cast = reconcile_cast(attributor.extract_cast(chapters_file.chapters))
         save_artifact(
-            CastFile(book_id=book.book_id, characters=cast, input_hash=input_hash), book.dir
+            CastFile(
+                book_id=book.book_id,
+                characters=cast,
+                input_hash=input_hash,
+                attributor=attributor.name,
+            ),
+            book.dir,
         )
         log(f"[analyze] {len(cast)} characters")
 
     prior = load_artifact(AttributionFile, book.dir)
     done_chapters: dict[int, list[Unit]] = {}
-    if prior is not None and prior.input_hash == input_hash:
+    if prior is not None and prior.input_hash == input_hash and prior.attributor == attributor.name:
         for u in prior.units:
             done_chapters.setdefault(u.chapter, []).append(u)
         if done_chapters:
