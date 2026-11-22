@@ -404,11 +404,38 @@ def doctor(
 
 @app.command()
 def stats(
-    book: str,
+    book: Annotated[str | None, typer.Argument()] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Print book metrics: words, units, voices, rendered audio time."""
     cfg = _cfg(config)
+    if book is None:
+        n_books = n_units = n_rendered = 0
+        chars = 0.0
+        for d in cfg.data_dir.iterdir() if cfg.data_dir.is_dir() else ():
+            if not d.is_dir():
+                continue
+            if load_artifact(ChaptersFile, d) is None:
+                continue
+            n_books += 1
+            attrib_f = load_artifact(AttributionFile, d)
+            manifest_f = load_artifact(AudioManifest, d)
+            if attrib_f is None:
+                continue
+            n_units += len(attrib_f.units)
+            done_ids = (
+                {k for k, e in manifest_f.units.items() if e.status == "done"}
+                if manifest_f
+                else set()
+            )
+            for u in attrib_f.units:
+                if u.id in done_ids:
+                    n_rendered += 1
+                    chars += len(u.text)
+        typer.echo(f"books:     {n_books}")
+        typer.echo(f"units:     {n_units:,} ({n_rendered:,} rendered)")
+        typer.echo(f"audio:     ~{chars / 15 / 60:.0f} min rendered")
+        return
     b = _book(cfg, book)
     chapters = load_artifact(ChaptersFile, b.dir)
     attrib = load_artifact(AttributionFile, b.dir)
