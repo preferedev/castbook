@@ -79,11 +79,22 @@ def import_cmd(
 ) -> None:
     """Copy books into the library and parse them into chapters."""
     cfg = _cfg(config)
+    from .. import net
+
+    sources: list[str] = []
     for src in files:
+        p = Path(src)
+        if p.is_dir():
+            found = sorted(f for f in p.iterdir() if f.suffix.lower() in net.SUPPORTED_SUFFIXES)
+            if not found:
+                typer.echo(f"no supported books in {src}")
+                raise typer.Exit(1)
+            sources.extend(str(f) for f in found)
+        else:
+            sources.append(src)
+    for src in sources:
         path = Path(src)
         if src.lower().startswith(("http://", "https://")):
-            from .. import net
-
             tmp = Path(tempfile.mkdtemp())
             try:
                 path = net.fetch_book_url(src, tmp)
@@ -92,6 +103,9 @@ def import_cmd(
                 raise typer.Exit(1) from e
         if not path.exists() or path.is_dir():
             typer.echo(f"no such file: {src}")
+            raise typer.Exit(1)
+        if path.suffix.lower() not in net.SUPPORTED_SUFFIXES:
+            typer.echo(f"unsupported format {path.suffix or '(none)'} — {path.name}")
             raise typer.Exit(1)
         book = import_book(path, cfg)
         typer.echo(f"book id: {book.book_id}")
