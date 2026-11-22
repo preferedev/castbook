@@ -6,6 +6,8 @@ Source: Kokoro-82M preset voices (Apache-2.0) via kokoro-onnx.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic import BaseModel
 
 
@@ -86,3 +88,25 @@ def pool(gender: str, age: str = "") -> list[VoiceEntry]:
         if aged:
             return aged
     return voices
+
+
+def _norm(name: str) -> str:
+    import re
+
+    return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
+
+
+def load_memory(data_dir: Path) -> dict[str, str]:
+    import json
+
+    f = Path(data_dir) / "voice-memory.json"
+    if not f.exists():
+        return {}
+    return {str(k): str(v) for k, v in json.load(f.open()).items()}
+
+
+def save_memory(data_dir: Path, mapping: dict[str, str]) -> None:
+    import json
+
+    merged = {**load_memory(data_dir), **{_norm(k): v for k, v in mapping.items()}}
+    Path(data_dir, "voice-memory.json").write_text(json.dumps(merged, indent=2))
