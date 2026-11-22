@@ -760,9 +760,22 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/regenerate")
-    def regenerate(book_id: str, chapters: str) -> dict[str, Any]:
+    def regenerate(book_id: str, chapters: str = "", failed: bool = False) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         sel: set[int] = set()
+        if failed:
+            manifest0 = load_artifact(AudioManifest, book.dir)
+            attrib0 = load_artifact(AttributionFile, book.dir)
+            if manifest0 is None or attrib0 is None:
+                raise HTTPException(409, "nothing to regenerate")
+            ch_by_unit = {u.id: u.chapter for u in attrib0.units}
+            sel = {
+                ch_by_unit[uid]
+                for uid, e in manifest0.units.items()
+                if e.status == UnitStatus.failed and uid in ch_by_unit
+            }
+            if not sel:
+                raise HTTPException(404, "no failed units")
         try:
             for part in chapters.split(","):
                 part = part.strip()
