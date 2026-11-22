@@ -379,6 +379,21 @@ def estimate(
     )
 
 
+@app.command("config")
+def show_config(
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Show the effective configuration and where it came from."""
+    cfg = _cfg(config)
+    src = getattr(cfg, "_config_path", None)
+    typer.echo(f"file:      {src if src and src.exists() else '(defaults — no config.toml)'}")
+    typer.echo(f"data_dir:  {cfg.data_dir}")
+    typer.echo(f"models:    {cfg.models_dir}")
+    typer.echo(f"llm:       {cfg.llm.backend}")
+    typer.echo(f"tts:       {cfg.tts.backend}")
+    typer.echo(f"export:    {cfg.export.format}")
+
+
 @app.command()
 def lexicon(
     book: Annotated[str | None, typer.Argument()] = None,
