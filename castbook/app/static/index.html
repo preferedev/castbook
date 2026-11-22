@@ -80,6 +80,7 @@
     <select id="merge-dst"></select>
     <button id="merge-btn" class="ghost">Merge</button>
     <button id="analyze">Re-analyze</button>
+    <button id="run-all" title="analyze → cast → generate → export">Run all</button>
     <input id="gen-chapters" placeholder="ch 1-3,7" style="width:5.5rem" title="chapter range">
     <button id="generate">Generate</button>
     <button id="regen" class="ghost" title="re-render these chapters">↻</button>
@@ -87,6 +88,7 @@
     <button id="preview-gen" class="ghost">Preview 50</button>
     <select id="export-fmt" title="export format"><option value="m4b">m4b</option><option>mp3</option><option>both</option></select>
     <select id="export-layout" title="library layout"><option value="">flat</option><option value="abs">audiobookshelf</option></select>
+    <input id="export-ch" placeholder="chapters (e.g. 1-3,7)" size="16" style="width:9rem">
     <button id="export" class="ghost">Export</button>
     <button id="align" class="ghost" title="word-level karaoke timestamps">Align</button>
     <button id="stop" class="ghost" title="cancel running job">■</button>
@@ -168,7 +170,7 @@ async function loadBooks() {
         <button class="ghost" onclick="deleteBook('${b.book_id}')">Delete</button>
         <a class="ghost" href="${tok(`/reader/${b.book_id}`)}">Read</a>
         <a class="ghost" href="#" onclick="dlTranscript('${b.book_id}');return false">SRT</a>
-        ${b.exports.map(f => `<a href="${tok(`/api/books/${b.book_id}/download/${f}`)}">${esc(f)}</a>`).join("")}
+        ${b.exports.map(f => `<a href="${tok(`/api/books/${b.book_id}/download/${f.split("/").map(encodeURIComponent).join("/")}`)}">${esc(f)}</a>`).join("")}
       </div>
     </section>`).join("");
 }
@@ -192,7 +194,8 @@ async function openBook(id) {
       <td class="muted">${esc(role)}${n ? ` · ${n} units` : ""}</td>
       <td>${voices.length ? `<select data-speaker="${sp}">${voices.map(v =>
         `<option value="${v.id}" ${v.id === cur ? "selected" : ""}>${v.id} — ${esc(v.description)}</option>`
-      ).join("")}</select>` : `<input data-speaker="${sp}" data-voice-text value="${esc(cur)}" placeholder="voice description" style="width:16rem">`}
+      ).join("")}${cur && !voices.some(v => v.id === cur) ?
+        `<option value="${esc(cur)}" selected>${esc(cur.split("/").pop())} (cloned)</option>` : ""}</select>` : `<input data-speaker="${sp}" data-voice-text value="${esc(cur)}" placeholder="voice description" style="width:16rem">`}
         <input class="spd" data-sp="${sp}" type="number" min="0.5" max="2" step="0.05" value="${d.casting[sp]?.speed ?? 1}" style="width:4rem" title="speed">
         <input class="mix" data-sp="${sp}" placeholder="mix a:0.7+b:0.3" style="width:9rem" title="custom voice spec" value="${/\+/.test(d.casting[sp]?.voice || '') ? esc(d.casting[sp].voice) : ''}"></td>
       <td><button class="ghost" data-preview="${sp}" type="button">▶</button>
@@ -443,6 +446,10 @@ $("play-ch").onclick = () => {
 $("align").onclick = () => api(`/api/books/${current}/align`, {method: "POST"}).then(refreshProgress);
 $("stop").onclick = () => api(`/api/books/${current}/cancel`, {method: "POST"}).then(refreshProgress);
 $("preview-gen").onclick = () => api(`/api/books/${current}/generate?limit=50`, {method: "POST"}).then(refreshProgress);
+$("run-all").onclick = () => {
+  if (confirm(`Run the full pipeline on ${current}? (analyze → cast → generate → export)`))
+    api(`/api/books/${current}/run`, {method: "POST"}).then(refreshProgress);
+};
 $("merge-btn").onclick = async () => {
   const src = $("merge-src").value, dst = $("merge-dst").value;
   if (!src || !dst || src === dst) { $("cast-meta").textContent = "pick two different speakers"; return; }
@@ -459,6 +466,8 @@ $("export").onclick = async () => {
     const f = $("export-fmt").value, l = $("export-layout").value;
     if (f) q.push(`format=${f}`);
     if (l) q.push(`layout=${l}`);
+    const ch = $("export-ch").value.trim();
+    if (ch) q.push(`chapters=${encodeURIComponent(ch)}`);
     await api(`/api/books/${current}/export${q.length ? "?" + q.join("&") : ""}`, {method: "POST"});
   } catch (e) {
     $("export").disabled = false;
@@ -471,7 +480,7 @@ $("export").onclick = async () => {
       const books = await api(`/api/books`);
       const b = books.find(x => x.book_id === current);
       if (b) $("downloads").innerHTML = b.exports.map(f =>
-        `<a href="${tok(`/api/books/${current}/download/${f}`)}">${esc(f)}</a>`).join("");
+        `<a href="${tok(`/api/books/${current}/download/${f.split("/").map(encodeURIComponent).join("/")}`)}">${esc(f)}</a>`).join("");
       const p = await api(`/api/books/${current}/progress`);
       if (!p.busy) {
         clearInterval(timer);

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Annotated
 
@@ -65,19 +67,77 @@ def _chapter_range(spec: str | None) -> set[int] | None:
 
 
 def _book(cfg: Settings, book: str) -> BookPaths:
-    return BookPaths(cfg.data_dir, book)
+    root = cfg.data_dir.resolve()
+    b = BookPaths(cfg.data_dir, book)
+    if b.dir.resolve() == root or root not in b.dir.resolve().parents:
+        typer.echo(f"bad book id {book!r}")
+        raise typer.Exit(1)
+    return b
 
 
 @app.command("import")
 def import_cmd(
-    files: Annotated[list[Path], typer.Argument(exists=True, dir_okay=False)],
+    files: Annotated[
+        list[str],
+        typer.Argument(help="local files (.epub/.txt/.pdf/…) or http(s) ebook URLs"),
+    ],
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    chain: Annotated[
+        bool, typer.Option("--chain", help="also run analyze + cast after each import")
+    ] = False,
 ) -> None:
     """Copy books into the library and parse them into chapters."""
     cfg = _cfg(config)
-    for file in files:
-        book = import_book(file, cfg)
-        typer.echo(f"book id: {book.book_id}")
+    paths, tmp_dirs = _resolve_sources(files)
+    try:
+        for path in paths:
+            book = import_book(path, cfg)
+            typer.echo(f"book id: {book.book_id}")
+            if chain:
+                analyze_book(book, cfg)
+                cast_book(book, cfg)
+    finally:
+        for d in tmp_dirs:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def _resolve_sources(sources: list[str]) -> tuple[list[Path], list[Path]]:
+    """Expand files/dirs/URLs into local ebook paths + temp dirs to clean up."""
+    from .. import net
+
+    out: list[str] = []
+    for src in sources:
+        p = Path(src)
+        if p.is_dir():
+            found = sorted(
+                f for f in p.iterdir() if f.is_file() and f.suffix.lower() in net.SUPPORTED_SUFFIXES
+            )
+            if not found:
+                typer.echo(f"no supported books in {src}")
+                raise typer.Exit(1)
+            out.extend(str(f) for f in found)
+        else:
+            out.append(src)
+    paths: list[Path] = []
+    tmp_dirs: list[Path] = []
+    for src in out:
+        path = Path(src)
+        if src.lower().startswith(("http://", "https://")):
+            tmp = Path(tempfile.mkdtemp())
+            tmp_dirs.append(tmp)
+            try:
+                path = net.fetch_book_url(src, tmp)
+            except net.FetchError as e:
+                typer.echo(f"fetch failed: {e}")
+                raise typer.Exit(1) from e
+        if not path.exists() or path.is_dir():
+            typer.echo(f"no such file: {src}")
+            raise typer.Exit(1)
+        if path.suffix.lower() not in net.SUPPORTED_SUFFIXES:
+            typer.echo(f"unsupported format {path.suffix or '(none)'} — {path.name}")
+            raise typer.Exit(1)
+        paths.append(path)
+    return paths, tmp_dirs
 
 
 @app.command()
@@ -155,11 +215,18 @@ def export(
     book: str,
     format: Annotated[str, typer.Option("--format", "-f")] = "m4b",
     layout: Annotated[str | None, typer.Option("--layout", help="abs for Audiobookshelf")] = None,
+    chapters: Annotated[str | None, typer.Option("--chapters", help="subset, e.g. 1-3,7")] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Mux finished chapters to M4B or MP3."""
     cfg = _cfg(config)
-    export_book(_book(cfg, book), cfg, format=format, layout=layout)
+    export_book(
+        _book(cfg, book),
+        cfg,
+        format=format,
+        layout=layout,
+        only=_chapter_range(chapters),
+    )
 
 
 @app.command()
@@ -230,12 +297,19 @@ def review(
 def voices(
     play: Annotated[str | None, typer.Option("--play", help="synthesize a sample")] = None,
     text: Annotated[str, typer.Option("--text")] = "A quick preview of this voice.",
+    backend: Annotated[
+        str | None, typer.Option("--backend", help="kokoro|pocket|qwen — default: config")
+    ] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """List the voice library; --play writes a sample WAV for a voice id."""
     from ..cast.library import LIBRARY, POCKET_LIBRARY
 
     cfg = _cfg(config)
+    if backend is not None:
+        if backend not in ("kokoro", "pocket", "qwen"):
+            raise typer.BadParameter(f"unknown backend {backend!r}")
+        cfg.tts.backend = backend
     lib = {"kokoro": LIBRARY, "pocket": POCKET_LIBRARY}.get(cfg.tts.backend, [])
     if play:
         from ..artifacts import VoiceSpec
@@ -299,8 +373,9 @@ def stats(
     casting = load_artifact(CastingFile, b.dir)
     manifest = load_artifact(AudioManifest, b.dir)
     if chapters:
+        words = sum(c.word_count for c in chapters.chapters)
         typer.echo(f"chapters:  {len(chapters.chapters)}")
-        typer.echo(f"words:     {sum(c.word_count for c in chapters.chapters):,}")
+        typer.echo(f"words:     {words:,} (est. ~{words / 165 / 60:.1f} h narration)")
     if attrib:
         ambiguous = sum(1 for u in attrib.units if u.speaker == "ambiguous")
         typer.echo(f"units:     {len(attrib.units):,} ({ambiguous} ambiguous)")
@@ -316,7 +391,10 @@ def stats(
 
 @app.command("run")
 def run_cmd(
-    file: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    files: Annotated[
+        list[str],
+        typer.Argument(help="local files (.epub/.txt/.pdf/…), a directory, or http(s) ebook URLs"),
+    ],
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     speed: Annotated[float, typer.Option("--speed", min=0.5, max=2.0)] = 1.0,
     workers: Annotated[int, typer.Option("--workers", min=1, max=16)] = 1,
@@ -324,8 +402,14 @@ def run_cmd(
 ) -> None:
     """Full pipeline: import → analyze → cast → generate → export."""
     cfg = _cfg(config)
-    book = run_book(file, cfg, speed=speed, workers=workers, layout=layout)
-    typer.echo(f"done: {book.export}")
+    paths, tmp_dirs = _resolve_sources(files)
+    try:
+        for path in paths:
+            book = run_book(path, cfg, speed=speed, workers=workers, layout=layout)
+            typer.echo(f"done: {book.export}")
+    finally:
+        for d in tmp_dirs:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 @app.command()
@@ -378,6 +462,9 @@ def models_pull(
 def serve(
     port: Annotated[int, typer.Option("--port", "-p")] = 8484,
     host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
+    open_browser: Annotated[
+        bool, typer.Option("--open", help="open the UI in your browser")
+    ] = False,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Run the local web UI (--host 0.0.0.0 to share on the LAN)."""
@@ -392,6 +479,13 @@ def serve(
 
         token = secrets.token_urlsafe(16)
         typer.echo(f"LAN mode — share as ?token= or header x-castbook-token:\n  {token}")
+    if open_browser:
+        import threading
+        import webbrowser
+
+        shown = f"[{host}]" if ":" in host else host
+        url = f"http://{shown}:{port}" + (f"?token={token}" if token else "")
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     uvicorn.run(create_app(cfg, token=token), host=host, port=port, log_level="info")
 
 
@@ -453,9 +547,15 @@ def clone(
     b = _book(cfg, book)
     dest_dir = b.dir / "voices"
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / f"{speaker}{clip.suffix.lower()}"
+    import time as _time
+
+    dest = dest_dir / f"{speaker}-{int(_time.time())}{clip.suffix.lower()}"
     shutil.copy2(clip, dest)
-    cast_book(b, cfg, overrides={speaker: str(dest)})
+    casting = load_artifact(CastingFile, b.dir)
+    overrides = {sp: spec.voice for sp, spec in casting.map.items()} if casting else {}
+    speeds = {sp: spec.speed for sp, spec in casting.map.items()} if casting else {}
+    overrides[speaker] = str(dest)
+    cast_book(b, cfg, overrides=overrides, speeds=speeds)
     typer.echo(f"cloned {clip.name} → {speaker} ({dest})")
 
 
@@ -481,3 +581,20 @@ def reset(
     if not keep_source:
         shutil.rmtree(b.dir / "source", ignore_errors=True)
     typer.echo(f"reset {book}")
+
+
+@app.command()
+def rm(
+    book: str,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="skip confirmation")] = False,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Delete a book entirely (source, artifacts, audio, exports)."""
+    b = _book(_cfg(config), book)
+    if not b.dir.is_dir():
+        typer.echo(f"unknown book {book!r}")
+        raise typer.Exit(1)
+    if not yes and not typer.confirm(f"delete {b.dir} entirely?"):
+        raise typer.Abort
+    shutil.rmtree(b.dir)
+    typer.echo(f"deleted {book}")

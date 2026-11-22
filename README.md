@@ -44,7 +44,7 @@ un-rendered units are synthesized.
 
 | command | what it does |
 |---|---|
-| `castbook import <file> [<file>…]` | import one or more ebooks (EPUB/PDF/TXT/MD/MOBI/AZW3) → `chapters.json` |
+| `castbook import <file\|dir\|url> […]` | import ebooks (EPUB/PDF/TXT/MD/MOBI/AZW3) — files, a whole directory, or http(s) URLs → `chapters.json` |
 | `castbook analyze <book>` | attribute every line (`--backend heuristic\|llamacpp\|hybrid` — hybrid = heuristic + LLM second look) |
 | `castbook clone <book> <sp> <clip>` | clone a voice from a wav/mp3/flac clip onto a speaker (pocket only) |
 | `castbook cast <book>` | auto-assign voices; `--map name=voice` (mix voices as `a:0.7+b:0.3`), `--speed name=rate` |

@@ -11,7 +11,9 @@ import re
 
 from ..artifacts import Chapter, Unit
 
-QUOTE_RE = re.compile("[\u201c\u0022\u2018']([^\u201d\u0022\u2019']+)[\u201d\u0022\u2019']")
+QUOTE_RE = re.compile(
+    "[\u201c\u0022\u2018'\u00ab\u201e]([^\u201d\u0022\u2019'\u00bb]+)[\u201d\u0022\u2019'\u00bb\u201c]"
+)
 
 MAX_UNIT_WORDS = 180
 
@@ -20,10 +22,10 @@ def split_units(chapter: Chapter) -> list[Unit]:
     units: list[Unit] = []
     seq = 0
     for p_index, para in enumerate(_paragraphs(chapter.text)):
-        inside = False
+        inside: list[str] = []
         for piece in (p for block in _speech_blocks(para) for p in _cap(block)):
             seq += 1
-            after = _inside_quote(piece, inside)
+            after = _quote_stack(piece, inside)
             kind = "dialogue" if inside or after or QUOTE_RE.search(piece) else "narration"
             units.append(
                 Unit(
@@ -48,21 +50,36 @@ def _quote_step(stack: list[str], ch: str, text: str, i: int) -> None:
         else:
             stack.append("d")
     elif ch == "\u201c":
-        stack.append("d")
+        if stack and stack[-1] == "g":
+            stack.pop()  # „german“ closes with the same mark English opens with
+        else:
+            stack.append("d")
+    elif ch == "\u201e":
+        stack.append("g")
     elif ch == "\u2018":
         stack.append("s")
+    elif ch == "\u00ab":
+        stack.append("g")
     elif stack and (
         (ch == "\u201d" and stack[-1] == "d")
         or (ch == "\u2019" and stack[-1] == "s" and not _apostrophe(text, i))
+        or (ch == "\u00bb" and stack[-1] == "g")
     ):
         stack.pop()
 
 
-def _inside_quote(text: str, inside: bool = False) -> bool:
-    stack: list[str] = ["d"] if inside else []
+def _quote_stack(text: str, initial: list[str] | None = None) -> list[str]:
+    """Residual open-quote levels — carries the real level ('d'/'s'/'g') across
+    capped units, not just a boolean."""
+    stack = list(initial) if initial else []
     for i, ch in enumerate(text):
         _quote_step(stack, ch, text, i)
-    return bool(stack)
+    return stack
+
+
+def _inside_quote(text: str, inside: bool = False) -> bool:
+    stack: list[str] = ["d"] if inside else []
+    return bool(_quote_stack(text, stack))
 
 
 def _apostrophe(text: str, i: int) -> bool:

@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from typing import cast as tcast
 
-from ..artifacts import Chapter, Character, Unit
-from .units import _apostrophe, _inside_quote, _quote_step, split_units
+from ..artifacts import Chapter, Character, Emotion, Unit
+from .units import _apostrophe, _quote_stack, _quote_step, split_units
 
 SAID_VERBS = (
     "said|asked|replied|cried|whispered|shouted|exclaimed|answered|continued|"
@@ -23,21 +24,24 @@ SAID_VERBS = (
     "wailed|moaned|grumbled|snarled|sneered|blurted|snapped|roared|bellowed|"
     "choked|hissed|rasped|whined|croaked|queried|ventured|offered|confessed|"
     "mused|retorted|drawled|howled|stuttered|resumed|rejoined|ejaculated|says|"
-    "assented|reiterated"
+    "assented|reiterated|"
+    "dit|demanda|demande|r\u00e9pondit|r\u00e9pond|reprit|reprend|ajouta|ajoute|"
+    "murmura|cria|\u00e9cria|exclama|interrompit|continua|souffla|questionna|"
+    "r\u00e9pliqua|r\u00e9pliqu\u00e9|sagte|fragte|antwortete|rief|fl\u00fcsterte"
 )
 _NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:(?:de|van|von|of|the|al|bin)\s+)?[A-Z][a-z]+){0,2}"
 _NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+"
 NAME = rf"(?-i:((?:the\s+)?(?:{_NAME_TITLED}|{_NAME_PLAIN})))"
 
-TAG_AFTER = re.compile(rf"[”\"'\u2019]\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
-_QUOTE_CHAR = re.compile(r"[\"\u201c\u201d\u2018\u2019']")
+TAG_AFTER = re.compile(rf"[”\"'\u2019\u00bb\u201c]\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
+_QUOTE_CHAR = re.compile(r"[\"\u201c\u201d\u2018\u2019'\u00ab\u00bb\u201e]")
 FIRST_PERSON = re.compile(
-    rf"[”\"']\s*,?\s*(?:I\s+(?:\w+\s+)?(?:{SAID_VERBS})|(?:{SAID_VERBS})\s+I)\b",
+    rf"[”\"'\u00bb]\s*,?\s*(?:I\s+(?:\w+\s+)?(?:{SAID_VERBS})|(?:{SAID_VERBS})\s+I)\b",
     re.IGNORECASE,
 )
-NAME_SAYS = re.compile(rf"{NAME}\s+({SAID_VERBS})", re.IGNORECASE)
+NAME_SAYS = re.compile(rf"{NAME}\s+({SAID_VERBS})\b", re.IGNORECASE)
 _FP_TAGS = re.compile(
-    rf"[”\"'\u2019]\s*,?\s*I\s+(?:{SAID_VERBS})|\b(?:{SAID_VERBS})\s+I\b",
+    rf"[”\"'\u2019\u00bb]\s*,?\s*I\s+(?:{SAID_VERBS})|\b(?:{SAID_VERBS})\s+I\b",
     re.IGNORECASE,
 )
 VOCATIVE = re.compile(rf"\b({SAID_VERBS})\b[^.!?]*,\s*{NAME}\s*[.!?]", re.IGNORECASE)
@@ -156,14 +160,14 @@ class HeuristicAttributor:
         names = _name_index(cast)
         runs: list[list[tuple[Unit, str | None]]] = []
         run_after_narration: list[bool] = []
-        in_quote = False
+        in_quote: list[str] = []
         cur_para = -1
         narr_break = True
         pending: str | None = None
         for u in units:
             if u.kind != "dialogue":
                 u.speaker = "narrator"
-                in_quote = False
+                in_quote = []
                 narr_break = True
                 pending = _trailing_says(u.text, names)
                 if pending is None and "I" in names:
@@ -174,7 +178,7 @@ class HeuristicAttributor:
                         pending = others[0]
                 continue
             if u.paragraph != cur_para:
-                in_quote = False
+                in_quote = []
                 cur_para = u.paragraph
             hit = self._speaker_for(u.text, names, in_quote)
             if in_quote and runs:
@@ -186,7 +190,7 @@ class HeuristicAttributor:
                 run_after_narration.append(narr_break)
             narr_break = False
             pending = None
-            in_quote = _inside_quote(u.text, in_quote)
+            in_quote = _quote_stack(u.text, in_quote)
         resolved: list[str | None] = [next((s for _, s in run if s), None) for run in runs]
 
         segs: list[list[int]] = [[]]
@@ -276,7 +280,7 @@ class HeuristicAttributor:
                 if len(cands) != 2:
                     continue
                 if first_person and re.search(
-                    r"(?:^|[.!?]\s+)[“”\"']*\s*(?:he|she)\b[^.!?]*\b(?:me|us)\b",
+                    r"(?:^|[.!?]\s+)[“”\"'\u00ab\u00bb\u201e]*\s*(?:he|she)\b[^.!?]*\b(?:me|us)\b",
                     zone,
                     re.IGNORECASE,
                 ):
@@ -289,7 +293,7 @@ class HeuristicAttributor:
                 if (
                     left in cands
                     and quoted >= 15 * 6
-                    and not re.search(r'[!?]["\u201d\'\u2019]*\s*$', qtext.strip())
+                    and not re.search(r'[!?]["\u201d\'\u2019\u00bb]*\s*$', qtext.strip())
                 ):
                     resolved[i] = left
                     for u, _ in run:
@@ -337,9 +341,13 @@ class HeuristicAttributor:
         for run, final_speaker in zip(runs, resolved, strict=True):
             for u, _ in run:
                 u.speaker = final_speaker or "ambiguous"
+                if u.speaker not in ("narrator", "ambiguous"):
+                    u.emotion = _emotion_of(u.text)
         return units
 
-    def _speaker_for(self, text: str, names: dict[str, str], in_quote: bool = False) -> str | None:
+    def _speaker_for(
+        self, text: str, names: dict[str, str], in_quote: list[str] | None = None
+    ) -> str | None:
         zone = _tag_zone(text, in_quote)
         if not _QUOTE_CHAR.search(zone):
             return None
@@ -440,13 +448,15 @@ def _gender_of(raw: str) -> str:
     return FIRST_NAME_GENDER.get(first, "unknown")
 
 
-def _tag_zone(text: str, inside: bool = False) -> str:
+def _tag_zone(text: str, inside: list[str] | None = None) -> str:
     """Text outside quoted speech — where speaker tags live. Quote marks stay
     as regex anchors; everything said inside a quote is dropped."""
-    stack: list[str] = ["d"] if inside else []
+    stack: list[str] = list(inside) if inside else []
     out: list[str] = []
     for i, ch in enumerate(text):
-        if ch in '"\u201c\u201d\u2018' or (ch == "\u2019" and not _apostrophe(text, i)):
+        if ch in '"\u201c\u201d\u2018\u00ab\u00bb\u201e' or (
+            ch == "\u2019" and not _apostrophe(text, i)
+        ):
             _quote_step(stack, ch, text, i)
             out.append(ch)
         elif not stack:
@@ -518,7 +528,7 @@ def _trailing_says(text: str, names: dict[str, str]) -> str | None:
     return _lookup(m.group(1), names) if m else None
 
 
-_QUOTED = re.compile("[\u201c\"']([^\u201d\"']+)[\u201d\"']")
+_QUOTED = re.compile("[\u201c\"'\u00ab\u201e]([^\u201d\"'\u00bb\u201c]+)[\u201d\"'\u00bb\u201c]")
 
 
 def _addressed(run: list[tuple[Unit, str | None]], names: dict[str, str]) -> set[str]:
@@ -545,14 +555,14 @@ def _addressed(run: list[tuple[Unit, str | None]], names: dict[str, str]) -> set
                     span,
                 ) or re.search(rf"\b{pat}\s+\w*\s*(?:{SAID_VERBS})\b", span):
                     out.add(cid)
-        for collective in ("crew", "crowd", "chorus", "seamen", "mariners"):
-            group_id = _lookup(collective, names) or _lookup(collective.title(), names)
-            if group_id and re.search(
-                r"(?:^|[,.!?;\u2014\u2013]\s*)(?:my\s+)?(?:men|lads|mates|hearties|boys|friends)\s*(?=[,.!?;\u2014\u2013]|$)",
-                span,
-                re.IGNORECASE,
-            ):
-                out.add(group_id)
+            for collective in ("crew", "crowd", "chorus", "seamen", "mariners"):
+                group_id = _lookup(collective, names) or _lookup(collective.title(), names)
+                if group_id and re.search(
+                    r"(?:^|[,.!?;\u2014\u2013]\s*)(?:my\s+)?(?:men|lads|mates|hearties|boys|friends)\s*(?=[,.!?;\u2014\u2013]|$)",
+                    span,
+                    re.IGNORECASE,
+                ):
+                    out.add(group_id)
     return out
 
 
@@ -563,7 +573,7 @@ def _subject_name(sent: str, names: dict[str, str]) -> str | None:
     head = re.sub(
         r"^(?:And|But|So|Then|Well|Why|Now)\s+",
         "",
-        sent.lstrip().lstrip("“”\"'").lstrip(),
+        sent.lstrip().lstrip("“”\"'«»„").lstrip(),
     )
     for raw, cid in names.items():
         if len(raw) <= 3 or raw in ("I", "he", "she", "they"):
@@ -582,7 +592,7 @@ def _beat_speaker(zone: str, names: dict[str, str]) -> str | None:
     if not sents:
         return None
     last = sents[-1]
-    head = last.lstrip("“”\"', ")
+    head = last.lstrip("“”\"', «»„")
     pronoun_subject = re.match(r"(?:he|she|they)\b", head, re.IGNORECASE) or re.search(
         rf"\b(?:{SAID_VERBS})\s+(?:he|she|they)\b", last, re.IGNORECASE
     )
@@ -593,7 +603,7 @@ def _beat_speaker(zone: str, names: dict[str, str]) -> str | None:
             hit = _subject_name(prev, names) or _any_name(prev, names)
             if hit:
                 return hit
-            if not re.match(r"(?:he|she|they)\b", prev.lstrip("“”\"', "), re.IGNORECASE):
+            if not re.match(r"(?:he|she|they)\b", prev.lstrip("“”\"', «»„"), re.IGNORECASE):
                 return None
         return None
     return _subject_name(last, names)
@@ -653,3 +663,30 @@ def _lookup(raw: str, names: dict[str, str]) -> str | None:
             if part in names:
                 return names[part]
     return None
+
+
+_EMOTION_CUES: list[tuple[Emotion, re.Pattern[str]]] = [
+    (
+        tcast(Emotion, e),
+        re.compile(rf"\b(?:{pat})\w*", re.IGNORECASE),
+    )
+    for e, pat in (
+        ("whispered", r"whisper|murmur|mutter|hush"),
+        ("shouted", r"shout|yell|scream|roar|bellow|thunder|shriek|holler|ejaculat"),
+        ("sad", r"sob|weep|wept|wail|moan|lament|sniff"),
+        ("joyful", r"laugh|chuckle|giggle|rejoice|delight|merr"),
+        ("angry", r"snarl|growl|fum(?:e|ing)|rag(?:e|ing)|seeth|stormed"),
+        ("fearful", r"trembl|stammer|stutter|quaver|gasp|shudder"),
+        ("sarcastic", r"sneer|scoff|scorn|mock|taunt|dryly|drily|archly"),
+    )
+]
+_SHOUT_TEXT = re.compile(r"(?:!{2,}|[A-Z]{2,}[A-Z\s?!,]{8,}!)")
+
+
+def _emotion_of(text: str) -> Emotion:
+    for emotion, pat in _EMOTION_CUES:
+        if pat.search(text):
+            return emotion
+    if _SHOUT_TEXT.search(text):
+        return "shouted"
+    return "neutral"

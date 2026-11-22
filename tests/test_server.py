@@ -183,7 +183,7 @@ def test_import_from_url(client_setup) -> None:  # type: ignore[no-untyped-def]
     )
     (tmp_path / "book.txt").write_text("CHAPTER I\n\nHello, said Alice.\n" * 5)
     monkeypatch2 = __import__("pytest").MonkeyPatch()
-    monkeypatch2.setattr("castbook.app.server._public_host", lambda url: None)
+    monkeypatch2.setattr("castbook.net.assert_public_host", lambda url: None)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         port = srv.server_address[1]
@@ -205,7 +205,7 @@ def test_import_from_url(client_setup) -> None:  # type: ignore[no-untyped-def]
 
 
 def test_url_import_rejects_private_hosts() -> None:
-    from castbook.app.server import _public_host
+    from castbook.net import FetchError, assert_public_host
 
     for bad in (
         "http://127.0.0.1/x.epub",
@@ -214,12 +214,12 @@ def test_url_import_rejects_private_hosts() -> None:
         "http://169.254.169.254/latest",
     ):
         try:
-            _public_host(bad)
-        except Exception as e:
-            assert getattr(e, "status_code", None) in (400, 502), bad
+            assert_public_host(bad)
+        except FetchError as e:
+            assert e.status == 400, bad
         else:
             raise AssertionError(f"{bad} not rejected")
-    _public_host("http://93.184.216.34/book.epub")  # public IP literal passes
+    assert_public_host("http://93.184.216.34/book.epub")  # public IP literal passes
 
 
 def test_transcript_endpoints(client_setup) -> None:  # type: ignore[no-untyped-def]
@@ -264,9 +264,9 @@ def test_gutenberg_endpoint(client_setup) -> None:  # type: ignore[no-untyped-de
             return False
 
     mp = __import__("pytest").MonkeyPatch()
-    mp.setattr("castbook.app.server._public_host", lambda url: None)
+    mp.setattr("castbook.net.assert_public_host", lambda url: None)
     mp.setattr(
-        "castbook.app.server._url_opener",
+        "castbook.net._opener",
         type("O", (), {"open": lambda self, req, timeout=0: _Resp(body)})(),
     )
     try:
@@ -278,3 +278,25 @@ def test_gutenberg_endpoint(client_setup) -> None:  # type: ignore[no-untyped-de
         assert r.json()["next"] is False
     finally:
         mp.undo()
+
+
+def test_download_nested_and_traversal(client_setup) -> None:  # type: ignore[no-untyped-def]
+    client, tmp_path = client_setup
+    book_id = _import_txt(client, tmp_path)
+    book_dir = tmp_path / "books" / book_id
+    sub = book_dir / "export" / "Some Title-1-2"
+    sub.mkdir(parents=True)
+    (sub / "01 - One.mp3").write_bytes(b"mp3")
+    (book_dir / "export" / "book.m4b").write_bytes(b"m4b")
+
+    r = client.get("/api/books")
+    assert r.status_code == 200
+    exports = next(b for b in r.json() if b["book_id"] == book_id)["exports"]
+    assert "Some Title-1-2/01 - One.mp3" in exports and "book.m4b" in exports
+
+    from urllib.parse import quote
+
+    r = client.get(f"/api/books/{book_id}/download/{quote('Some Title-1-2/01 - One.mp3')}")
+    assert r.status_code == 200 and r.content == b"mp3"
+    r = client.get(f"/api/books/{book_id}/download/..%2F..%2Fsecret.txt")
+    assert r.status_code == 404

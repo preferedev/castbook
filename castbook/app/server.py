@@ -6,17 +6,14 @@ artifacts, so the UI survives a server restart.
 
 from __future__ import annotations
 
-import ipaddress
 import os
 import re
 import shutil
-import socket
 import tempfile
 import threading
 import time
 import urllib.error
 import urllib.parse
-import urllib.request
 from collections import Counter
 from collections.abc import Callable
 from io import BytesIO
@@ -26,6 +23,7 @@ from typing import Annotated, Any
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
+from .. import net
 from ..artifacts import (
     AttributionFile,
     AudioManifest,
@@ -46,35 +44,12 @@ from ..tts.backend import Backend
 from ..workdir import BookPaths
 
 STATIC = Path(__file__).parent / "static"
-MAX_UPLOAD = 200 * 1024 * 1024
-SUPPORTED_SUFFIXES = (".epub", ".txt", ".md", ".pdf", ".mobi", ".azw", ".azw3")
+MAX_UPLOAD = net.MAX_UPLOAD
+SUPPORTED_SUFFIXES = net.SUPPORTED_SUFFIXES
 
 
-def _public_host(url: str) -> None:
-    host = urllib.parse.urlparse(url).hostname or ""
-    try:
-        ip = ipaddress.ip_address(host)
-        addrs = [ip]
-    except ValueError:
-        try:
-            addrs = [ipaddress.ip_address(i[4][0]) for i in socket.getaddrinfo(host, None)]
-        except (socket.gaierror, ValueError) as e:
-            raise HTTPException(502, f"cannot resolve host {host}") from e
-    if not addrs or not all(a.is_global for a in addrs):
-        raise HTTPException(400, "url host is not public")
-
-
-class _CheckedRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(
-        self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str
-    ) -> Any:
-        if not newurl.lower().startswith(("http://", "https://")):
-            raise HTTPException(400, "redirect to unsupported scheme")
-        _public_host(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
-
-
-_url_opener = urllib.request.build_opener(_CheckedRedirect())
+def _http(e: net.FetchError) -> HTTPException:
+    return HTTPException(e.status, str(e))
 
 
 _jobs: dict[str, threading.Thread] = {}
@@ -237,30 +212,10 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         return tmp_path
 
     def _save_url(url: str, tmp_dir: Path) -> Path:
-        if not url.lower().startswith(("http://", "https://")):
-            raise HTTPException(400, "url must start with http:// or https://")
-        _public_host(url)
-        req = urllib.request.Request(url, headers={"User-Agent": "castbook/0.1"})
         try:
-            resp = _url_opener.open(req, timeout=60)
-        except HTTPException:
-            raise
-        except urllib.error.URLError as e:
-            raise HTTPException(502, f"fetch failed: {e.reason}") from e
-        with resp:
-            name = Path(urllib.parse.urlparse(resp.geturl()).path).name or "book.epub"
-            suffix = Path(name).suffix.lower()
-            if suffix not in SUPPORTED_SUFFIXES:
-                raise HTTPException(400, f"unsupported format {suffix or '(none)'}")
-            tmp_path = tmp_dir / name
-            size = 0
-            with tmp_path.open("wb") as out:
-                while chunk := resp.read(1 << 20):
-                    size += len(chunk)
-                    if size > MAX_UPLOAD:
-                        raise HTTPException(413, "file too large")
-                    out.write(chunk)
-        return tmp_path
+            return net.fetch_book_url(url, tmp_dir)
+        except net.FetchError as e:
+            raise _http(e) from e
 
     @app.get("/api/gutenberg")
     def gutenberg(q: str = "", page: int = 1) -> dict[str, Any]:
@@ -270,18 +225,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         if q.strip():
             params["search"] = q.strip()
         url = "https://gutendex.com/books/?" + urllib.parse.urlencode(params)
-        _public_host(url)
-        req = urllib.request.Request(url, headers={"User-Agent": "castbook/0.1"})
         for attempt in range(2):
             try:
-                with _url_opener.open(req, timeout=30) as resp:
+                with net.open_url(url, timeout=30) as resp:
                     data = json.loads(resp.read())
                 break
             except TimeoutError:
                 if attempt:
                     raise HTTPException(502, "gutendex timed out — retry") from None
-            except urllib.error.URLError as e:
-                raise HTTPException(502, f"gutendex failed: {e.reason}") from e
+            except net.FetchError as e:
+                raise HTTPException(502, f"gutendex failed: {e}") from e
         results = []
         for r in data.get("results", []):
             fmts = r.get("formats") or {}
@@ -447,7 +400,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             raise HTTPException(422, f"bad speaker id {speaker!r}")
         dest_dir = book.dir / "voices"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        dest = dest_dir / f"{safe}{suffix}"
+        dest = dest_dir / f"{safe}-{int(time.time())}{suffix}"
         size = 0
         with dest.open("wb") as out:
             while chunk := file.file.read(1 << 20):
@@ -456,7 +409,11 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                     dest.unlink(missing_ok=True)
                     raise HTTPException(413, "file too large")
                 out.write(chunk)
-        cast_book(book, cfg, overrides={safe: str(dest)})
+        casting = load_artifact(CastingFile, book.dir)
+        overrides = {sp: spec.voice for sp, spec in casting.map.items()} if casting else {}
+        speeds = {sp: spec.speed for sp, spec in casting.map.items()} if casting else {}
+        overrides[safe] = str(dest)
+        cast_book(book, cfg, overrides=overrides, speeds=speeds)
         return {"ok": True, "clip": str(dest)}
 
     @app.post("/api/books/{book_id}/analyze")
@@ -518,6 +475,27 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 cancel=cancel,
             )
             if export and not cancel.is_set():
+                log("[export] started")
+                outs = export_book(book, cfg, log=log)
+                log(f"[export] wrote {', '.join(p.name for p in outs)}")
+
+        _spawn(f"job:{book_id}", work, log)
+        return {"ok": True}
+
+    @app.post("/api/books/{book_id}/run")
+    def run(book_id: str) -> dict[str, Any]:
+        """Full pipeline in one job: analyze → cast → generate → export."""
+        book = _require_book(cfg, book_id)
+        log = _log_to(book.dir / "job.log")
+
+        def work() -> None:
+            cancel = _cancels[f"job:{book_id}"]
+            analyze_book(book, cfg, log)
+            cast_book(book, cfg, log=log)
+            if cancel.is_set():
+                return
+            generate_book(book, cfg, log=log, cancel=cancel)
+            if not cancel.is_set():
                 log("[export] started")
                 outs = export_book(book, cfg, log=log)
                 log(f"[export] wrote {', '.join(p.name for p in outs)}")
@@ -745,27 +723,40 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
 
     @app.post("/api/books/{book_id}/export")
     def export(
-        book_id: str, format: str | None = None, layout: str | None = None
+        book_id: str,
+        format: str | None = None,
+        layout: str | None = None,
+        chapters: str | None = None,
     ) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         if format is not None and format not in ("m4b", "mp3", "both"):
             raise HTTPException(422, f"bad format {format!r}")
         if layout is not None and layout not in ("abs",):
             raise HTTPException(422, f"bad layout {layout!r}")
+        only: set[int] | None = None
+        if chapters:
+            try:
+                only = set()
+                for part in chapters.split(","):
+                    lo, _, hi = part.strip().partition("-")
+                    only.update(range(int(lo), int(hi) + 1) if hi else [int(lo)])
+            except ValueError:
+                raise HTTPException(422, f"bad chapters {chapters!r}") from None
         log = _log_to(book.dir / "job.log")
         log(f"[export] started ({format or cfg.export.format})")
 
         def work() -> None:
-            outs = export_book(book, cfg, format=format, layout=layout, log=log)
+            outs = export_book(book, cfg, format=format, layout=layout, only=only, log=log)
             log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
         _spawn(f"job:{book_id}", work, log)
         return {"started": True}
 
-    @app.get("/api/books/{book_id}/download/{name}")
+    @app.get("/api/books/{book_id}/download/{name:path}")
     def download(book_id: str, name: str) -> FileResponse:
-        path = (cfg.data_dir / book_id / "export" / name).resolve()
-        if not path.is_file() or path.parent != (cfg.data_dir / book_id / "export").resolve():
+        export_dir = (cfg.data_dir / book_id / "export").resolve()
+        path = (export_dir / name).resolve()
+        if not path.is_file() or export_dir not in path.parents:
             raise HTTPException(404, "no such export")
         return FileResponse(path, filename=path.name)
 
@@ -808,7 +799,9 @@ def _status(d: Path, ch: ChaptersFile) -> dict[str, Any]:
         "chapters": len(ch.chapters),
         "chapters_rendered": done,
         "stages": stages,
-        "exports": [p.name for p in (d / "export").glob("*") if p.is_file()]
+        "exports": [
+            str(p.relative_to(d / "export")) for p in (d / "export").rglob("*") if p.is_file()
+        ]
         if (d / "export").exists()
         else [],
     }

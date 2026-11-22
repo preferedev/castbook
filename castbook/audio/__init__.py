@@ -122,12 +122,25 @@ def _safe_dir(name: str) -> str:
     return re.sub(r'[\\/:*?"<>|]', "-", name).strip(". ") or "untitled"
 
 
+def _range_label(idxs: list[int]) -> str:
+    parts: list[str] = []
+    i = 0
+    while i < len(idxs):
+        j = i
+        while j + 1 < len(idxs) and idxs[j + 1] == idxs[j] + 1:
+            j += 1
+        parts.append(f"{idxs[i]}-{idxs[j]}" if j > i else str(idxs[i]))
+        i = j + 1
+    return "_".join(parts)
+
+
 def export(
     book: BookPaths,
     cfg: Settings,
     log: Callable[[str], None] = print,
     format: str | None = None,
     layout: str | None = None,
+    only: set[int] | None = None,
 ) -> list[Path]:
     manifest = load_artifact(AudioManifest, book.dir)
     chapters = load_artifact(ChaptersFile, book.dir)
@@ -135,12 +148,18 @@ def export(
         raise FileNotFoundError(f"{book.dir} — run `castbook generate` first")
 
     done = sorted(
-        ((int(i), c) for i, c in manifest.chapters.items() if c.status == ChapterStatus.done),
+        (
+            (int(i), c)
+            for i, c in manifest.chapters.items()
+            if c.status == ChapterStatus.done and (only is None or int(i) in only)
+        ),
         key=lambda x: x[0],
     )
+    if not done:
+        raise FileNotFoundError(f"{book.dir} — no rendered chapters match")
     skipped = len(manifest.chapters) - len(done)
     if skipped:
-        log(f"[export] {skipped} chapters not rendered — excluded; re-run `castbook generate`")
+        log(f"[export] {skipped} chapters not rendered or excluded; re-run `castbook generate`")
     wavs = [book.audio / c.path for _, c in done]
     titles = [chapters.chapters[i].title for i, _ in done]
 
@@ -148,17 +167,31 @@ def export(
     outputs: list[Path] = []
     fmt = format or cfg.export.format
     if fmt in ("m4b", "both"):
-        out = mux_m4b(wavs, titles, chapters.meta, book.m4b(chapters.meta.title), book.dir)
+        m4b_path = book.m4b(chapters.meta.title)
+        if only is not None:
+            m4b_path = m4b_path.with_name(f"{m4b_path.stem}-{_range_label(sorted(only))}.m4b")
+        out = mux_m4b(wavs, titles, chapters.meta, m4b_path, book.dir)
         outputs.append(out)
         log(f"[export] {out.name}")
+    label = _range_label(sorted(only)) if only is not None else ""
     if fmt in ("mp3", "both"):
-        out = export_mp3(wavs, titles, book.export)
+        mp3_dir = book.export
+        if label:
+            mp3_dir = book.export / f"{_safe_dir(getattr(chapters.meta, 'title', 'book'))}-{label}"
+        out = export_mp3(wavs, titles, mp3_dir)
         outputs.append(out)
         log(f"[export] mp3 chapters → {out.name}/")
     if layout == "abs":
-        dest = abs_layout(book, chapters.meta, outputs, book.export / "abs")
+        abs_root = book.export / (f"abs-{label}" if label else "abs")
+        dest = abs_layout(book, chapters.meta, outputs, abs_root)
         zip_path = shutil.make_archive(
-            str(book.export / f"{_safe_dir(getattr(chapters.meta, 'title', 'book'))}-abs"),
+            str(
+                book.export
+                / (
+                    f"{_safe_dir(getattr(chapters.meta, 'title', 'book'))}-abs"
+                    + (f"-{_range_label(sorted(only))}" if only is not None else "")
+                )
+            ),
             "zip",
             dest.parent,
         )
