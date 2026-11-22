@@ -814,6 +814,13 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         save_artifact(ch, book.dir)
         return {"ok": True, "index": chapter, "title": title}
 
+    @app.get("/api/opds")
+    def opds(request: Request) -> Response:
+        from ..opds import build_catalog
+
+        base = str(request.base_url).rstrip("/")
+        return Response(build_catalog(cfg, base), media_type="application/atom+xml")
+
     @app.get("/api/books/{book_id}/feed.xml")
     def feed(book_id: str, request: Request) -> Response:
         from ..rss import build_feed
