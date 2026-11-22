@@ -122,9 +122,20 @@ def test_models_endpoints(tmp_path, monkeypatch) -> None:
     models = {m["id"]: m for m in client.get("/api/models").json()}
     assert "kokoro-v1" in models and "qwen3-4b-q4" in models
     assert all("license" in m and "downloaded" in m for m in models.values())
+    monkeypatch.setattr(
+        "castbook.app.server.models_pull",
+        lambda d, ids, log: log(f"pulled {', '.join(ids)}"),
+    )
     assert client.post("/api/models/pull?ids=kokoro-v1").json() == {"ok": True}
-    log = client.get("/api/models/log").json()["lines"]
-    assert any("kokoro-v1" in line for line in log)
+    import time
+
+    for _ in range(50):
+        log = client.get("/api/models/log").json()["lines"]
+        if any("kokoro-v1" in line for line in log):
+            break
+        time.sleep(0.05)
+    else:
+        raise AssertionError(f"pull log missing kokoro-v1: {log}")
 
 
 def test_config_backend_switch(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -329,6 +340,8 @@ def test_read_rejects_nonpublic_url(client_setup) -> None:  # type: ignore[no-un
 
 def test_run_quality_param(client_setup, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     client, tmp_path = client_setup
+    monkeypatch.setattr("castbook.app.server.analyze_book", lambda *a, **k: None)
+    monkeypatch.setattr("castbook.app.server.cast_book", lambda *a, **k: None)
     monkeypatch.setattr("castbook.app.server.generate_book", lambda *a, **k: None)
     monkeypatch.setattr("castbook.app.server.export_book", lambda *a, **k: [])
     book_id = _import_txt(client, tmp_path)
@@ -368,6 +381,14 @@ def test_run_all_books(client_setup, monkeypatch) -> None:  # type: ignore[no-un
         )
     assert client.post("/api/run-all").status_code == 404  # empty library
     book_id = _import_txt(client, tmp_path)
+    import time
+
+    from castbook.app import server as srv
+
+    for _ in range(50):  # drain job threads other tests may have left alive
+        if not any(k.startswith("job:") and t.is_alive() for k, t in srv._jobs.items()):
+            break
+        time.sleep(0.05)
     r = client.post("/api/run-all?quality=bogus")
     assert r.status_code == 422
     r = client.post("/api/run-all")
