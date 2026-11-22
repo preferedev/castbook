@@ -83,7 +83,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
 
         @app.middleware("http")
         async def _auth(request: Request, call_next):  # type: ignore[no-untyped-def]
-            if request.url.path.startswith("/api/"):
+            if not request.url.path.startswith("/favicon"):
                 given = request.headers.get("x-castbook-token") or request.query_params.get("token")
                 if given != token:
                     return JSONResponse({"detail": "missing token"}, status_code=401)
@@ -227,6 +227,15 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             "units": len(attrib.units) if attrib else 0,
             "unit_counts": (dict(Counter(u.speaker for u in attrib.units)) if attrib else {}),
         }
+
+    @app.get("/api/books/{book_id}/cover")
+    def cover(book_id: str) -> FileResponse:
+        book = _require_book(cfg, book_id)
+        for base in (book.dir, book.source):
+            for f in sorted(base.glob("cover.*")):
+                if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
+                    return FileResponse(f)
+        raise HTTPException(404, "no cover")
 
     @app.get("/api/books/{book_id}/lexicon")
     def get_lexicon(book_id: str) -> dict[str, Any]:

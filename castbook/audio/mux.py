@@ -30,6 +30,9 @@ def mux_m4b(
     if not chapter_wavs:
         raise ValueError("no chapters to mux")
     cover = workdir / meta.cover_path if meta.cover_path else None
+    if cover is not None and not cover.exists():
+        alt = workdir / "source" / Path(meta.cover_path or "").name
+        cover = alt if alt.exists() else cover
 
     durations = [float(_probe_duration(p)) for p in chapter_wavs]
     meta_file = workdir / ".ffmetadata"

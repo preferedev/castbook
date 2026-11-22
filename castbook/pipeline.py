@@ -24,7 +24,7 @@ def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) ->
         book_id = f"{book_id}-{n}"
     book = BookPaths(cfg.data_dir, book_id).ensure()
     src = book.import_source(src)
-    meta, chapters = parse.parse(src, cover_dir=book.source)
+    meta, chapters = parse.parse(src, cover_dir=book.dir)
     save_artifact(
         ChaptersFile(
             book_id=book.book_id,

@@ -147,6 +147,7 @@ async function loadBooks() {
   $("books").innerHTML = books.map(b => `
     <section>
       <div class="book-head">
+        <img src="${tok(`/api/books/${b.book_id}/cover`)}" onerror="this.remove()" style="width:2.2rem;height:2.9rem;object-fit:cover;margin-right:.6rem;border-radius:2px;vertical-align:middle">
         <strong>${esc(b.title)}</strong>
         <span class="muted">${esc(b.author)} · ${b.chapters} ch · ${b.chapters_rendered} rendered</span>
       </div>

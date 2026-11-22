@@ -99,6 +99,8 @@ def abs_layout(book: BookPaths, meta: object, outputs: list[Path], out_root: Pat
     cover_path = getattr(meta, "cover_path", None)
     if cover_path:
         cover = book.dir / cover_path
+        if not cover.exists():
+            cover = book.source / Path(cover_path).name
         if cover.exists():
             shutil.copy2(cover, dest / "cover.jpg")
     (dest / "metadata.json").write_text(

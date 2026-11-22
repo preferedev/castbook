@@ -141,9 +141,11 @@ def test_token_gate(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-unt
     cfg = Settings(data_dir=tmp_path / "books", models_dir=tmp_path / "models")
     client = TestClient(create_app(cfg, token="sekret"))
     assert client.get("/api/books").status_code == 401
+    assert client.get("/").status_code == 401
+    assert client.get("/reader/x").status_code == 401
     assert client.get("/api/books", headers={"x-castbook-token": "sekret"}).status_code == 200
     assert client.get("/api/books?token=sekret").status_code == 200
-    assert "cb-token" in client.get("/").text
+    assert "cb-token" in client.get("/?token=sekret").text
 
 
 def test_backend_switch_drops_stale_casting(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
