@@ -381,6 +381,18 @@ def create_app(cfg: Settings) -> FastAPI:
             "log": log_tail,
         }
 
+    @app.post("/api/books/{book_id}/align")
+    def align_words(book_id: str) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        try:
+            from ..audio import align as align_mod
+        except ImportError:
+            raise HTTPException(422, "install castbook[align] for word timestamps") from None
+        log = _log_to(book.dir / "job.log")
+        log("[align] started")
+        _spawn(f"align:{book_id}", lambda: align_mod.run(book, cfg, log=log), log)
+        return {"started": True}
+
     @app.post("/api/books/{book_id}/export")
     def export(book_id: str, format: str | None = None) -> dict[str, Any]:
         book = _require_book(cfg, book_id)

@@ -68,6 +68,7 @@
     <button id="play-ch" class="ghost" title="play rendered chapter audio">▶ audio</button>
     <button id="preview-gen" class="ghost">Preview 50</button>
     <button id="export" class="ghost">Export</button>
+    <button id="align" class="ghost" title="word-level karaoke timestamps">Align</button>
   </div>
   <div class="bar" style="margin-top:.75rem"><i id="prog" style="width:0%"></i></div>
   <div class="muted" id="prog-label" style="margin:.25rem 0"></div>
@@ -258,6 +259,7 @@ $("play-ch").onclick = () => {
   const ch = m ? +m[0] : 0;
   new Audio(`/api/books/${current}/chapters/${ch}/audio`).play();
 };
+$("align").onclick = () => api(`/api/books/${current}/align`, {method: "POST"}).then(refreshProgress);
 $("preview-gen").onclick = () => api(`/api/books/${current}/generate?limit=50`, {method: "POST"}).then(refreshProgress);
 $("merge-btn").onclick = async () => {
   const src = $("merge-src").value, dst = $("merge-dst").value;
