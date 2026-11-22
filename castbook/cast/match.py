@@ -14,6 +14,21 @@ from .library import DEFAULT_AMBIGUOUS, DEFAULT_NARRATOR, VoiceEntry, _norm, poo
 _VALID = {v.id for v in pool("male") + pool("female") + pool("unknown")}
 
 
+def _valid_voice(name: str) -> bool:
+    if not name:
+        return False
+    for spec in name.split("+"):
+        vname, _, w = spec.partition(":")
+        if vname not in _VALID:
+            return False
+        try:
+            if w and float(w) <= 0:
+                return False
+        except ValueError:
+            return False
+    return True
+
+
 def auto_cast(
     characters: list[Character], book_id: str, memory: dict[str, str] | None = None
 ) -> dict[str, VoiceSpec]:
@@ -24,7 +39,7 @@ def auto_cast(
     pending: list[Character] = []
     for c in order:
         remembered = memory.get(_norm(c.name))
-        if remembered in _VALID:
+        if remembered and _valid_voice(remembered):
             out[c.id] = VoiceSpec(
                 backend="kokoro", voice=remembered, seed=_seed(f"{book_id}:{c.id}")
             )

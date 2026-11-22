@@ -9,7 +9,7 @@ from ..artifacts import CastFile, CastingFile, load_artifact, save_artifact
 from ..config import Settings
 from ..workdir import BookPaths
 from .library import load_memory, save_memory
-from .match import auto_cast
+from .match import _valid_voice, auto_cast
 
 
 def run(
@@ -25,7 +25,7 @@ def run(
 
     mapping = auto_cast(cast_file.characters, book.book_id, memory=load_memory(cfg.data_dir))
     for speaker, voice_id in (overrides or {}).items():
-        if speaker in mapping:
+        if speaker in mapping and _valid_voice(voice_id):
             mapping[speaker].voice = voice_id
     for speaker, speed in (speeds or {}).items():
         if speaker in mapping and 0 < speed <= 2:

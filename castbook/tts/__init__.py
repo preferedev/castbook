@@ -145,12 +145,19 @@ def run(
         from concurrent.futures import ThreadPoolExecutor
 
         tls = threading.local()
-        tls.backend = make_backend(cfg)  # fail fast before spawning workers
+        import queue
+
+        ready: queue.Queue[Backend] = queue.Queue()
+        ready.put(make_backend(cfg))  # fail fast + hand off to first worker
 
         def render_t(unit: Unit) -> tuple[str, float, str, str, str]:
-            if not hasattr(tls, "backend"):
-                tls.backend = make_backend(cfg)
-            return render(unit, tls.backend)
+            try:
+                be = ready.get_nowait()
+            except queue.Empty:
+                if not hasattr(tls, "backend"):
+                    tls.backend = make_backend(cfg)
+                be = tls.backend
+            return render(unit, be)
 
         pool = ThreadPoolExecutor(max_workers=min(workers, os.cpu_count() or 1))
         futures = [pool.submit(render_t, u) for u in pending]
