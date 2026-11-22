@@ -113,7 +113,8 @@ class LlamaCppAttributor:
                 if tag is None:
                     u.speaker = "ambiguous" if u.kind == "dialogue" else "narrator"
                 else:
-                    u.speaker = str(tag.get("speaker") or "ambiguous").strip().lower()
+                    raw = str(tag.get("speaker") or "ambiguous").strip().lower()
+                    u.speaker = _normalize_speaker(raw, cast)
                     if u.speaker not in ("narrator", "ambiguous"):
                         u.kind = "dialogue"
                     emotion = str(tag.get("emotion", "neutral")).lower()
@@ -168,6 +169,19 @@ def _surname_speaker(name: str, cast: list[Character]) -> str | None:
             if name.endswith(" " + surname):
                 return c.name.lower()
     return None
+
+
+def _normalize_speaker(name: str, cast: list[Character]) -> str:
+    if name in ("narrator", "ambiguous"):
+        return name
+    found = _exact_speaker(name, cast) or _surname_speaker(name, cast)
+    if found:
+        return found
+    for c in cast:
+        for o in {c.name.lower(), *(a.lower() for a in c.aliases)}:
+            if len(name) >= 4 and (name in o or o in name):
+                return c.name.lower()
+    return name
 
 
 _EMOTIONS = {"neutral", "angry", "sad", "joyful", "fearful", "whispered", "shouted", "sarcastic"}
