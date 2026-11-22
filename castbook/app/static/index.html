@@ -237,7 +237,7 @@ $("merge-btn").onclick = async () => {
   const src = $("merge-src").value, dst = $("merge-dst").value;
   if (!src || !dst || src === dst) { $("cast-meta").textContent = "pick two different speakers"; return; }
   const r = await api(`/api/books/${current}/merge?src=${encodeURIComponent(src)}&dst=${encodeURIComponent(dst)}`, {method: "POST"});
-  $("cast-meta").textContent = `merged ${src} → ${dst} (${r.touched} units)`;
+  $("cast-meta").textContent = `merged ${src} → ${dst} (${r.merged} units)`;
   openBook(current);
 };
 
