@@ -43,12 +43,14 @@ def run(
         if speaker in mapping and 0 < speed <= 2:
             mapping[speaker].speed = speed
     if flat:
-        narrator_voice = mapping["narrator"].voice
+        narrator = mapping["narrator"]
         for spec in mapping.values():
-            spec.voice = narrator_voice
+            spec.voice, spec.seed = narrator.voice, narrator.seed
         log("[cast] flat mode — every speaker reads in the narrator's voice")
 
-    if not flat:
+    # a single-voice cast is never worth remembering — it would poison every
+    # character's voice for future books
+    if len({s.voice for s in mapping.values()}) > 1:
         save_memory(
             cfg.data_dir,
             {c.name: mapping[c.id].voice for c in cast_file.characters if c.id in mapping},
