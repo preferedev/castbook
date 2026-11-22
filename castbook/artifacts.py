@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal, TypeVar
@@ -188,9 +190,14 @@ def _file_stem(cls: type[BaseModel]) -> str:
 def save_artifact(model: BaseModel, directory: Path) -> Path:
     """Atomically write an artifact — never overwrite a good file with a partial."""
     path = directory / f"{_file_stem(type(model))}.json"
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(model.model_dump_json(by_alias=True, indent=2))
-    tmp.replace(path)
+    fd, tmp_name = tempfile.mkstemp(dir=directory, suffix=".tmp", prefix=".write-")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(model.model_dump_json(by_alias=True, indent=2))
+        Path(tmp_name).replace(path)
+    except BaseException:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
     return path
 
 
