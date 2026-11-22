@@ -15,8 +15,12 @@ _MIN_TEXT_CHARS = 200
 
 def parse(path: Path, cover_dir: Path | None = None) -> tuple[BookMeta, list[Chapter]]:
     from pdfminer.high_level import extract_text  # deferred: heavy import
+    from pdfminer.pdfparser import PDFSyntaxError
 
-    text = extract_text(str(path))
+    try:
+        text = extract_text(str(path))
+    except PDFSyntaxError as e:
+        raise ValueError(f"not a parseable PDF: {e}") from e
     text = _clean(text)
     if len(text) < _MIN_TEXT_CHARS:
         raise ValueError(

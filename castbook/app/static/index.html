@@ -180,13 +180,14 @@ async function loadReview(id) {
     `<tr><td class="muted" style="font-size:.8rem">ch${u.chapter}</td>` +
     `<td>${esc(u.text.slice(0,140))}</td>` +
     `<td><select data-unit="${u.id}">` +
+    `<option value="">pick speaker…</option>` +
     names.map(n => `<option value="${n}">${n}</option>`).join("") +
     `</select></td></tr>`).join("");
 }
 
 $("save-review").onclick = async () => {
   const fixes = {};
-  document.querySelectorAll("#review-table select").forEach(s => fixes[s.dataset.unit] = s.value);
+  document.querySelectorAll("#review-table select").forEach(s => { if (s.value) fixes[s.dataset.unit] = s.value; });
   if (!Object.keys(fixes).length) return;
   const r = await api(`/api/books/${current}/speakers`, {
     method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(fixes)});

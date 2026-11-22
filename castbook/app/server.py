@@ -6,6 +6,7 @@ artifacts, so the UI survives a server restart.
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 import threading
 from collections.abc import Callable
@@ -37,6 +38,7 @@ MAX_UPLOAD = 200 * 1024 * 1024
 
 _jobs: dict[str, threading.Thread] = {}
 _jobs_lock = threading.Lock()
+_import_lock = threading.Lock()
 
 
 def _log_to(path: Path) -> Callable[[str], None]:
@@ -88,7 +90,9 @@ def create_app(cfg: Settings) -> FastAPI:
         suffix = Path(file.filename or "").suffix.lower()
         if suffix not in (".epub", ".txt", ".md", ".pdf"):
             raise HTTPException(400, f"unsupported format {suffix}")
-        tmp_path = Path(tempfile.mktemp(suffix=suffix))
+        filename = Path(file.filename or f"book{suffix}").name
+        tmp_dir = Path(tempfile.mkdtemp())
+        tmp_path = tmp_dir / filename
         size = 0
         try:
             with tmp_path.open("wb") as out:
@@ -97,9 +101,13 @@ def create_app(cfg: Settings) -> FastAPI:
                     if size > MAX_UPLOAD:
                         raise HTTPException(413, "file too large")
                     out.write(chunk)
-            book = import_book(tmp_path, cfg)
+            try:
+                with _import_lock:
+                    book = import_book(tmp_path, cfg)
+            except ValueError as e:
+                raise HTTPException(422, str(e)) from e
         finally:
-            tmp_path.unlink(missing_ok=True)
+            shutil.rmtree(tmp_dir, ignore_errors=True)
         return {"book_id": book.book_id}
 
     @app.get("/api/books/{book_id}")
