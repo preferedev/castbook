@@ -401,3 +401,30 @@ def test_run_all_books(client_setup, monkeypatch) -> None:  # type: ignore[no-un
             break
         time.sleep(0.05)
     assert f"export_book:{book_id}" in calls
+
+
+def test_unit_emotions_endpoint(client_setup) -> None:  # type: ignore[no-untyped-def]
+    from castbook.artifacts import AttributionFile, Unit, load_artifact, save_artifact
+
+    client, tmp_path = client_setup
+    book_id = _import_txt(client, tmp_path)
+    d = tmp_path / "books" / book_id
+    save_artifact(
+        AttributionFile(
+            book_id=book_id,
+            attributor="t",
+            input_hash="h",
+            units=[
+                Unit(id="u1", chapter=1, text="x", speaker="narrator", emotion="neutral"),
+                Unit(id="u2", chapter=1, text="y", speaker="narrator", emotion="sad"),
+            ],
+        ),
+        d,
+    )
+    assert (
+        client.post(f"/api/books/{book_id}/units/emotions", json={"u1": "nope"}).status_code == 422
+    )
+    r = client.post(f"/api/books/{book_id}/units/emotions", json={"u1": "joyful", "u2": "sad"})
+    assert r.status_code == 200 and r.json()["fixed"] == 1
+    attrib = load_artifact(AttributionFile, d)
+    assert attrib.units[0].emotion == "joyful" and attrib.units[1].emotion == "sad"

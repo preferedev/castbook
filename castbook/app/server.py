@@ -890,6 +890,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                     "chapter": u.chapter,
                     "text": u.text[:300],
                     "guess": u.guess and u.speaker != "ambiguous",
+                    "emotion": u.emotion,
                 }
                 for u in attrib.units
                 if u.speaker == "ambiguous" or u.guess
@@ -915,6 +916,35 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             for uid in fixes:
                 manifest.units.pop(uid, None)
             save_artifact(manifest, book.dir)
+        return {"ok": True, "fixed": fixed}
+
+    @app.post("/api/books/{book_id}/units/emotions")
+    def set_unit_emotions(book_id: str, fixes: dict[str, str]) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        attrib = load_artifact(AttributionFile, book.dir)
+        if attrib is None:
+            raise HTTPException(404, "run analyze first")
+        from ..artifacts import EMOTIONS
+
+        if len(fixes) > 20000:
+            raise HTTPException(413, "too many units")
+        bad = [v for v in fixes.values() if v not in EMOTIONS]
+        if bad:
+            raise HTTPException(422, f"invalid emotions: {sorted(set(bad))}")
+        fixed = 0
+        changed: list[str] = []
+        for u in attrib.units:
+            if u.id in fixes and u.emotion != fixes[u.id]:
+                u.emotion = fixes[u.id]  # type: ignore[assignment]
+                fixed += 1
+                changed.append(u.id)
+        if fixed:
+            save_artifact(attrib, book.dir)
+            manifest = load_artifact(AudioManifest, book.dir)
+            if manifest is not None:
+                for uid in changed:
+                    manifest.units.pop(uid, None)
+                save_artifact(manifest, book.dir)
         return {"ok": True, "fixed": fixed}
 
     @app.get("/api/books/{book_id}/search")

@@ -534,16 +534,30 @@ async function loadReview(id) {
     `<td><select data-unit="${u.id}">` +
     `<option value="">pick speaker…</option>` +
     names.map(n => `<option value="${n}">${n}</option>`).join("") +
+    `</select></td>` +
+    `<td><select data-emotion-unit="${u.id}">` +
+    ["neutral","angry","sad","joyful","fearful","whispered","shouted","sarcastic"].map(e =>
+      `<option value="${e}" ${e === u.emotion ? "selected" : ""}>${e}</option>`).join("") +
     `</select></td></tr>`).join("");
 }
 
 $("save-review").onclick = async () => {
   const fixes = {};
-  document.querySelectorAll("#review-table select").forEach(s => { if (s.value) fixes[s.dataset.unit] = s.value; });
-  if (!Object.keys(fixes).length) return;
-  const r = await api(`/api/books/${current}/speakers`, {
-    method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(fixes)});
-  $("review-status").textContent = `fixed ${r.fixed} — re-generate to render`;
+  document.querySelectorAll("#review-table select[data-unit]").forEach(s => { if (s.value) fixes[s.dataset.unit] = s.value; });
+  const emos = {};
+  document.querySelectorAll("#review-table select[data-emotion-unit]").forEach(s => { emos[s.dataset.emotionUnit] = s.value; });
+  let msg = [];
+  if (Object.keys(fixes).length) {
+    const r = await api(`/api/books/${current}/speakers`, {
+      method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(fixes)});
+    msg.push(`fixed ${r.fixed} speakers`);
+  }
+  if (Object.keys(emos).length) {
+    const r2 = await api(`/api/books/${current}/units/emotions`, {
+      method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(emos)});
+    if (r2.fixed) msg.push(`${r2.fixed} emotions`);
+  }
+  $("review-status").textContent = (msg.join(" + ") || "nothing changed") + " — re-generate to render";
   loadReview(current);
 };
 
