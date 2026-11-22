@@ -50,7 +50,7 @@ un-rendered units are synthesized.
 | `castbook clone <book> <sp> <clip>` | clone a voice from a wav/mp3/flac clip onto a speaker (pocket only) |
 | `castbook cast <book>` | auto-assign voices; `--map name=voice` (mix voices as `a:0.7+b:0.3`), `--speed name=rate` |
 | `castbook generate <book>` | synthesize audio (resumable; `--chapters 1-3,7`, `--limit 50` preview, `--workers 4` parallel, `--align` word timestamps) |
-| `castbook export <book>` | mux chaptered M4B (+ `--format mp3`/`both`) |
+| `castbook export <book>` | mux chaptered M4B (+ `--format mp3`/`both`, `--epub` read-along EPUB3) |
 | `castbook review <book>` | list ambiguous units; `--set unit=speaker` to fix |
 | `castbook merge <book> <a> <b>` | fold duplicate speaker `a` into `b` |
 | `castbook align <book>` | word-level timestamps for reader karaoke (needs `[align]` extra) |
@@ -59,7 +59,10 @@ un-rendered units are synthesized.
 | `castbook books` | list books with render progress |
 | `castbook models list\|pull` | model management |
 | `castbook serve -p 8484` | local web UI (`--host 0.0.0.0` shares on LAN behind a printed token) |
-| `castbook transcript <book>` | per-chapter SRT/VTT/TXT with speaker labels (`--fmt`, `-o`) |
+| `castbook transcript <book>` | per-chapter SRT/VTT/TXT with speaker labels (`--fmt`, `-o`, `--speaker name` for one character) |
+| `castbook search <book> <text>` | who said it: every matching unit with chapter, speaker, excerpt |
+| `castbook rename <book> <sp> <name>` | rename a character (old name kept as an alias) |
+| `castbook chapters <book>` | chapter indexes, titles, word counts |
 
 ## Docker
 
@@ -75,6 +78,10 @@ with the ▶ button, review and
 override voice casting (including per-speaker speed, `voiceA:0.7+voiceB:0.3` mixes, and merging duplicate speakers), generate (or "Preview 50" for a quick sample), play any rendered chapter with ▶ audio, re-render just a range with ↻, and export in the background — download the M4B when it lands.
 The reader view highlights the spoken word when `castbook align` has run, remembers
 your position, and supports space/←/→/↑/↓ shortcuts.
+Each book also gets a podcast feed (`/api/books/<id>/feed.xml` — subscribe in any
+podcast app) and the whole library is browsable as an OPDS catalog at
+`/api/opds` (KyBook, Panels, etc.). `export --epub` produces a read-along
+EPUB3 with word-level media overlays for Thorium/Apple Books.
 
 Voice assignments persist across books (`data/voice-memory.json`) — a character
 keeps their voice everywhere they appear. Pronunciation overrides live in
