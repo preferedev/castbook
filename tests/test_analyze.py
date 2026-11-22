@@ -217,3 +217,22 @@ def test_heuristic_narrator_does_not_enter_turn_history() -> None:
         "narrator",
         "ambiguous",
     ]
+
+
+def test_heuristic_alternation_assignment_is_flagged_as_guess() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="alice", name="Alice", aliases=[]),
+        Character(id="bob", name="Bob", aliases=[]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Hi," said Alice.\n\n"Okay," said Bob.\n\n"Whatever."',
+        word_count=0,
+    )
+    units = HeuristicAttributor().attribute(ch, cast)
+    assert [u.guess for u in units] == [False, False, True]
+    assert units[2].speaker == "alice"
