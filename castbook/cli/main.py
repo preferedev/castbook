@@ -857,10 +857,25 @@ def books(
         )
         total = len(attrib.units) if attrib else 0
         if json_:
+            stage = (
+                "imported"
+                if attrib is None
+                else (
+                    "rendered"
+                    if manifest
+                    and chapters
+                    and len(
+                        [c for c in manifest.chapters.values() if c.status == ChapterStatus.done]
+                    )
+                    == len(chapters.chapters)
+                    else "analyzed"
+                )
+            )
             rows.append(
                 {
                     "book_id": d.name,
                     "title": title,
+                    "stage": stage,
                     "units": total,
                     "rendered": done,
                     "failed": failed,
