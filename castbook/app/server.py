@@ -123,6 +123,12 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     def webmanifest() -> FileResponse:
         return FileResponse(STATIC / "manifest.json", media_type="application/manifest+json")
 
+    @app.get("/static/icon-{size}.png")
+    def app_icon(size: int) -> FileResponse:
+        if size not in (192, 512):
+            raise HTTPException(404)
+        return FileResponse(STATIC / f"icon-{size}.png")
+
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
         return _page("index.html")
