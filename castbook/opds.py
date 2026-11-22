@@ -9,8 +9,9 @@ from .artifacts import ChaptersFile, load_artifact
 from .config import Settings
 
 
-def build_catalog(cfg: Settings, base_url: str) -> str:
+def build_catalog(cfg: Settings, base_url: str, token: str | None = None) -> str:
     base = base_url.rstrip("/")
+    qs = f"?token={quote(token)}" if token else ""
     entries: list[str] = []
     if cfg.data_dir.exists():
         for d in sorted(cfg.data_dir.iterdir()):
@@ -22,9 +23,9 @@ def build_catalog(cfg: Settings, base_url: str) -> str:
             m = ch.meta
             bid = d.name
             links = [
-                f'<link rel="http://opds-spec.org/image" href="{base}/api/books/{bid}/cover"/>',
+                f'<link rel="http://opds-spec.org/image" href="{base}/api/books/{bid}/cover{qs}"/>',
                 f'<link rel="subsection" type="application/atom+xml" '
-                f'href="{base}/api/books/{bid}/feed.xml"/>',
+                f'href="{base}/api/books/{bid}/feed.xml{qs}"/>',
             ]
             for f in sorted((d / "export").glob("*")) if (d / "export").is_dir() else []:
                 if not f.is_file():
@@ -35,7 +36,7 @@ def build_catalog(cfg: Settings, base_url: str) -> str:
                     ".zip": "application/zip",
                 }.get(f.suffix.lower())
                 if mime:
-                    href = f"{base}/api/books/{bid}/download/{quote(f.name)}"
+                    href = f"{base}/api/books/{bid}/download/{quote(f.name)}{qs}"
                     links.append(
                         f'<link rel="http://opds-spec.org/acquisition" type="{mime}" '
                         f'title="{escape(f.name)}" href="{href}"/>'

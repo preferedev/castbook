@@ -17,7 +17,7 @@ from .artifacts import (
 )
 
 
-def build_feed(book_dir: Path, base_url: str) -> str | None:
+def build_feed(book_dir: Path, base_url: str, token: str | None = None) -> str | None:
     """RSS 2.0 feed with one <item> per rendered chapter; None if nothing rendered."""
     ch = load_artifact(ChaptersFile, book_dir)
     attrib = load_artifact(AttributionFile, book_dir)
@@ -35,6 +35,7 @@ def build_feed(book_dir: Path, base_url: str) -> str | None:
     if not rendered:
         return None
     base = base_url.rstrip("/")
+    qs = f"?token={escape(token)}" if token else ""
     bid = ch.book_id
     meta = ch.meta
     title = escape(meta.title or bid)
@@ -50,7 +51,7 @@ def build_feed(book_dir: Path, base_url: str) -> str | None:
         items.append(
             f"""    <item>
       <title>{escape(c.title or f"Chapter {i}")}</title>
-      <enclosure url="{base}/api/books/{escape(bid)}/chapters/{i}/audio"
+      <enclosure url="{base}/api/books/{escape(bid)}/chapters/{i}/audio{qs}"
         type="audio/wav" length="{wav.stat().st_size}"/>
       <guid isPermaLink="false">{escape(bid)}-ch{i}</guid>
       <pubDate>{format_datetime(datetime.fromtimestamp(mtime, timezone.utc))}</pubDate>
@@ -59,7 +60,7 @@ def build_feed(book_dir: Path, base_url: str) -> str | None:
         )
     if not items:
         return None
-    cover = f"{base}/api/books/{escape(bid)}/cover"
+    cover = f"{base}/api/books/{escape(bid)}/cover{qs}"
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
   <channel>

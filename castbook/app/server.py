@@ -819,14 +819,17 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         from ..opds import build_catalog
 
         base = str(request.base_url).rstrip("/")
-        return Response(build_catalog(cfg, base), media_type="application/atom+xml")
+        return Response(
+            build_catalog(cfg, base, token=request.query_params.get("token")),
+            media_type="application/atom+xml",
+        )
 
     @app.get("/api/books/{book_id}/feed.xml")
     def feed(book_id: str, request: Request) -> Response:
         from ..rss import build_feed
 
         book = _require_book(cfg, book_id)
-        xml = build_feed(book.dir, str(request.base_url))
+        xml = build_feed(book.dir, str(request.base_url), token=request.query_params.get("token"))
         if xml is None:
             raise HTTPException(404, "no rendered chapters yet")
         return Response(content=xml, media_type="application/rss+xml")
