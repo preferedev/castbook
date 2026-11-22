@@ -399,9 +399,20 @@ def run_cmd(
     speed: Annotated[float, typer.Option("--speed", min=0.5, max=2.0)] = 1.0,
     workers: Annotated[int, typer.Option("--workers", min=1, max=16)] = 1,
     layout: Annotated[str | None, typer.Option("--layout", help="abs for Audiobookshelf")] = None,
+    quality: Annotated[
+        str | None,
+        typer.Option("--quality", "-q", help="fast|balanced|studio — preset llm+tts backends"),
+    ] = None,
 ) -> None:
     """Full pipeline: import → analyze → cast → generate → export."""
     cfg = _cfg(config)
+    if quality is not None:
+        from ..config import QUALITY_PRESETS
+
+        preset = QUALITY_PRESETS.get(quality)
+        if preset is None:
+            raise typer.BadParameter(f"unknown quality {quality!r} (fast|balanced|studio)")
+        cfg.llm.backend, cfg.tts.backend = preset
     paths, tmp_dirs = _resolve_sources(files)
     try:
         for path in paths:

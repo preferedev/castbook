@@ -36,6 +36,14 @@ format = "m4b"                # m4b | mp3 | both
 """
 
 
+QUALITY_PRESETS = {
+    # name -> (llm backend, tts backend); explicit flags still override
+    "fast": ("heuristic", "pocket"),
+    "balanced": ("hybrid", "kokoro"),
+    "studio": ("llamacpp", "qwen"),
+}
+
+
 class LlmSettings(BaseModel):
     backend: str = "llamacpp"
     model: str = "qwen3-4b-q4"
