@@ -548,7 +548,7 @@ def _addressed(run: list[tuple[Unit, str | None]], names: dict[str, str]) -> set
         for collective in ("crew", "crowd", "chorus", "seamen", "mariners"):
             cid: str | None = _lookup(collective, names) or _lookup(collective.title(), names)
             if cid and re.search(
-                r"(?:^|[,.!?;—–]\s*)(?:my\s+)?(?:men|lads|mates|hearties|boys|friends)\s*(?=[,.!?;—–]|$)",
+                r"(?:^|[,.!?;\u2014\u2013]\s*)(?:my\s+)?(?:men|lads|mates|hearties|boys|friends)\s*(?=[,.!?;\u2014\u2013]|$)",
                 span,
                 re.IGNORECASE,
             ):
