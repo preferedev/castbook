@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from ..artifacts import BookMeta, Chapter
-from . import epub, mobi, pdf, txt
+from . import docx, epub, mobi, pdf, txt
 
 PARSERS = {
     ".epub": epub.parse,
@@ -14,6 +14,7 @@ PARSERS = {
     ".md": txt.parse,
     ".html": txt.parse,
     ".htm": txt.parse,
+    ".docx": docx.parse,
     ".pdf": pdf.parse,
     ".mobi": mobi.parse,
     ".azw": mobi.parse,
