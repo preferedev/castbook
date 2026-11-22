@@ -494,6 +494,14 @@ def doctor(
     mi = detect()
     typer.echo(f"machine:     {mi.tier} · {mi.cores} cores · {mi.ram_gb} GB RAM")
     typer.echo(mi.verdict)
+    if cfg.data_dir.is_dir():
+        junk = sum(
+            1
+            for d in cfg.data_dir.iterdir()
+            if d.is_dir() and d.name != "_reads" and not (d / "chapters.json").exists()
+        )
+        if junk:
+            typer.echo(f"junk dirs:   {junk} — run `castbook clean`")
     raise typer.Exit(0 if ok else 1)
 
 
