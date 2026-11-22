@@ -447,7 +447,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             raise HTTPException(422, f"bad speaker id {speaker!r}")
         dest_dir = book.dir / "voices"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        dest = dest_dir / f"{safe}{suffix}"
+        dest = dest_dir / f"{safe}-{int(time.time())}{suffix}"
         size = 0
         with dest.open("wb") as out:
             while chunk := file.file.read(1 << 20):
@@ -456,7 +456,11 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                     dest.unlink(missing_ok=True)
                     raise HTTPException(413, "file too large")
                 out.write(chunk)
-        cast_book(book, cfg, overrides={safe: str(dest)})
+        casting = load_artifact(CastingFile, book.dir)
+        overrides = {sp: spec.voice for sp, spec in casting.map.items()} if casting else {}
+        speeds = {sp: spec.speed for sp, spec in casting.map.items()} if casting else {}
+        overrides[safe] = str(dest)
+        cast_book(book, cfg, overrides=overrides, speeds=speeds)
         return {"ok": True, "clip": str(dest)}
 
     @app.post("/api/books/{book_id}/analyze")

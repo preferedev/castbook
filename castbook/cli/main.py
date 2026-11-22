@@ -453,9 +453,15 @@ def clone(
     b = _book(cfg, book)
     dest_dir = b.dir / "voices"
     dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / f"{speaker}{clip.suffix.lower()}"
+    import time as _time
+
+    dest = dest_dir / f"{speaker}-{int(_time.time())}{clip.suffix.lower()}"
     shutil.copy2(clip, dest)
-    cast_book(b, cfg, overrides={speaker: str(dest)})
+    casting = load_artifact(CastingFile, b.dir)
+    overrides = {sp: spec.voice for sp, spec in casting.map.items()} if casting else {}
+    speeds = {sp: spec.speed for sp, spec in casting.map.items()} if casting else {}
+    overrides[speaker] = str(dest)
+    cast_book(b, cfg, overrides=overrides, speeds=speeds)
     typer.echo(f"cloned {clip.name} → {speaker} ({dest})")
 
 
