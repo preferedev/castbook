@@ -594,6 +594,9 @@ def clean(
 @app.command()
 def verify(
     book: str,
+    fix: Annotated[
+        bool, typer.Option("--fix", help="drop manifest entries whose wav files vanished")
+    ] = False,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Health-check a book: coverage, failed units, chapter gaps, stale export."""
@@ -632,6 +635,22 @@ def verify(
         )
         if gaps:
             problems.append(f"missing chapter wavs: {','.join(sorted(gaps, key=int)[:10])}")
+        orphans = [
+            uid
+            for uid, e in manifest.units.items()
+            if e.status == UnitStatus.done and not (b.audio / e.path).exists()
+        ]
+        if orphans:
+            problems.append(
+                f"{len(orphans)} done units lost their wav file"
+                + (" — dropped, rerun generate" if fix else " (verify --fix to drop)")
+            )
+        if (orphans or gaps) and fix:
+            for uid in orphans:
+                del manifest.units[uid]
+            for c in gaps:
+                manifest.chapters.pop(c, None)
+            save_artifact(manifest, b.dir)
         export_dir = b.dir / "export"
         if not export_dir.is_dir() or not any(export_dir.iterdir()):
             problems.append("no exports — run export")
