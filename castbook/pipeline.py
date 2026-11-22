@@ -168,12 +168,22 @@ def run_book(
     speed: float = 1.0,
     workers: int = 1,
     layout: str | None = None,
+    lang: str | None = None,
+    split_hours: float | None = None,
+    epub: bool = False,
 ) -> BookPaths:
-    book = import_book(src, cfg, log)
+    book = import_book(src, cfg, log, lang=lang)
     analyze_book(book, cfg, log)
     cast_book(book, cfg, log=log)
     generate_book(book, cfg, log=log, speed=speed, workers=workers)
-    export_book(book, cfg, log, layout=layout)
+    export_book(book, cfg, log, layout=layout, split_hours=split_hours)
+    if epub:
+        from .epubout import build_media_epub
+
+        ch = load_artifact(ChaptersFile, book.dir)
+        title = (ch.meta.title if ch else book.book_id) or book.book_id
+        out = build_media_epub(book, book.export / f"{title}-read-along.epub")
+        log(f"[export] {out.name}")
     return book
 
 

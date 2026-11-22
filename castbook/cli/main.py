@@ -620,6 +620,13 @@ def run_cmd(
         str | None,
         typer.Option("--quality", "-q", help="fast|balanced|studio — preset llm+tts backends"),
     ] = None,
+    lang: Annotated[str | None, typer.Option("--lang")] = None,
+    split: Annotated[
+        float | None, typer.Option("--split", help="split the M4B into parts of at most N hours")
+    ] = None,
+    epub: Annotated[
+        bool, typer.Option("--epub", help="also write a read-along EPUB3 (media overlay)")
+    ] = False,
 ) -> None:
     """Full pipeline: import → analyze → cast → generate → export."""
     cfg = _cfg(config)
@@ -633,7 +640,16 @@ def run_cmd(
     paths, tmp_dirs = _resolve_sources(files)
     try:
         for path in paths:
-            book = run_book(path, cfg, speed=speed, workers=workers, layout=layout)
+            book = run_book(
+                path,
+                cfg,
+                speed=speed,
+                workers=workers,
+                layout=layout,
+                lang=lang,
+                split_hours=split,
+                epub=epub,
+            )
             typer.echo(f"done: {book.export}")
     finally:
         for d in tmp_dirs:
