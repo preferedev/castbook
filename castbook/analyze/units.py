@@ -50,9 +50,10 @@ def _quote_step(stack: list[str], ch: str, text: str, i: int) -> None:
         stack.append("d")
     elif ch == "\u2018":
         stack.append("s")
-    elif ch == "\u201d" and stack and stack[-1] == "d":
-        stack.pop()
-    elif ch == "\u2019" and not _apostrophe(text, i) and stack and stack[-1] == "s":
+    elif stack and (
+        (ch == "\u201d" and stack[-1] == "d")
+        or (ch == "\u2019" and stack[-1] == "s" and not _apostrophe(text, i))
+    ):
         stack.pop()
 
 
