@@ -663,8 +663,14 @@ def books(
             if manifest
             else 0
         )
+        failed = (
+            sum(1 for e in manifest.units.values() if e.status == UnitStatus.failed)
+            if manifest
+            else 0
+        )
         total = len(attrib.units) if attrib else 0
         rendered = f" · {done}/{total} rendered" if manifest else " · not rendered"
+        rendered += f" · {failed} failed" if failed else ""
         review = (
             f" · {len(attrib.needs_review)} to review" if attrib and attrib.needs_review else ""
         )
