@@ -62,6 +62,10 @@
   </div>
   <div class="bar" style="margin-top:.75rem"><i id="prog" style="width:0%"></i></div>
   <div class="muted" id="prog-label" style="margin:.25rem 0"></div>
+  <details id="log-details" style="margin-top:.5rem">
+    <summary class="muted">Job log</summary>
+    <pre id="job-log" class="muted" style="font-size:.75rem;max-height:12rem;overflow:auto"></pre>
+  </details>
   <pre id="log" style="display:none"></pre>
   <div id="downloads" class="row" style="margin-top:.5rem"></div>
 
@@ -146,6 +150,7 @@ async function saveCast() {
 }
 
 async function refreshProgress() {
+  api(`/api/books/${current}/log`).then(r => { $("job-log").textContent = r.lines.join("\n"); });
   if (!current) return;
   try {
     const p = await api(`/api/books/${current}/progress`);

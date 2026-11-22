@@ -126,6 +126,12 @@ def create_app(cfg: Settings) -> FastAPI:
             "units": len(attrib.units) if attrib else 0,
         }
 
+    @app.get("/api/books/{book_id}/log")
+    def book_log(book_id: str, lines: int = 100) -> dict[str, Any]:
+        f = _require_book(cfg, book_id).dir / "job.log"
+        text = f.read_text() if f.exists() else ""
+        return {"lines": text.splitlines()[-lines:]}
+
     @app.delete("/api/books/{book_id}")
     def delete_book(book_id: str) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
