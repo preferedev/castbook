@@ -11,7 +11,7 @@ import re
 from collections import Counter
 
 from ..artifacts import Chapter, Character, Unit
-from .units import _apostrophe, _inside_quote, _quote_step, quoted_spans, split_units
+from .units import _apostrophe, _inside_quote, _quote_step, split_units
 
 SAID_VERBS = (
     "said|asked|replied|cried|whispered|shouted|exclaimed|answered|continued|"
@@ -22,7 +22,7 @@ SAID_VERBS = (
     "begged|sobbed|stammered|gasped|growled|screamed|yelled|mumbled|drawled|"
     "wailed|moaned|grumbled|snarled|sneered|blurted|snapped|roared|bellowed|"
     "choked|hissed|rasped|whined|croaked|queried|ventured|offered|confessed|"
-    "mused|retorted|drawled|howled|stuttered|resumed|rejoined|ejaculated|"
+    "mused|retorted|drawled|howled|stuttered|resumed|rejoined|ejaculated|says|"
     "assented|reiterated"
 )
 _NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:(?:de|van|von|of|the|al|bin)\s+)?[A-Z][a-z]+){0,2}"
@@ -159,11 +159,13 @@ class HeuristicAttributor:
         in_quote = False
         cur_para = -1
         narr_break = True
+        pending: str | None = None
         for u in units:
             if u.kind != "dialogue":
                 u.speaker = "narrator"
                 in_quote = False
                 narr_break = True
+                pending = _trailing_says(u.text, names)
                 continue
             if u.paragraph != cur_para:
                 in_quote = False
@@ -172,9 +174,12 @@ class HeuristicAttributor:
             if in_quote and runs:
                 runs[-1].append((u, hit))
             else:
+                if hit is None and pending is not None:
+                    hit = pending
                 runs.append([(u, hit)])
                 run_after_narration.append(narr_break)
             narr_break = False
+            pending = None
             in_quote = _inside_quote(u.text, in_quote)
         resolved: list[str | None] = [next((s for _, s in run if s), None) for run in runs]
 
@@ -186,8 +191,6 @@ class HeuristicAttributor:
 
         first_person = "I" in names
         cast_ids = [c.id for c in cast]
-        last_speaker = ""
-        prev_speaker = ""
         for seg in segs:
             parties: list[str] = []
             for i in seg:
@@ -199,48 +202,67 @@ class HeuristicAttributor:
                     if cid not in parties:
                         parties.append(cid)
                 parties = parties[:2]
-            last_speaker = prev_speaker = ""
             for pos, i in enumerate(seg):
+                if resolved[i] is not None:
+                    continue
                 run = runs[i]
-                speaker = resolved[i]
-                if speaker is None:
-                    quoted = sum(len(q) for u, _ in run for q in quoted_spans(u.text))
-                    total = sum(len(u.text) for u, _ in run)
-                    zone = " ".join(_tag_zone(u.text) for u, _ in run)
-                    tagged = re.search(SAID_VERBS, zone) is not None
-                    left = next(
-                        (resolved[j] for j in seg[pos - 1 :: -1] if resolved[j] in parties),
-                        None,
-                    )
-                    if not left and not tagged and total and quoted / total < 0.3:
-                        speaker = "narrator"
-                    elif len(parties) == 2:
-                        if first_person and _pronoun_tag(run):
-                            speaker = next((p for p in parties if p != names["I"]), None)
-                        if speaker is None:
-                            anchor = left or next(
-                                (resolved[j] for j in seg[pos + 1 :] if resolved[j] in parties),
-                                None,
-                            )
-                            if anchor:
-                                speaker = parties[1] if anchor == parties[0] else parties[0]
-                                for u, _ in run:
-                                    u.guess = True
-                    if speaker is None:
-                        speaker = prev_speaker or last_speaker or "ambiguous"
-                        if speaker not in ("ambiguous",):
-                            for u, _ in run:
-                                u.guess = True
-                    resolved[i] = speaker
+                stack: list[str] = []
+                quoted = 0
                 for u, _ in run:
-                    u.speaker = speaker
-                if speaker not in ("ambiguous", "narrator") and speaker != last_speaker:
+                    for idx, c in enumerate(u.text):
+                        deep = bool(stack)
+                        _quote_step(stack, c, u.text, idx)
+                        if deep and stack:
+                            quoted += 1
+                total = sum(len(u.text) for u, _ in run)
+                zone = " ".join(_tag_zone(u.text) for u, _ in run)
+                tagged = re.search(SAID_VERBS, zone) is not None
+                left = next(
+                    (resolved[j] for j in reversed(seg[:pos]) if resolved[j] in parties),
+                    None,
+                )
+                if not left and not tagged and total and quoted / total < 0.3:
+                    resolved[i] = "narrator"
+                    continue
+                if len(parties) != 2:
+                    continue
+                if first_person and _pronoun_tag(run):
+                    resolved[i] = next((p for p in parties if p != names["I"]), None)
+                    continue
+                if left:
+                    resolved[i] = parties[1] if left == parties[0] else parties[0]
+                    for u, _ in run:
+                        u.guess = True
+            if len(parties) == 2:
+                head = next(
+                    (pos for pos, i in enumerate(seg) if resolved[i] in parties),
+                    len(seg),
+                )
+                for pos in range(min(head, len(seg) - 2), -1, -1):
+                    i = seg[pos]
+                    right = resolved[seg[pos + 1]]
+                    if resolved[i] is not None or right not in parties:
+                        continue
+                    resolved[i] = parties[1] if right == parties[0] else parties[0]
+                    for u, _ in runs[i]:
+                        u.guess = True
+            last_speaker = ""
+            prev_speaker = ""
+            for i in seg:
+                if resolved[i] is None:
+                    speaker = prev_speaker or last_speaker or "ambiguous"
+                    resolved[i] = speaker
+                    if speaker != "ambiguous":
+                        for u, _ in runs[i]:
+                            u.guess = True
+                final = resolved[i] or "ambiguous"
+                if final not in ("ambiguous", "narrator") and final != last_speaker:
                     prev_speaker = last_speaker or prev_speaker
-                    last_speaker = speaker
+                    last_speaker = final
 
-        for run, speaker in zip(runs, resolved, strict=True):
+        for run, final_speaker in zip(runs, resolved, strict=True):
             for u, _ in run:
-                u.speaker = speaker or "ambiguous"
+                u.speaker = final_speaker or "ambiguous"
         return units
 
     def _speaker_for(self, text: str, names: dict[str, str], in_quote: bool = False) -> str | None:
@@ -397,6 +419,17 @@ def _name_index(cast: list[Character]) -> dict[str, str]:
                     if part.lower() not in _NAME_PART_STOP:
                         index[part] = c.id
     return index
+
+
+_TRAILING_SAYS = re.compile(
+    rf"({NAME}|he|she|I)\s+(?:{SAID_VERBS})\s*[:\u2014\u2013,-]?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _trailing_says(text: str, names: dict[str, str]) -> str | None:
+    m = _TRAILING_SAYS.search(text.strip())
+    return _lookup(m.group(1), names) if m else None
 
 
 _PRONOUN_TAG = re.compile(
