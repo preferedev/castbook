@@ -559,6 +559,22 @@ def doctor(
         status = "ok" if found else "MISSING"
         ok &= bool(found)
         typer.echo(f"{name:12} {status}")
+    if shutil.which("ffmpeg"):
+        import subprocess
+
+        try:
+            enc = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-encoders"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            ).stdout
+            missing = [e for e in ("aac", "libmp3lame") if f" {e} " not in enc + " "]
+            if missing:
+                ok = False
+                typer.echo(f"encoders     MISSING {','.join(missing)} — ffmpeg build lacks them")
+        except Exception:
+            pass
     for m in models_mod.MANIFEST:
         present = (cfg.models_dir / m.filename).exists()
         typer.echo(f"{m.id:22} {'ok' if present else 'not downloaded'}")
