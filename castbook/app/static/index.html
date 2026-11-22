@@ -563,7 +563,8 @@ $("pack-file").onchange = async (e) => {
   const r = await api(`/api/books/${current}/voicepack`, {method: "POST",
     headers: {"content-type": "application/json"}, body: await f.text()});
   $("pack-status").textContent = `applied ${r.applied.length}` +
-    (r.skipped.length ? ` — skipped ${r.skipped.join(", ")}` : "");
+    (r.skipped.length ? ` — skipped ${r.skipped.join(", ")}` : "") +
+    (r.mismatched?.length ? ` — wrong backend: ${r.mismatched.join(", ")}` : "");
   openBook(current);
   e.target.value = "";
 };

@@ -649,3 +649,5 @@ def voicepack_import(
     typer.echo(f"applied {len(res['applied'])} voices: {', '.join(res['applied'])}")
     if res["skipped"]:
         typer.echo(f"skipped (no match): {', '.join(res['skipped'])}")
+    if res["mismatched"]:
+        typer.echo(f"skipped (other backend): {', '.join(res['mismatched'])}")
