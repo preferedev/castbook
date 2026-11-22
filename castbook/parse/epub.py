@@ -72,11 +72,13 @@ def _item_text(item: object) -> str:
 
 
 def _chapters(book: el_epub.EpubBook) -> list[Chapter]:
-    docs = [i for i in book.get_items_of_type(ebooklib.ITEM_DOCUMENT)]
+    docs = {i.get_id(): i for i in book.get_items_of_type(ebooklib.ITEM_DOCUMENT)}
+    ordered = [docs[idref] for idref, _linear in book.spine if idref in docs]
+    ordered += [d for i, d in docs.items() if d not in ordered]
     toc_titles = _toc_map(book)
 
     raw: list[Chapter] = []
-    for item in docs:
+    for item in ordered:
         text = _item_text(item)
         if len(text.split()) < MIN_WORDS:
             continue
