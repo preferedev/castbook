@@ -353,15 +353,16 @@ def models_pull(
 @app.command()
 def serve(
     port: Annotated[int, typer.Option("--port", "-p")] = 8484,
+    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
-    """Run the local web UI."""
+    """Run the local web UI (--host 0.0.0.0 to share on the LAN)."""
     import uvicorn
 
     from ..app.server import create_app
 
     cfg = _cfg(config)
-    uvicorn.run(create_app(cfg), host="127.0.0.1", port=port, log_level="info")
+    uvicorn.run(create_app(cfg), host=host, port=port, log_level="info")
 
 
 @app.command()
