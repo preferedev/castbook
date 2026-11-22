@@ -69,6 +69,7 @@
     <button id="preview-gen" class="ghost">Preview 50</button>
     <button id="export" class="ghost">Export</button>
     <button id="align" class="ghost" title="word-level karaoke timestamps">Align</button>
+    <button id="stop" class="ghost" title="cancel running job">■</button>
   </div>
   <div class="bar" style="margin-top:.75rem"><i id="prog" style="width:0%"></i></div>
   <div class="muted" id="prog-label" style="margin:.25rem 0"></div>
@@ -79,6 +80,12 @@
   <pre id="log" style="display:none"></pre>
   <div id="downloads" class="row" style="margin-top:.5rem"></div>
 
+  <details id="lex-details" style="margin-top:1rem">
+    <summary>Pronunciation lexicon</summary>
+    <textarea id="lex-txt" rows="6" style="width:100%;font-family:monospace" placeholder='{"Cheshire":"CHEH-shur"}'></textarea>
+    <button id="lex-save" class="ghost" style="margin-top:.5rem">Save lexicon</button>
+    <span class="muted" id="lex-meta"></span>
+  </details>
   <details id="review-details" style="margin-top:1rem">
     <summary class="muted">Ambiguous units <b id="review-count"></b> — assign a speaker</summary>
     <table><tbody id="review-table"></tbody></table>
@@ -158,6 +165,7 @@ async function openBook(id) {
     b.textContent = "▶";
   });
   loadReview(id);
+  loadLexicon(id);
   refreshProgress();
 }
 
@@ -223,6 +231,17 @@ $("import").onclick = async () => {
     loadBooks();
   } catch (e) { $("import-status").textContent = e.message; }
 };
+async function loadLexicon(id) {
+  const r = await api(`/api/books/${id}/lexicon`);
+  $("lex-txt").value = Object.keys(r.book).length ? JSON.stringify(r.book, null, 2) : "";
+  $("lex-meta").textContent = Object.keys(r.global).length ? ` · ${Object.keys(r.global).length} global entries` : "";
+}
+$("lex-save").onclick = async () => {
+  let body;
+  try { body = JSON.parse($("lex-txt").value || "{}"); } catch { $("lex-meta").textContent = " · invalid JSON"; return; }
+  const r = await api(`/api/books/${current}/lexicon`, {method: "PUT", headers: {"content-type":"application/json"}, body: JSON.stringify(body)});
+  $("lex-meta").textContent = ` · saved ${r.saved} entries`;
+};
 async function loadReview(id) {
   const r = await api(`/api/books/${id}/review`);
   const units = r.units || [];
@@ -265,6 +284,7 @@ $("play-ch").onclick = () => {
   new Audio(`/api/books/${current}/chapters/${ch}/audio`).play();
 };
 $("align").onclick = () => api(`/api/books/${current}/align`, {method: "POST"}).then(refreshProgress);
+$("stop").onclick = () => api(`/api/books/${current}/cancel`, {method: "POST"}).then(refreshProgress);
 $("preview-gen").onclick = () => api(`/api/books/${current}/generate?limit=50`, {method: "POST"}).then(refreshProgress);
 $("merge-btn").onclick = async () => {
   const src = $("merge-src").value, dst = $("merge-dst").value;

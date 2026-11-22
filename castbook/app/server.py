@@ -6,6 +6,7 @@ artifacts, so the UI survives a server restart.
 
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 import threading
@@ -38,6 +39,7 @@ STATIC = Path(__file__).parent / "static"
 MAX_UPLOAD = 200 * 1024 * 1024
 
 _jobs: dict[str, threading.Thread] = {}
+_cancels: dict[str, threading.Event] = {}
 _jobs_lock = threading.Lock()
 _import_lock = threading.Lock()
 
@@ -62,6 +64,8 @@ def _spawn(key: str, target: Callable[[], object], log: Callable[[str], None]) -
     with _jobs_lock:
         if key in _jobs and _jobs[key].is_alive():
             raise HTTPException(409, f"{key} already running")
+        cancel = _cancels.setdefault(key, threading.Event())
+        cancel.clear()
         t = threading.Thread(target=wrapped, daemon=True)
         _jobs[key] = t
         t.start()
@@ -132,6 +136,35 @@ def create_app(cfg: Settings) -> FastAPI:
             "needs_review": attrib.needs_review if attrib else [],
             "units": len(attrib.units) if attrib else 0,
         }
+
+    @app.get("/api/books/{book_id}/lexicon")
+    def get_lexicon(book_id: str) -> dict[str, Any]:
+        import json
+
+        book = _require_book(cfg, book_id)
+        book_lex: dict[str, str] = {}
+        f = book.dir / "lexicon.json"
+        if f.exists():
+            book_lex = json.loads(f.read_text())
+        glob: dict[str, str] = {}
+        g = cfg.data_dir / "lexicon.json"
+        if g.exists():
+            glob = json.loads(g.read_text())
+        return {"book": book_lex, "global": glob}
+
+    @app.put("/api/books/{book_id}/lexicon")
+    def put_lexicon(book_id: str, body: dict[str, str]) -> dict[str, Any]:
+        import json
+
+        book = _require_book(cfg, book_id)
+        for k, v in body.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise HTTPException(422, "lexicon entries must be word→replacement strings")
+        fd, tmppath = tempfile.mkstemp(dir=book.dir, suffix=".tmp", prefix="lexicon-")
+        with os.fdopen(fd, "w") as fh:
+            fh.write(json.dumps(body, indent=2, ensure_ascii=False))
+        Path(tmppath).replace(book.dir / "lexicon.json")
+        return {"saved": len(body)}
 
     @app.get("/api/books/{book_id}/align")
     def alignment(book_id: str) -> Any:
@@ -231,8 +264,17 @@ def create_app(cfg: Settings) -> FastAPI:
         log = _log_to(book.dir / "job.log")
 
         def work() -> None:
-            generate_book(book, cfg, log=log, chapters=sel, limit=limit, workers=workers)
-            if export:
+            cancel = _cancels[f"job:{book_id}"]
+            generate_book(
+                book,
+                cfg,
+                log=log,
+                chapters=sel,
+                limit=limit,
+                workers=workers,
+                cancel=cancel,
+            )
+            if export and not cancel.is_set():
                 log("[export] started")
                 outs = export_book(book, cfg, log=log)
                 log(f"[export] wrote {', '.join(p.name for p in outs)}")
@@ -269,7 +311,7 @@ def create_app(cfg: Settings) -> FastAPI:
             for cid in [str(c) for c in sel]:
                 manifest.chapters.pop(cid, None)
             save_artifact(manifest, book.dir)
-            generate_book(book, cfg, log=log, chapters=sel)
+            generate_book(book, cfg, log=log, chapters=sel, cancel=_cancels[f"job:{book_id}"])
 
         log = _log_to(book.dir / "job.log")
         _spawn(f"job:{book_id}", work, log)
@@ -397,6 +439,18 @@ def create_app(cfg: Settings) -> FastAPI:
             "eta_s": eta_s,
             "log": log_tail,
         }
+
+    @app.post("/api/books/{book_id}/cancel")
+    def cancel(book_id: str) -> dict[str, Any]:
+        _require_book(cfg, book_id)
+        key = f"job:{book_id}"
+        ev = _cancels.get(key)
+        t = _jobs.get(key)
+        if t is None or not t.is_alive():
+            raise HTTPException(409, "no job running")
+        if ev:
+            ev.set()
+        return {"cancelled": True}
 
     @app.post("/api/books/{book_id}/align")
     def align_words(book_id: str) -> dict[str, Any]:

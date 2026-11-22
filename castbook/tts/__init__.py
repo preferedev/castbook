@@ -6,6 +6,7 @@ VoiceSpec) differs from the manifest entry, or its wav is missing.
 
 from __future__ import annotations
 
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -67,7 +68,10 @@ def _load_lexicon(book: BookPaths, cfg: Settings) -> dict[str, str]:
     out: dict[str, str] = {}
     for f in (cfg.data_dir / "lexicon.json", book.dir / "lexicon.json"):
         if f.exists():
-            out.update({str(k): str(v) for k, v in json.load(f.open()).items()})
+            try:
+                out.update({str(k): str(v) for k, v in json.load(f.open()).items()})
+            except (json.JSONDecodeError, OSError):
+                continue
     return out
 
 
@@ -89,6 +93,7 @@ def run(
     limit: int | None = None,
     workers: int = 1,
     dry_run: bool = False,
+    cancel: threading.Event | None = None,
 ) -> Path:
     attribution = load_artifact(AttributionFile, book.dir)
     casting = load_artifact(CastingFile, book.dir)
@@ -171,6 +176,9 @@ def run(
         futures = [pool.submit(render_t, u) for u in pending]
         try:
             for f in futures:
+                if cancel is not None and cancel.is_set():
+                    log(f"[tts] cancelled at {done_i + skipped}/{total}")
+                    break
                 done_i += 1
                 try:
                     uid, dur, name, uh, _ = f.result()
@@ -198,9 +206,12 @@ def run(
                         f"({rendered} new, {skipped} cached, {failed} failed)"
                     )
         finally:
-            pool.shutdown(wait=True)
+            pool.shutdown(wait=True, cancel_futures=True)
     else:
         for unit in pending:
+            if cancel is not None and cancel.is_set():
+                log(f"[tts] cancelled at {done_i + skipped}/{total}")
+                break
             done_i += 1
             try:
                 uid, dur, name, uh, _ = render(unit, backend)  # type: ignore[arg-type]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -60,6 +61,7 @@ def generate_book(
     limit: int | None = None,
     workers: int = 1,
     dry_run: bool = False,
+    cancel: threading.Event | None = None,
 ) -> Path:
     out = tts.run(
         book,
@@ -70,6 +72,7 @@ def generate_book(
         limit=limit,
         workers=workers,
         dry_run=dry_run,
+        cancel=cancel,
     )
     if limit is None and not dry_run:
         audio.assemble_chapters(book, cfg, log)
