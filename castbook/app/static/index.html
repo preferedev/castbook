@@ -236,6 +236,9 @@ async function openBook(id) {
   $("cast-section").style.display = "";
   $("cast-title").textContent = id;
   $("cast-meta").textContent = `${d.units} units · ${d.needs_review.length} need review`;
+  api(`/api/books/${id}/estimate`).then(e => {
+    if (e.pending) $("cast-meta").textContent += ` · ~${Math.round(e.est_render_min)} min render (${e.backend})`;
+  }).catch(() => {});
   const rows = [];
   const speakers = new Set(Object.keys(d.casting));
   for (const c of d.characters) speakers.add(c.id);
