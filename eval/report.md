@@ -1,46 +1,41 @@
 # Castbook attribution eval
-_2026-11-22T15:41:30+00:00Z — heuristic_
+_2026-11-22T17:15:03+00:00Z — heuristic_
 
 | book | units | labeled | correct | accuracy | ambiguous |
 |---|---|---|---|---|---|
-| alice-in-wonderland | 107 | 21 | 18 | 86% | 2 |
-| great-expectations | 35 | 35 | 21 | 60% | 10 |
-| pride-and-prejudice | 29 | 20 | 13 | 65% | 7 |
-| sherlock-holmes | 29 | 29 | 19 | 66% | 3 |
+| alice-in-wonderland | 146 | 21 | 20 | 95% | 0 |
+| dorian-gray | 21 | 16 | 13 | 81% | 0 |
+| dr-jekyll-and-mr-hyde | 28 | 20 | 19 | 95% | 0 |
+| great-expectations | 46 | 34 | 32 | 94% | 2 |
+| huckleberry-finn | 27 | 20 | 18 | 90% | 0 |
+| jane-eyre | 26 | 20 | 18 | 90% | 0 |
+| moby-dick | 36 | 20 | 19 | 95% | 2 |
+| pride-and-prejudice | 34 | 20 | 15 | 75% | 1 |
+| sherlock-holmes | 36 | 29 | 26 | 90% | 0 |
+| treasure-island | 35 | 25 | 22 | 88% | 0 |
 
 ## Misses
 
-- **alice-in-wonderland** `ch006-u0004` expected `ambiguous` got `alice` — 'The table was a large one, but the three were all crowded together at one corner'
-- **alice-in-wonderland** `ch006-u0023` expected `hatter` got `dormouse` — 'The Hatter was the first to break the silence. “What day of the month is it?” he'
-- **alice-in-wonderland** `ch006-u0024` expected `alice` got `hatter` — 'Alice considered a little, and then said “The fourth.”'
-- **great-expectations** `ch001-u0002` expected `narrator` got `ambiguous` — 'I give Pirrip as my father’s family name, on the authority of his\ntombstone and '
+- **alice-in-wonderland** `ch006-u0005` expected `ambiguous` got `alice` — 'The table was a large one, but the three were all crowded together at one corner'
+- **dorian-gray** `ch000-u0003` expected `basil-hallward` got `lord-henry-wotton` — '“That entirely depends on how you sit to-day, Dorian.”'
+- **dorian-gray** `ch000-u0006` expected `basil-hallward` got `lord-henry-wotton` — '“This is Lord Henry Wotton, Dorian, an old Oxford friend of mine. I\nhave just be'
+- **dorian-gray** `ch000-u0011` expected `lord-henry-wotton` got `dorian-gray` — '“Oh, I will make your peace with my aunt. She is quite devoted to you.\nAnd I don'
+- **dr-jekyll-and-mr-hyde** `ch001-u0027` expected `mr.-enfield` got `mr-utterson` — 'Mr. Utterson sighed deeply but said never a word; and the young man\npresently re'
 - **great-expectations** `ch001-u0005` expected `magwitch` got `ambiguous` — '“Hold your noise!” cried a terrible voice, as a man started up from\namong the gr'
-- **great-expectations** `ch001-u0007` expected `pip` got `ambiguous` — '“Oh! Don’t cut my throat, sir,” I pleaded in terror. “Pray don’t do it,\nsir.”'
-- **great-expectations** `ch001-u0009` expected `pip` got `abel-magwitch` — '“Pip, sir.”'
-- **great-expectations** `ch001-u0011` expected `pip` got `abel-magwitch` — '“Pip. Pip, sir.”'
-- **great-expectations** `ch001-u0023` expected `pip` got `ambiguous` — '“There, sir!” I timidly explained. “Also Georgiana. That’s my mother.”'
-- **great-expectations** `ch001-u0024` expected `magwitch` got `ambiguous` — '“Oh!” said he, coming back. “And is that your father alonger your\nmother?”'
-- **great-expectations** `ch001-u0026` expected `magwitch` got `pip` — '“Ha!” he muttered then, considering. “Who d’ye live with,—supposin’\nyou’re kindl'
-- **great-expectations** `ch001-u0028` expected `magwitch` got `pip` — '“Blacksmith, eh?” said he. And looked down at his leg.'
-- **great-expectations** `ch001-u0030` expected `magwitch` got `ambiguous` — '“Now lookee here,” he said, “the question being whether you’re to be\nlet to live'
-- **great-expectations** `ch001-u0031` expected `pip` got `ambiguous` — '“Yes, sir.”'
-- **great-expectations** `ch001-u0032` expected `magwitch` got `ambiguous` — '“And you know what wittles is?”'
-- **great-expectations** `ch001-u0033` expected `pip` got `ambiguous` — '“Yes, sir.”'
-- **great-expectations** `ch001-u0035` expected `magwitch` got `ambiguous` — '“You get me a file.” He tilted me again. “And you get me wittles.” He'
-- **pride-and-prejudice** `ch001-u0003` expected `bennet` got `ambiguous` — '“I hope Mr. Bingley will like it, Lizzy.”'
-- **pride-and-prejudice** `ch001-u0009` expected `bennet` got `ambiguous` — '“Don’t keep coughing so, Kitty, for heaven’s sake! Have a little compassion on m'
-- **pride-and-prejudice** `ch001-u0010` expected `bennet` got `ambiguous` — '“Kitty has no discretion in her coughs,” said her father; “she times them ill.”'
-- **pride-and-prejudice** `ch001-u0013` expected `elizabeth` got `kitty` — '“Tomorrow fortnight.”'
-- **pride-and-prejudice** `ch001-u0015` expected `bennet` got `kitty` — '“Then, my dear, you may have the advantage of your friend, and introduce Mr. Bin'
-- **pride-and-prejudice** `ch001-u0017` expected `bennet` got `kitty` — '“I honour your circumspection. A fortnight’s acquaintance is certainly very litt'
-- **pride-and-prejudice** `ch001-u0019` expected `bennet` got `kitty` — '“What can be the meaning of that emphatic exclamation?” cried he. “Do you consid'
-- **sherlock-holmes** `ch001-u0008` expected `holmes` got `ambiguous` — '“Wedlock suits you,” he remarked. “I think, Watson, that you have put\non seven a'
-- **sherlock-holmes** `ch001-u0010` expected `holmes` got `john-watson` — '“Indeed, I should have thought a little more. Just a trifle more, I\nfancy, Watso'
-- **sherlock-holmes** `ch001-u0012` expected `holmes` got `john-watson` — '“I see it, I deduce it. How do I know that you have been getting\nyourself very w'
-- **sherlock-holmes** `ch001-u0015` expected `holmes` got `ambiguous` — '“It is simplicity itself,” said he; “my eyes tell me that on the inside\nof your '
-- **sherlock-holmes** `ch001-u0017` expected `holmes` got `john-watson` — '“Quite so,” he answered, lighting a cigarette, and throwing himself\ndown into an'
-- **sherlock-holmes** `ch001-u0019` expected `holmes` got `john-watson` — '“How often?”'
-- **sherlock-holmes** `ch001-u0021` expected `holmes` got `john-watson` — '“Then how many are there?”'
-- **sherlock-holmes** `ch001-u0023` expected `holmes` got `john-watson` — '“Quite so! You have not observed. And yet you have seen. That is just\nmy point. '
-- **sherlock-holmes** `ch001-u0025` expected `watson` got `ambiguous` — '“There will call upon you to-night, at a quarter to eight o’clock,” it\nsaid, “a '
-- **sherlock-holmes** `ch001-u0027` expected `holmes` got `john-watson` — '“I have no data yet. It is a capital mistake to theorise before one has\ndata. In'
+- **great-expectations** `ch001-u0037` expected `pip` got `abel-magwitch` — '“My sister, sir,—Mrs. Joe Gargery,—wife of Joe Gargery, the blacksmith,\nsir.”'
+- **huckleberry-finn** `ch008-u0006` expected `jim` got `huckleberry-finn` — '“What’s de use er makin’ up de camp fire to cook strawbries en sich\ntruck? But y'
+- **huckleberry-finn** `ch008-u0019` expected `jim` got `huckleberry-finn` — '“No! W’y, what has you lived on? But you got a gun. Oh, yes, you got a\ngun. Dat’'
+- **jane-eyre** `ch023-u0020` expected `jane-eyre` got `rochester` — '“I am no bird; and no net ensnares me; I am a free human being with an\nindepende'
+- **jane-eyre** `ch023-u0024` expected `jane-eyre` got `rochester` — '“You play a farce, which I merely laugh at.”'
+- **moby-dick** `ch036-u0020` expected `ahab` got `ambiguous` — '“All ye mast-headers have before now heard me give orders about a white\nwhale. L'
+- **pride-and-prejudice** `ch001-u0006` expected `bennet` got `elizabeth` — '“I do not believe Mrs. Long will do any such thing. She has two nieces of her ow'
+- **pride-and-prejudice** `ch001-u0014` expected `kitty` got `bennet` — '“When is your next ball to be, Lizzy?”'
+- **pride-and-prejudice** `ch001-u0015` expected `elizabeth` got `kitty` — '“Tomorrow fortnight.”'
+- **pride-and-prejudice** `ch001-u0018` expected `bennet` got `kitty` — '“Impossible, Mr. Bennet, impossible, when I am not acquainted with him myself; h'
+- **pride-and-prejudice** `ch001-u0019` expected `bennet` got `kitty` — '“I honour your circumspection. A fortnight’s acquaintance is certainly very litt'
+- **sherlock-holmes** `ch001-u0026` expected `holmes` got `john-watson` — '“Quite so! You have not observed. And yet you have seen. That is just\nmy point. '
+- **sherlock-holmes** `ch001-u0030` expected `watson` got `sherlock-holmes` — '“There will call upon you to-night, at a quarter to eight o’clock,” it\nsaid, “a '
+- **sherlock-holmes** `ch001-u0033` expected `holmes` got `john-watson` — '“I have no data yet. It is a capital mistake to theorise before one has\ndata. In'
+- **treasure-island** `ch001-u0002` expected `long-john-silver` got `jim-hawkins` — '“Yes, my lad,” said he;'
+- **treasure-island** `ch001-u0004` expected `long-john-silver` got `jim-hawkins` — '“Oh!” said he, quite loud, and offering his hand.'
+- **treasure-island** `ch001-u0029` expected `long-john-silver` got `jim-hawkins` — '“Keel-hauling, was you? And a mighty suitable thing, too, and you may\nlay to tha'

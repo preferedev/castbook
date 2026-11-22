@@ -1,0 +1,60 @@
+{
+  "title": "treasure-island",
+  "text": "“Mr. Silver, sir?” I asked, holding out the note.\n\n“Yes, my lad,” said he; “such is my name, to be sure. And who may you\nbe?” And then as he saw the squire’s letter, he seemed to me to give\nsomething almost like a start.\n\n“Oh!” said he, quite loud, and offering his hand. “I see. You are our\nnew cabin-boy; pleased I am to see you.”\n\nAnd he took my hand in his large firm grasp.\n\nJust then one of the customers at the far side rose suddenly and made\nfor the door. It was close by him, and he was out in the street in a\nmoment. But his hurry had attracted my notice, and I recognized him at\nglance. It was the tallow-faced man, wanting two fingers, who had come\nfirst to the Admiral Benbow.\n\n“Oh,” I cried, “stop him! It’s Black Dog!”\n\n“I don’t care two coppers who he is,” cried Silver. “But he hasn’t paid\nhis score. Harry, run and catch him.”\n\nOne of the others who was nearest the door leaped up and started in\npursuit.\n\n“If he were Admiral Hawke he shall pay his score,” cried Silver; and\nthen, relinquishing my hand, “Who did you say he was?” he asked. “Black\nwhat?”\n\n“Dog, sir,” said I. “Has Mr. Trelawney not told you of the buccaneers?\nHe was one of them.”\n\n“So?” cried Silver. “In my house! Ben, run and help Harry. One of those\nswabs, was he? Was that you drinking with him, Morgan? Step up here.”\n\nThe man whom he called Morgan--an old, grey-haired, mahogany-faced\nsailor--came forward pretty sheepishly, rolling his quid.\n\n“Now, Morgan,” said Long John very sternly, “you never clapped your eyes\non that Black--Black Dog before, did you, now?”\n\n“Not I, sir,” said Morgan with a salute.\n\n“You didn’t know his name, did you?”\n\n“No, sir.”\n\n“By the powers, Tom Morgan, it’s as good for you!” exclaimed the\nlandlord. “If you had been mixed up with the like of that, you would\nnever have put another foot in my house, you may lay to that. And what\nwas he saying to you?”\n\n“I don’t rightly know, sir,” answered Morgan.\n\n“Do you call that a head on your shoulders, or a blessed dead-eye?”\n cried Long John. “Don’t rightly know, don’t you! Perhaps you don’t\nhappen to rightly know who you was speaking to, perhaps? Come, now, what\nwas he jawing--v’yages, cap’ns, ships? Pipe up! What was it?”\n\n“We was a-talkin’ of keel-hauling,” answered Morgan.\n\n“Keel-hauling, was you? And a mighty suitable thing, too, and you may\nlay to that. Get back to your place for a lubber, Tom.”\n\nAnd then, as Morgan rolled back to his seat, Silver added to me in a\nconfidential whisper that was very flattering, as I thought, “He’s\nquite an honest man, Tom Morgan, on’y stupid. And now,” he ran on again,\naloud, “let’s see--Black Dog? No, I don’t know the name, not I. Yet I\nkind of think I’ve--yes, I’ve seen the swab. He used to come here with a\nblind beggar, he used.”\n\n“That he did, you may be sure,” said I. “I knew that blind man too. His\nname was Pew.”\n\n“It was!” cried Silver, now quite excited. “Pew! That were his name for\ncertain. Ah, he looked a shark, he did! If we run down this Black Dog,\nnow, there’ll be news for Cap’n Trelawney! Ben’s a good runner; few\nseamen run better than Ben. He should run him down, hand over hand, by\nthe powers! He talked o’ keel-hauling, did he? I’LL keel-haul him!”\n\nAll the time he was jerking out these phrases he was stumping up and\ndown the tavern on his crutch, slapping tables with his hand, and giving\nsuch a show of excitement as would have convinced an Old Bailey judge\nor a Bow Street runner. My suspicions had been thoroughly reawakened on\nfinding Black Dog at the Spy-glass, and I watched the cook narrowly. But\nhe was too deep, and too ready, and too clever for me, and by the time\nthe two men had come back out of breath and confessed that they had lost",
+  "chapter_index": 1,
+  "cast": [
+    {
+      "name": "Jim Hawkins",
+      "aliases": [
+        "Jim",
+        "Hawkins",
+        "I"
+      ],
+      "gender": "m"
+    },
+    {
+      "name": "Long John Silver",
+      "aliases": [
+        "Silver",
+        "Long John",
+        "the landlord",
+        "Mr. Silver"
+      ],
+      "gender": "m"
+    },
+    {
+      "name": "Tom Morgan",
+      "aliases": [
+        "Morgan"
+      ],
+      "gender": "m"
+    }
+  ],
+  "labels": {
+    "ch001-u0001": "jim-hawkins",
+    "ch001-u0002": "long-john-silver",
+    "ch001-u0004": "long-john-silver",
+    "ch001-u0006": "narrator",
+    "ch001-u0007": "narrator",
+    "ch001-u0008": "jim-hawkins",
+    "ch001-u0009": "long-john-silver",
+    "ch001-u0011": "narrator",
+    "ch001-u0012": "long-john-silver",
+    "ch001-u0014": "jim-hawkins",
+    "ch001-u0016": "long-john-silver",
+    "ch001-u0018": "narrator",
+    "ch001-u0019": "long-john-silver",
+    "ch001-u0020": "tom-morgan",
+    "ch001-u0021": "long-john-silver",
+    "ch001-u0022": "tom-morgan",
+    "ch001-u0023": "long-john-silver",
+    "ch001-u0025": "tom-morgan",
+    "ch001-u0026": "long-john-silver",
+    "ch001-u0028": "tom-morgan",
+    "ch001-u0029": "long-john-silver",
+    "ch001-u0030": "long-john-silver",
+    "ch001-u0031": "jim-hawkins",
+    "ch001-u0033": "long-john-silver",
+    "ch001-u0035": "narrator"
+  }
+}

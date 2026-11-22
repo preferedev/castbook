@@ -107,6 +107,7 @@ class Unit(BaseModel):
     emotion: Emotion = "neutral"
     kind: UnitKind = "narration"
     paragraph: int = 0
+    guess: bool = False
 
 
 class AttributionFile(BaseModel):

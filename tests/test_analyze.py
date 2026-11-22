@@ -97,7 +97,10 @@ def test_heuristic_name_says_inside_quote_is_content_not_tag() -> None:
         text='"Alice said nothing," he noted. "All wrong," said Bob.',
         word_count=0,
     )
-    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == ["bob"]
+    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == [
+        "bob",
+        "bob",
+    ]
 
 
 def test_heuristic_speaker_history_resets_at_narration() -> None:
@@ -153,3 +156,221 @@ def test_heuristic_double_quote_inside_single_speech() -> None:
         word_count=0,
     )
     assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == ["bob"]
+
+
+def test_heuristic_extract_cast_synthesizes_first_person_protagonist() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter
+
+    text = "\n\n".join(f'"Line {i}," said I.' for i in range(6))
+    ch = Chapter(index=0, title="t", text=text, word_count=0)
+    cast = HeuristicAttributor().extract_cast([ch])
+    assert cast[0].name == "Protagonist" and "I" in cast[0].aliases
+    units = HeuristicAttributor().attribute(ch, cast)
+    assert all(u.speaker == "protagonist" for u in units)
+
+
+def test_heuristic_no_protagonist_in_third_person() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter
+
+    text = "\n\n".join(f'"Line {i}," said Alice.' for i in range(6))
+    ch = Chapter(index=0, title="t", text=text, word_count=0)
+    cast = HeuristicAttributor().extract_cast([ch])
+    assert all(c.name != "Protagonist" for c in cast)
+
+
+def test_heuristic_narration_dominant_quote_is_narrator() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [Character(id="alice", name="Alice", aliases=[])]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text="She walked to the stone and read aloud the words carved there, "
+        '"REST IN PEACE," before turning slowly toward the empty fields beyond.',
+        word_count=0,
+    )
+    assert HeuristicAttributor().attribute(ch, cast)[0].speaker == "narrator"
+
+
+def test_heuristic_narrator_does_not_enter_turn_history() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="alice", name="Alice", aliases=[]),
+        Character(id="bob", name="Bob", aliases=[]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Hi," said Alice.\n\n'
+        "The afternoon wore on.\n\n"
+        'She stared at the stone that read "RIP" beneath her breath for a while.\n\n'
+        '"Okay then."',
+        word_count=0,
+    )
+    # the inscription unit is narrator and must not seed turn-taking history;
+    # the trailing untagged line stays honestly ambiguous
+    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == [
+        "alice",
+        "narrator",
+        "narrator",
+        "ambiguous",
+    ]
+
+
+def test_heuristic_alternation_assignment_is_flagged_as_guess() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="alice", name="Alice", aliases=[]),
+        Character(id="bob", name="Bob", aliases=[]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Hi," said Alice.\n\n"Okay," said Bob.\n\n"Whatever."',
+        word_count=0,
+    )
+    units = HeuristicAttributor().attribute(ch, cast)
+    assert [u.guess for u in units] == [False, False, True]
+    assert units[2].speaker == "alice"
+
+
+def test_heuristic_stopword_name_parts_do_not_steal_tags() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="tashtego", name="Tashtego", aliases=["the Gay-Header"]),
+        Character(id="crew", name="Crew", aliases=["the seamen"]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Does he fan-tail a little curious, sir?" said the\nGay-Header.',
+        word_count=0,
+    )
+    assert HeuristicAttributor().attribute(ch, cast)[0].speaker == "tashtego"
+
+
+def test_heuristic_wrapped_alias_still_resolves() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [Character(id="ahab", name="Ahab", aliases=["Captain Ahab"])]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Moby Dick?" shouted\nCaptain Ahab.',
+        word_count=0,
+    )
+    assert HeuristicAttributor().attribute(ch, cast)[0].speaker == "ahab"
+
+
+def test_heuristic_two_party_scene_fills_alternating_turns() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="jane-eyre", name="Jane Eyre", aliases=["Jane", "I"]),
+        Character(id="rochester", name="Rochester", aliases=["Mr. Rochester"]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Where do you see the necessity?" he asked suddenly.\n\n'
+        '"Where? You, sir, have placed it before me."\n\n'
+        '"In what shape?"\n\n'
+        '"In the shape of Miss Ingram, your bride," I retorted.',
+        word_count=0,
+    )
+    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == [
+        "rochester",
+        "jane-eyre",
+        "rochester",
+        "jane-eyre",
+    ]
+
+
+def test_heuristic_pronoun_tag_means_the_non_i_party() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="pip", name="Pip", aliases=["I"]),
+        Character(id="magwitch", name="Abel Magwitch", aliases=["Magwitch"]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"There, sir!" I timidly explained.\n\n"Oh!" said he, coming back.',
+        word_count=0,
+    )
+    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == [
+        "pip",
+        "magwitch",
+    ]
+
+
+def test_heuristic_action_beat_subject_speaks() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="basil", name="Basil Hallward", aliases=["the painter"]),
+        Character(id="dorian", name="Dorian Gray"),
+        Character(id="henry", name="Lord Henry Wotton", aliases=["Lord Henry"]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text=(
+            'The painter hesitated for a moment, and then said, "Harry, '
+            'I want to finish this picture."\n\n'
+            '"You are too charming, Mr. Gray." And Lord Henry flung himself down.'
+        ),
+        word_count=0,
+    )
+    assert [
+        u.speaker for u in HeuristicAttributor().attribute(ch, cast) if u.kind == "dialogue"
+    ] == [
+        "basil",
+        "henry",
+    ]
+
+
+def test_hybrid_llm_overrides_only_unsure_units() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.analyze.hybrid import HybridAttributor
+    from castbook.analyze.units import split_units
+    from castbook.artifacts import Chapter, Character
+
+    class FakeLLM:
+        name = "fake"
+
+        def extract_cast(self, chapters: list[Chapter]) -> list[Character]:
+            return []
+
+        def attribute(self, chapter: Chapter, cast: list[Character]) -> list:
+            us = split_units(chapter)
+            for u in us:
+                if u.kind == "dialogue":
+                    u.speaker = "bob"
+            return us
+
+    cast = [Character(id="alice", name="Alice"), Character(id="bob", name="Bob")]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Nothing to say," she sighed.\n\n"All wrong," said Bob.',
+        word_count=0,
+    )
+    speakers = [
+        u.speaker for u in HybridAttributor(HeuristicAttributor(), FakeLLM()).attribute(ch, cast)
+    ]
+    assert speakers == ["bob", "bob"]

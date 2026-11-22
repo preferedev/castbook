@@ -85,7 +85,7 @@ def analyze(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     backend: Annotated[
-        str | None, typer.Option("--backend", help="attributor: heuristic|llamacpp")
+        str | None, typer.Option("--backend", help="attributor: heuristic|llamacpp|hybrid")
     ] = None,
 ) -> None:
     """Extract the cast and attribute speakers (cast.json + attribution.json)."""
@@ -208,8 +208,9 @@ def review(
         for u in attrib.units:
             if u.id in fixes:
                 u.speaker = fixes[u.id]
+                u.guess = False
                 fixed += 1
-        attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous"]
+        attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous" or u.guess]
         save_artifact(attrib, b.dir)
         manifest = load_artifact(AudioManifest, b.dir)
         if manifest is not None:
@@ -218,10 +219,11 @@ def review(
             save_artifact(manifest, b.dir)
         typer.echo(f"fixed {fixed} units (re-run `castbook generate` to render them)")
         return
-    ambiguous = [u for u in attrib.units if u.speaker == "ambiguous"]
-    typer.echo(f"{len(ambiguous)} ambiguous units")
-    for u in ambiguous[:50]:
-        typer.echo(f"  {u.id}  ch{u.chapter}  {u.text[:80]!r}")
+    flagged = [u for u in attrib.units if u.speaker == "ambiguous" or u.guess]
+    typer.echo(f"{len(flagged)} units need review (ambiguous + guessed)")
+    for u in flagged[:50]:
+        tag = "?" if u.speaker == "ambiguous" else f"~{u.speaker}"
+        typer.echo(f"  {u.id}  ch{u.chapter}  {tag}  {u.text[:80]!r}")
 
 
 @app.command()
@@ -422,6 +424,39 @@ def merge(
         typer.echo(str(e))
         raise typer.Exit(1) from e
     typer.echo(f"merged {src} → {dst} ({n} units re-attributed)")
+
+
+@app.command()
+def clone(
+    book: str,
+    speaker: Annotated[str, typer.Argument(help="speaker id to give the cloned voice")],
+    clip: Annotated[Path, typer.Argument(help="voice clip (wav/mp3/flac) to clone from")],
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Clone a voice from an audio clip onto a speaker (pocket backend).
+
+    Only clone voices you have the right to use — see the consent notice in
+    the README. The clip is copied into the book so paths stay stable.
+    """
+    import shutil
+
+    if clip.suffix.lower() not in {".wav", ".mp3", ".flac"}:
+        typer.echo("clip must be .wav, .mp3 or .flac")
+        raise typer.Exit(1)
+    if not clip.exists():
+        typer.echo(f"no such file: {clip}")
+        raise typer.Exit(1)
+    cfg = _cfg(config)
+    if cfg.tts.backend != "pocket":
+        typer.echo('cloning needs the pocket backend — set tts.backend = "pocket"')
+        raise typer.Exit(1)
+    b = _book(cfg, book)
+    dest_dir = b.dir / "voices"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{speaker}{clip.suffix.lower()}"
+    shutil.copy2(clip, dest)
+    cast_book(b, cfg, overrides={speaker: str(dest)})
+    typer.echo(f"cloned {clip.name} → {speaker} ({dest})")
 
 
 @app.command()

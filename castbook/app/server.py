@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
 import shutil
 import socket
 import tempfile
@@ -46,7 +47,7 @@ from ..workdir import BookPaths
 
 STATIC = Path(__file__).parent / "static"
 MAX_UPLOAD = 200 * 1024 * 1024
-SUPPORTED_SUFFIXES = (".epub", ".txt", ".md", ".pdf")
+SUPPORTED_SUFFIXES = (".epub", ".txt", ".md", ".pdf", ".mobi", ".azw", ".azw3")
 
 
 def _public_host(url: str) -> None:
@@ -427,6 +428,37 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         cast_book(book, cfg, overrides=voices, speeds=speeds)
         return {"ok": True}
 
+    @app.post("/api/books/{book_id}/clone")
+    def clone_voice(
+        book_id: str,
+        speaker: str,
+        file: Annotated[UploadFile | None, File()] = None,
+    ) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        if cfg.tts.backend != "pocket":
+            raise HTTPException(422, "cloning needs tts.backend = 'pocket'")
+        if file is None or not file.filename:
+            raise HTTPException(400, "no clip uploaded")
+        suffix = Path(file.filename).suffix.lower()
+        if suffix not in {".wav", ".mp3", ".flac"}:
+            raise HTTPException(400, "clip must be .wav, .mp3 or .flac")
+        safe = re.sub(r"[^a-z0-9_-]", "", speaker.lower())
+        if not safe:
+            raise HTTPException(422, f"bad speaker id {speaker!r}")
+        dest_dir = book.dir / "voices"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / f"{safe}{suffix}"
+        size = 0
+        with dest.open("wb") as out:
+            while chunk := file.file.read(1 << 20):
+                size += len(chunk)
+                if size > MAX_UPLOAD:
+                    dest.unlink(missing_ok=True)
+                    raise HTTPException(413, "file too large")
+                out.write(chunk)
+        cast_book(book, cfg, overrides={safe: str(dest)})
+        return {"ok": True, "clip": str(dest)}
+
     @app.post("/api/books/{book_id}/analyze")
     def analyze(book_id: str, backend: str | None = None) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
@@ -583,9 +615,14 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             raise HTTPException(404, "run analyze first")
         return {
             "units": [
-                {"id": u.id, "chapter": u.chapter, "text": u.text[:300]}
+                {
+                    "id": u.id,
+                    "chapter": u.chapter,
+                    "text": u.text[:300],
+                    "guess": u.guess and u.speaker != "ambiguous",
+                }
                 for u in attrib.units
-                if u.speaker == "ambiguous"
+                if u.speaker == "ambiguous" or u.guess
             ]
         }
 
@@ -599,8 +636,9 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         for u in attrib.units:
             if u.id in fixes:
                 u.speaker = fixes[u.id]
+                u.guess = False
                 fixed += 1
-        attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous"]
+        attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous" or u.guess]
         save_artifact(attrib, book.dir)
         manifest = load_artifact(AudioManifest, book.dir)
         if manifest is not None:
