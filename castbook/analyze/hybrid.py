@@ -22,13 +22,12 @@ class HybridAttributor:
 
     def attribute(self, chapter: Chapter, cast: list[Character]) -> list[Unit]:
         units = self._heuristic.attribute(chapter, cast)
+        cast_ids = {c.id for c in cast}
         unsure = {
             u.id
             for u in units
             if u.kind == "dialogue"
-            and (
-                u.guess or u.speaker in (None, "ambiguous") or u.speaker not in {c.id for c in cast}
-            )
+            and (u.guess or u.speaker in (None, "ambiguous") or u.speaker not in cast_ids)
         }
         if not unsure:
             return units
