@@ -813,14 +813,18 @@ def run_cmd(
 @app.command()
 def books(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    json_: Annotated[bool, typer.Option("--json", help="machine-readable output")] = False,
 ) -> None:
     """List imported books."""
     cfg = _cfg(config)
     if not cfg.data_dir.exists():
         typer.echo("(no books yet)")
         return
+    import json
+
     from ..artifacts import load_artifact
 
+    rows = []
     for d in sorted(cfg.data_dir.iterdir()):
         if not d.is_dir() or not (d / "chapters.json").exists():
             continue
@@ -839,12 +843,26 @@ def books(
             else 0
         )
         total = len(attrib.units) if attrib else 0
+        if json_:
+            rows.append(
+                {
+                    "book_id": d.name,
+                    "title": title,
+                    "units": total,
+                    "rendered": done,
+                    "failed": failed,
+                    "to_review": len(attrib.needs_review) if attrib else 0,
+                }
+            )
+            continue
         rendered = f" · {done}/{total} rendered" if manifest else " · not rendered"
         rendered += f" · {failed} failed" if failed else ""
         review = (
             f" · {len(attrib.needs_review)} to review" if attrib and attrib.needs_review else ""
         )
         typer.echo(f"{d.name:30} {title}{rendered}{review}")
+    if json_:
+        typer.echo(json.dumps(rows, indent=2))
 
 
 @models_app.command("list")
