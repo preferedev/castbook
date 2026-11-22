@@ -64,6 +64,7 @@ def _http(e: net.FetchError) -> HTTPException:
 
 _jobs: dict[str, threading.Thread] = {}
 _cancels: dict[str, threading.Event] = {}
+_run_all_current: str | None = None
 _jobs_lock = threading.Lock()
 _import_lock = threading.Lock()
 
@@ -403,6 +404,8 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     @app.delete("/api/books/{book_id}")
     def delete_book(book_id: str) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
+        if _run_all_current == book_id:
+            raise HTTPException(409, "run-all is processing this book")
         with _jobs_lock:
             busy = [k for k, t in _jobs.items() if k.endswith(f":{book_id}") and t.is_alive()]
         if busy:
@@ -576,6 +579,86 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
         _spawn(f"job:{book_id}", work, log)
+        return {"ok": True}
+
+    @app.post("/api/run-all")
+    def run_all(quality: str | None = None) -> dict[str, Any]:
+        """Every book through the pipeline in one job — resumable per book."""
+        job_cfg = cfg
+        if quality is not None:
+            from ..config import QUALITY_PRESETS
+
+            preset = QUALITY_PRESETS.get(quality)
+            if preset is None:
+                raise HTTPException(422, f"unknown quality: {quality}")
+            job_cfg = cfg.model_copy(deep=True)
+            job_cfg.llm.backend, job_cfg.tts.backend = preset
+
+        log = _log_to(cfg.data_dir / "run-all.log")
+        book_ids = (
+            [
+                d.name
+                for d in sorted(cfg.data_dir.iterdir())
+                if d.is_dir() and load_artifact(ChaptersFile, d) is not None
+            ]
+            if cfg.data_dir.is_dir()
+            else []
+        )
+        if not book_ids:
+            raise HTTPException(404, "no imported books")
+        if any(k.startswith("job:") and t.is_alive() for k, t in _jobs.items()):
+            raise HTTPException(409, "a per-book job is running — cancel it first")
+
+        def work() -> None:
+            global _run_all_current
+            cancel = _cancels["run-all"]
+            for bid in book_ids:
+                if cancel.is_set():
+                    return
+                if not (cfg.data_dir / bid).is_dir():
+                    continue  # deleted mid-run
+                if (t := _jobs.get(f"job:{bid}")) is not None and t.is_alive():
+                    log(f"[run-all] {bid} has its own job running — skipped")
+                    continue
+                book = BookPaths(cfg.data_dir, bid)
+                log(f"[run-all] === {bid} ===")
+                _run_all_current = bid
+                try:
+                    analyze_book(book, job_cfg, log)
+                    cast_book(book, job_cfg, log=log)
+                    if cancel.is_set():
+                        return
+                    generate_book(book, job_cfg, log=log, cancel=cancel)
+                    if not cancel.is_set():
+                        outs = export_book(book, job_cfg, log=log)
+                        log(f"[run-all] {bid}: {', '.join(p.name for p in outs)}")
+                finally:
+                    _run_all_current = None
+            log("[run-all] library complete")
+
+        _spawn("run-all", work, log)
+        return {"ok": True, "books": book_ids}
+
+    @app.get("/api/run-all/log")
+    def run_all_log(lines: int = 40) -> dict[str, Any]:
+        text = ""
+        path = cfg.data_dir / "run-all.log"
+        if path.exists():
+            text = path.read_text(errors="replace")
+        t = _jobs.get("run-all")
+        return {
+            "lines": text.splitlines()[-lines:],
+            "running": t is not None and t.is_alive(),
+        }
+
+    @app.post("/api/run-all/cancel")
+    def run_all_cancel() -> dict[str, Any]:
+        t = _jobs.get("run-all")
+        if t is None or not t.is_alive():
+            raise HTTPException(409, "no run-all job running")
+        ev = _cancels.get("run-all")
+        if ev:
+            ev.set()
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/regenerate")

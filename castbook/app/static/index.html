@@ -42,6 +42,8 @@
     <input id="import-url" placeholder="…or paste an ebook URL" size="30">
     <button id="import-url-btn" class="ghost">Fetch</button>
     <span class="muted" id="import-status"></span>
+    <button id="run-library" class="ghost" title="run every imported book through the pipeline">Run library</button>
+    <span class="muted" id="lib-status" style="font-size:.8rem"></span>
   </div>
 </section>
 
@@ -213,6 +215,18 @@ async function pullModel(id) {
   }, 2000);
   loadModels();
 }
+
+$("run-library").onclick = async () => {
+  if (!confirm("Run every book through analyze → cast → render → export?")) return;
+  const r = await api("/api/run-all", {method: "POST"});
+  $("lib-status").textContent = `running ${r.books.length} books…`;
+};
+setInterval(async () => {
+  try {
+    const s = await api("/api/run-all/log");
+    $("lib-status").textContent = s.running ? (s.lines.at(-1) || "running…").slice(0, 80) : "";
+  } catch (_) {}
+}, 4000);
 
 async function loadBooks() {
   const books = await api("/api/books");
