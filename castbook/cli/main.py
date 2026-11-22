@@ -598,3 +598,54 @@ def rm(
         raise typer.Abort
     shutil.rmtree(b.dir)
     typer.echo(f"deleted {book}")
+
+
+voicepack_app = typer.Typer(help="Export/import shareable voice packs (casting presets).")
+app.add_typer(voicepack_app, name="voicepack")
+
+
+@voicepack_app.command("export")
+def voicepack_export(
+    book: str,
+    out: Annotated[Path | None, typer.Option("--out", "-o")] = None,
+    name: Annotated[str | None, typer.Option("--name")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Export the book's casting as a shareable voice pack JSON."""
+    import json as _json
+
+    from ..cast.voicepack import export_pack
+
+    b = _book(_cfg(config), book)
+    try:
+        pack = export_pack(b, name)
+    except ValueError as e:
+        typer.echo(str(e))
+        raise typer.Exit(1) from e
+    dest = out or b.dir / f"{book}.voicepack.json"
+    dest.write_text(_json.dumps(pack, indent=2))
+    typer.echo(f"wrote {dest} ({len(pack['speakers'])} voices)")
+
+
+@voicepack_app.command("import")
+def voicepack_import(
+    book: str,
+    pack_file: Path,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Apply a voice pack to a book's casting."""
+    import json as _json
+
+    from ..cast.voicepack import apply_pack
+
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    try:
+        pack = _json.loads(pack_file.read_text())
+        res = apply_pack(b, pack, cfg.tts.backend)
+    except (ValueError, _json.JSONDecodeError) as e:
+        typer.echo(str(e))
+        raise typer.Exit(1) from e
+    typer.echo(f"applied {len(res['applied'])} voices: {', '.join(res['applied'])}")
+    if res["skipped"]:
+        typer.echo(f"skipped (no match): {', '.join(res['skipped'])}")
