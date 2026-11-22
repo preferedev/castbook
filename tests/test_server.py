@@ -220,3 +220,12 @@ def test_url_import_rejects_private_hosts() -> None:
         else:
             raise AssertionError(f"{bad} not rejected")
     _public_host("http://93.184.216.34/book.epub")  # public IP literal passes
+
+
+def test_transcript_endpoints(client_setup) -> None:  # type: ignore[no-untyped-def]
+    client, tmp_path = client_setup
+    book_id = _import_txt(client, tmp_path)
+    r = client.post(f"/api/books/{book_id}/transcript")
+    assert r.status_code == 422  # needs analyze + generate
+    assert client.post(f"/api/books/{book_id}/transcript?fmt=docx").status_code == 400
+    assert client.get(f"/api/books/{book_id}/chapters/1/transcript").status_code == 404

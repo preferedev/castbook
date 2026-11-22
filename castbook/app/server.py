@@ -499,6 +499,29 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             raise HTTPException(404, "chapter not rendered")
         return FileResponse(wav, media_type="audio/wav")
 
+    @app.get("/api/books/{book_id}/chapters/{chapter}/transcript")
+    def chapter_transcript(book_id: str, chapter: int) -> FileResponse:
+        book = _require_book(cfg, book_id)
+        tr_dir = book.dir / "transcript"
+        for ext in ("srt", "vtt", "txt"):
+            f = tr_dir / f"ch{chapter:03d}.{ext}"
+            if f.exists():
+                return FileResponse(f)
+        raise HTTPException(404, "no transcript — run `castbook transcript`")
+
+    @app.post("/api/books/{book_id}/transcript")
+    def make_transcript(book_id: str, fmt: str = "srt") -> dict[str, Any]:
+        from ..transcript import write_transcript
+
+        book = _require_book(cfg, book_id)
+        if fmt not in ("srt", "vtt", "txt"):
+            raise HTTPException(400, "fmt must be srt, vtt or txt")
+        try:
+            written = write_transcript(book, book.dir / "transcript", fmt)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+        return {"ok": True, "count": len(written)}
+
     @app.post("/api/preview")
     def preview(spec: dict[str, Any]) -> FileResponse:
         voice = str(spec.get("voice", "af_sarah"))

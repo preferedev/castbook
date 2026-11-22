@@ -157,6 +157,7 @@ async function loadBooks() {
         <button class="ghost" onclick="openBook('${b.book_id}')">Open</button>
         <button class="ghost" onclick="deleteBook('${b.book_id}')">Delete</button>
         <a class="ghost" href="${tok(`/reader/${b.book_id}`)}">Read</a>
+        <a class="ghost" href="#" onclick="dlTranscript('${b.book_id}');return false">SRT</a>
         ${b.exports.map(f => `<a href="${tok(`/api/books/${b.book_id}/download/${f}`)}">${esc(f)}</a>`).join("")}
       </div>
     </section>`).join("");
@@ -292,6 +293,11 @@ $("import-url-btn").onclick = async () => {
     loadBooks();
   } catch (e) { $("import-status").textContent = e.message; }
 };
+async function dlTranscript(id) {
+  try { await api(`/api/books/${id}/transcript`, {method: "POST"}); }
+  catch (e) { $("import-status").textContent = e.message; return; }
+  window.open(tok(`/api/books/${id}/chapters/1/transcript`), "_blank");
+}
 async function loadLexicon(id) {
   const r = await api(`/api/books/${id}/lexicon`);
   $("lex-txt").value = Object.keys(r.book).length ? JSON.stringify(r.book, null, 2) : "";
