@@ -104,3 +104,33 @@ def test_emotion_changes_effective_voice() -> None:
     assert _unit_voice(v, "sad").speed == 0.9
     out = _unit_voice(v, "whispered")
     assert out.speed == 0.85 and out.voice == "v"
+
+
+def test_emotion_pacing_never_inverts_direction() -> None:
+    from castbook.artifacts import VoiceSpec
+    from castbook.tts import _unit_voice
+
+    slow = VoiceSpec(backend="k", voice="v", speed=0.5)
+    fast = VoiceSpec(backend="k", voice="v", speed=1.9)
+    assert _unit_voice(slow, "sad").speed <= slow.speed
+    assert _unit_voice(slow, "whispered").speed <= slow.speed
+    assert (
+        _unit_voice(fast, "shouted").speed >= fast.speed - 1e-9
+        or _unit_voice(fast, "shouted").speed == 2.0
+    )
+    zero = VoiceSpec(backend="k", voice="v", speed=0.0)
+    assert _unit_voice(zero, "sad") is zero
+
+
+def test_voice_mix_vector() -> None:
+    import numpy as np
+
+    from castbook.tts.kokoro import KokoroBackend
+
+    backend = KokoroBackend.__new__(KokoroBackend)
+    a = np.ones((4,), dtype=np.float32)
+    b = np.zeros((4,), dtype=np.float32)
+    backend._kokoro = type("K", (), {"get_voice_style": lambda self, n: a if n == "va" else b})()
+    vec = backend._voice_vector("va:0.75+vb:0.25")
+    assert np.allclose(vec, [0.75, 0.75, 0.75, 0.75])
+    assert backend._voice_vector("solo") == "solo"
