@@ -118,7 +118,7 @@ def _resolve_sources(sources: list[str]) -> tuple[list[Path], list[Path]]:
             found = sorted(
                 f
                 for f in p.rglob("*")
-                if f.is_file() and f.suffix.lower() in net.SUPPORTED_SUFFIXES
+                if f.is_file() and f.suffix.lower() in net.supported_suffixes()
             )
             if not found:
                 typer.echo(f"no supported books in {src}")
@@ -141,7 +141,7 @@ def _resolve_sources(sources: list[str]) -> tuple[list[Path], list[Path]]:
         if not path.exists() or path.is_dir():
             typer.echo(f"no such file: {src}")
             raise typer.Exit(1)
-        if path.suffix.lower() not in net.SUPPORTED_SUFFIXES:
+        if path.suffix.lower() not in net.supported_suffixes():
             typer.echo(f"unsupported format {path.suffix or '(none)'} — {path.name}")
             raise typer.Exit(1)
         paths.append(path)

@@ -57,7 +57,7 @@ from ..workdir import BookPaths
 
 STATIC = Path(__file__).parent / "static"
 MAX_UPLOAD = net.MAX_UPLOAD
-SUPPORTED_SUFFIXES = net.SUPPORTED_SUFFIXES
+SUPPORTED_SUFFIXES = net.supported_suffixes()
 
 
 def _http(e: net.FetchError) -> HTTPException:
