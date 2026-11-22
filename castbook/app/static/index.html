@@ -153,6 +153,8 @@
     <summary>Pronunciation lexicon</summary>
     <textarea id="lex-txt" rows="6" style="width:100%;font-family:monospace" placeholder='{"Cheshire":"CHEH-shur"}'></textarea>
     <button id="lex-save" class="ghost" style="margin-top:.5rem">Save lexicon</button>
+    <button id="lex-hear" class="ghost" style="margin-top:.5rem" title="hear the first 5 entries">▶ audition</button>
+    <audio id="lex-player" style="display:none" controls></audio>
     <span class="muted" id="lex-meta"></span>
   </details>
   <details id="review-details" style="margin-top:1rem">
@@ -535,6 +537,24 @@ async function runSearch() {
 $("q-btn").onclick = runSearch;
 $("q").addEventListener("keydown", e => { if (e.key === "Enter") runSearch(); });
 
+$("lex-hear").onclick = async () => {
+  let body;
+  try { body = JSON.parse($("lex-txt").value || "{}"); } catch { $("lex-meta").textContent = " · invalid JSON"; return; }
+  const entries = Object.entries(body).slice(0, 5);
+  if (!entries.length) { $("lex-meta").textContent = " · no entries"; return; }
+  const text = entries.map(([w, s]) => `${w}, pronounced ${s}`).join(". ");
+  const voice = $("read-voice").value || "af_sarah";
+  $("lex-meta").textContent = " · rendering…";
+  const r = await fetch(tok("/api/preview"), {method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({voice, text})});
+  if (r.ok) {
+    $("lex-player").src = URL.createObjectURL(await r.blob());
+    $("lex-player").style.display = "";
+    $("lex-player").play();
+    $("lex-meta").textContent = "";
+  } else $("lex-meta").textContent = " · audition failed";
+};
 $("lex-save").onclick = async () => {
   let body;
   try { body = JSON.parse($("lex-txt").value || "{}"); } catch { $("lex-meta").textContent = " · invalid JSON"; return; }
