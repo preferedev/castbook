@@ -1,13 +1,14 @@
 # Castbook attribution eval
-_2026-11-22T16:38:41+00:00Z — heuristic_
+_2026-11-22T16:42:19+00:00Z — heuristic_
 
 | book | units | labeled | correct | accuracy | ambiguous |
 |---|---|---|---|---|---|
 | alice-in-wonderland | 107 | 21 | 18 | 86% | 1 |
 | dr-jekyll-and-mr-hyde | 20 | 20 | 19 | 95% | 0 |
 | great-expectations | 35 | 35 | 33 | 94% | 2 |
+| huckleberry-finn | 26 | 20 | 16 | 80% | 4 |
 | jane-eyre | 21 | 20 | 20 | 100% | 0 |
-| moby-dick | 29 | 20 | 14 | 70% | 2 |
+| moby-dick | 29 | 20 | 15 | 75% | 2 |
 | pride-and-prejudice | 29 | 20 | 13 | 65% | 4 |
 | sherlock-holmes | 29 | 29 | 28 | 97% | 0 |
 | treasure-island | 25 | 25 | 23 | 92% | 0 |
@@ -20,12 +21,15 @@ _2026-11-22T16:38:41+00:00Z — heuristic_
 - **dr-jekyll-and-mr-hyde** `ch001-u0020` expected `mr.-enfield` got `mr-utterson` — 'Mr. Utterson sighed deeply but said never a word; and the young man\npresently re'
 - **great-expectations** `ch001-u0005` expected `magwitch` got `ambiguous` — '“Hold your noise!” cried a terrible voice, as a man started up from\namong the gr'
 - **great-expectations** `ch001-u0035` expected `magwitch` got `ambiguous` — '“You get me a file.” He tilted me again. “And you get me wittles.” He'
+- **huckleberry-finn** `ch008-u0001` expected `huckleberry-finn` got `ambiguous` — '“Hello, Jim!” and skipped out.'
+- **huckleberry-finn** `ch008-u0003` expected `jim` got `ambiguous` — '“Doan’ hurt me—don’t! I hain’t ever done no harm to a ghos’. I alwuz\nliked dead '
+- **huckleberry-finn** `ch008-u0025` expected `jim` got `ambiguous` — '“Maybe I better not tell.”'
+- **huckleberry-finn** `ch008-u0026` expected `huckleberry-finn` got `ambiguous` — '“Why, Jim?”'
 - **moby-dick** `ch036-u0009` expected `ahab` got `ambiguous` — '“What do ye do when ye see a whale, men?”'
 - **moby-dick** `ch036-u0010` expected `crew` got `narrator` — '“Sing out for him!” was the impulsive rejoinder from a score of clubbed\nvoices.'
 - **moby-dick** `ch036-u0013` expected `crew` got `ahab` — '“Lower away, and after him!”'
 - **moby-dick** `ch036-u0015` expected `crew` got `ahab` — '“A dead whale or a stove boat!”'
 - **moby-dick** `ch036-u0018` expected `ahab` got `ambiguous` — '“All ye mast-headers have before now heard me give orders about a white\nwhale. L'
-- **moby-dick** `ch036-u0020` expected `ahab` got `crew` — 'Receiving the top-maul from Starbuck, he advanced towards the main-mast\nwith the'
 - **pride-and-prejudice** `ch001-u0003` expected `bennet` got `elizabeth` — '“I hope Mr. Bingley will like it, Lizzy.”'
 - **pride-and-prejudice** `ch001-u0009` expected `bennet` got `kitty` — '“Don’t keep coughing so, Kitty, for heaven’s sake! Have a little compassion on m'
 - **pride-and-prejudice** `ch001-u0012` expected `kitty` got `bennet` — '“When is your next ball to be, Lizzy?”'
