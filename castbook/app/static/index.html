@@ -39,6 +39,8 @@
     <input type="file" id="file" accept=".epub,.txt,.md,.pdf" hidden multiple>
     <button id="import">Import</button>
     <button id="pick" class="ghost">Choose file…</button>
+    <input id="import-url" placeholder="…or paste an ebook URL" size="30">
+    <button id="import-url-btn" class="ghost">Fetch</button>
     <span class="muted" id="import-status"></span>
   </div>
 </section>
@@ -274,6 +276,19 @@ $("import").onclick = async () => {
   try {
     const r = await api("/api/import", {method: "POST", body: fd});
     $("import-status").textContent = `imported: ${r.book_id}`;
+    loadBooks();
+  } catch (e) { $("import-status").textContent = e.message; }
+};
+$("import-url-btn").onclick = async () => {
+  const url = $("import-url").value.trim();
+  if (!url) return;
+  $("import-status").textContent = "fetching…";
+  const fd = new FormData();
+  fd.append("url", url);
+  try {
+    const r = await api("/api/import", {method: "POST", body: fd});
+    $("import-status").textContent = `imported: ${r.book_id}`;
+    $("import-url").value = "";
     loadBooks();
   } catch (e) { $("import-status").textContent = e.message; }
 };

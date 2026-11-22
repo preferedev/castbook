@@ -149,7 +149,7 @@ def test_token_gate(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-unt
 
 
 def test_backend_switch_drops_stale_casting(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    from castbook.artifacts import CastingFile, save_artifact, load_artifact
+    from castbook.artifacts import CastingFile, load_artifact, save_artifact
 
     monkeypatch.setenv("CASTBOOK_CONFIG", str(tmp_path / "config.toml"))
     client = _client(tmp_path, monkeypatch)
@@ -169,3 +169,33 @@ def test_backend_switch_drops_stale_casting(tmp_path: Path, monkeypatch) -> None
     r = client.put("/api/config", json={"tts": {"backend": "pocket"}}).json()
     assert r["recast"] == ["b1"]
     assert list(load_artifact(CastingFile, d).map) == ["b"]
+
+
+def test_import_from_url(client_setup) -> None:  # type: ignore[no-untyped-def]
+    import functools
+    import http.server
+    import threading
+
+    client, tmp_path = client_setup
+    srv = http.server.HTTPServer(
+        ("127.0.0.1", 0),
+        functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(tmp_path)),
+    )
+    (tmp_path / "book.txt").write_text("CHAPTER I\n\nHello, said Alice.\n" * 5)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        port = srv.server_address[1]
+        r = client.post("/api/import", data={"url": f"http://127.0.0.1:{port}/book.txt"})
+        assert r.status_code == 200, r.text
+        assert r.json()["book_id"]
+        assert client.post("/api/import", data={"url": "ftp://x/book.txt"}).status_code == 400
+        assert client.post("/api/import").status_code == 400
+        assert (
+            client.post(
+                "/api/import",
+                data={"url": f"http://127.0.0.1:{port}/missing.epub"},
+            ).status_code
+            == 502
+        )
+    finally:
+        srv.shutdown()

@@ -11,12 +11,16 @@ import shutil
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from collections import Counter
 from collections.abc import Callable
+from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from ..artifacts import (
@@ -40,6 +44,7 @@ from ..workdir import BookPaths
 
 STATIC = Path(__file__).parent / "static"
 MAX_UPLOAD = 200 * 1024 * 1024
+SUPPORTED_SUFFIXES = (".epub", ".txt", ".md", ".pdf")
 
 _jobs: dict[str, threading.Thread] = {}
 _cancels: dict[str, threading.Event] = {}
@@ -186,22 +191,58 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         _spawn("models:pull", lambda: models_pull(cfg.models_dir, wanted, log=log), log)
         return {"ok": True}
 
-    @app.post("/api/import")
-    def upload(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
+    def _save_upload(file: UploadFile, tmp_dir: Path) -> Path:
         suffix = Path(file.filename or "").suffix.lower()
-        if suffix not in (".epub", ".txt", ".md", ".pdf"):
+        if suffix not in SUPPORTED_SUFFIXES:
             raise HTTPException(400, f"unsupported format {suffix}")
-        filename = Path(file.filename or f"book{suffix}").name
-        tmp_dir = Path(tempfile.mkdtemp())
-        tmp_path = tmp_dir / filename
+        tmp_path = tmp_dir / Path(file.filename or f"book{suffix}").name
         size = 0
+        with tmp_path.open("wb") as out:
+            while chunk := file.file.read(1 << 20):
+                size += len(chunk)
+                if size > MAX_UPLOAD:
+                    raise HTTPException(413, "file too large")
+                out.write(chunk)
+        return tmp_path
+
+    def _save_url(url: str, tmp_dir: Path) -> Path:
+        if not url.lower().startswith(("http://", "https://")):
+            raise HTTPException(400, "url must start with http:// or https://")
+        req = urllib.request.Request(url, headers={"User-Agent": "castbook/0.1"})
         try:
+            resp = urllib.request.urlopen(req, timeout=60)
+        except urllib.error.URLError as e:
+            raise HTTPException(502, f"fetch failed: {e.reason}") from e
+        with resp:
+            name = Path(urllib.parse.urlparse(resp.geturl()).path).name or "book.epub"
+            suffix = Path(name).suffix.lower()
+            if suffix not in SUPPORTED_SUFFIXES:
+                raise HTTPException(400, f"unsupported format {suffix or '(none)'}")
+            tmp_path = tmp_dir / name
+            size = 0
             with tmp_path.open("wb") as out:
-                while chunk := file.file.read(1 << 20):
+                while chunk := resp.read(1 << 20):
                     size += len(chunk)
                     if size > MAX_UPLOAD:
                         raise HTTPException(413, "file too large")
                     out.write(chunk)
+        return tmp_path
+
+    @app.post("/api/import")
+    def upload(
+        file: Annotated[UploadFile | None, File()] = None,
+        url: Annotated[str | None, Form()] = None,
+    ) -> dict[str, Any]:
+        if (file is None) == (not url):
+            raise HTTPException(400, "pass exactly one of file or url")
+        tmp_dir = Path(tempfile.mkdtemp())
+        try:
+            if url:
+                tmp_path = _save_url(url, tmp_dir)
+            else:
+                tmp_path = _save_upload(file or UploadFile(BytesIO(), filename=None), tmp_dir)
+            if tmp_path.stat().st_size == 0:
+                raise HTTPException(400, "empty file")
             try:
                 with _import_lock:
                     book = import_book(tmp_path, cfg)
