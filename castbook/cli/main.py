@@ -299,8 +299,9 @@ def stats(
     casting = load_artifact(CastingFile, b.dir)
     manifest = load_artifact(AudioManifest, b.dir)
     if chapters:
+        words = sum(c.word_count for c in chapters.chapters)
         typer.echo(f"chapters:  {len(chapters.chapters)}")
-        typer.echo(f"words:     {sum(c.word_count for c in chapters.chapters):,}")
+        typer.echo(f"words:     {words:,} (est. ~{words / 165 / 60:.1f} h narration)")
     if attrib:
         ambiguous = sum(1 for u in attrib.units if u.speaker == "ambiguous")
         typer.echo(f"units:     {len(attrib.units):,} ({ambiguous} ambiguous)")
