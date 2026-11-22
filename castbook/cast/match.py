@@ -106,12 +106,14 @@ def _auto_cast_descriptions(
 
 def _looks_like_preset(name: str) -> bool:
     """Preset ids/mixes/clips are voice handles, not prose descriptions."""
-    return (
-        "+" in name
-        or "/" in name
-        or "\\" in name
-        or bool(__import__("re").fullmatch(r"[a-z]{2}_[a-z0-9_]+", name))
-    )
+    from pathlib import Path
+
+    if "+" in name:
+        return True
+    p = Path(name)
+    if p.suffix.lower() in {".wav", ".mp3", ".flac"} or p.exists():
+        return True
+    return name in (_valid_ids("kokoro") | _valid_ids("pocket"))
 
 
 def _role_rank(role: str) -> int:
