@@ -31,6 +31,10 @@ FIRST_PERSON = re.compile(
     re.IGNORECASE,
 )
 NAME_SAYS = re.compile(rf"{NAME}\s+({SAID_VERBS})", re.IGNORECASE)
+_FP_TAGS = re.compile(
+    rf"[”\"'\u2019]\s*,?\s*I\s+(?:{SAID_VERBS})|\b(?:{SAID_VERBS})\s+I\b",
+    re.IGNORECASE,
+)
 VOCATIVE = re.compile(rf"\b({SAID_VERBS})\b[^.!?]*,\s*{NAME}\s*[.!?]", re.IGNORECASE)
 
 TITLE_PREFIXES = ("mr.", "mrs.", "miss", "dr.", "lady", "lord", "sir", "captain")
@@ -127,6 +131,18 @@ class HeuristicAttributor:
                     gender=_gender_of(name),
                     role="major" if n >= 10 else "minor",
                 )
+            )
+        fp = sum(len(_FP_TAGS.findall(ch.text)) for ch in chapters)
+        if fp >= 5:
+            characters.insert(
+                0,
+                Character(
+                    id="protagonist",
+                    name="Protagonist",
+                    aliases=["I"],
+                    gender="unknown",
+                    role="major",
+                ),
             )
         return _dedupe(characters)
 

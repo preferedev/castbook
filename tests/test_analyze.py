@@ -153,3 +153,25 @@ def test_heuristic_double_quote_inside_single_speech() -> None:
         word_count=0,
     )
     assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == ["bob"]
+
+
+def test_heuristic_extract_cast_synthesizes_first_person_protagonist() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter
+
+    text = "\n\n".join(f'"Line {i}," said I.' for i in range(6))
+    ch = Chapter(index=0, title="t", text=text, word_count=0)
+    cast = HeuristicAttributor().extract_cast([ch])
+    assert cast[0].name == "Protagonist" and "I" in cast[0].aliases
+    units = HeuristicAttributor().attribute(ch, cast)
+    assert all(u.speaker == "protagonist" for u in units)
+
+
+def test_heuristic_no_protagonist_in_third_person() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter
+
+    text = "\n\n".join(f'"Line {i}," said Alice.' for i in range(6))
+    ch = Chapter(index=0, title="t", text=text, word_count=0)
+    cast = HeuristicAttributor().extract_cast([ch])
+    assert all(c.name != "Protagonist" for c in cast)
