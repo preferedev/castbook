@@ -114,3 +114,13 @@ def test_regenerate_pops_chapter_units(client_setup, monkeypatch) -> None:  # ty
     assert spawned and spawned[0]["chapters"] == {1}
     r = client.post(f"/api/books/{book_id}/regenerate?chapters=")
     assert r.status_code in (409, 422)
+
+
+def test_models_endpoints(tmp_path, monkeypatch) -> None:
+    client = _client(tmp_path, monkeypatch)
+    models = {m["id"]: m for m in client.get("/api/models").json()}
+    assert "kokoro-v1" in models and "qwen3-4b-q4" in models
+    assert all("license" in m and "downloaded" in m for m in models.values())
+    assert client.post("/api/models/pull?ids=kokoro-v1").json() == {"ok": True}
+    log = client.get("/api/models/log").json()["lines"]
+    assert any("kokoro-v1" in line for line in log)

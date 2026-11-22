@@ -45,6 +45,12 @@
 
 <div id="books"></div>
 
+<details id="models-details" style="margin-top:1rem">
+  <summary class="muted">Models <b id="models-count"></b> — local weights for LLM + TTS</summary>
+  <table><tbody id="models-table"></tbody></table>
+  <span class="muted" id="models-status"></span>
+</details>
+
 <section id="cast-section" style="display:none">
   <div class="book-head">
     <h2 id="cast-title" style="font-size:1.05rem"></h2>
@@ -105,6 +111,29 @@ async function api(path, opts) {
 }
 
 async function loadVoices() { voices = await api("/api/voices"); }
+
+async function loadModels() {
+  const models = await api("/api/models");
+  const missing = models.filter(m => !m.downloaded);
+  $("models-count").textContent = missing.length ? `${missing.length} missing` : "all present";
+  $("models-table").innerHTML = models.map(m => `<tr>
+    <td><b>${esc(m.id)}</b></td>
+    <td class="muted">${m.kind} · ${m.size_mb} MB · ${esc(m.license)}${m.required ? " · required" : ""}</td>
+    <td>${m.downloaded ? '<span class="ok">downloaded</span>' : `<button class="ghost" onclick="pullModel('${m.id}')">Pull</button>`}</td>
+  </tr>`).join("");
+  $("models-status").textContent = models.some(m => m.busy) ? "downloading…" : "";
+  return models.some(m => m.busy);
+}
+
+let modelTimer = null;
+async function pullModel(id) {
+  await api(`/api/models/pull?ids=${encodeURIComponent(id)}`, {method: "POST"});
+  if (modelTimer) clearInterval(modelTimer);
+  modelTimer = setInterval(async () => {
+    if (!(await loadModels())) { clearInterval(modelTimer); modelTimer = null; }
+  }, 2000);
+  loadModels();
+}
 
 async function loadBooks() {
   const books = await api("/api/books");
@@ -242,6 +271,8 @@ $("lex-save").onclick = async () => {
   const r = await api(`/api/books/${current}/lexicon`, {method: "PUT", headers: {"content-type":"application/json"}, body: JSON.stringify(body)});
   $("lex-meta").textContent = ` · saved ${r.saved} entries`;
 };
+loadModels().catch(() => {});
+
 async function loadMachine() {
   const m = await api("/api/machine");
   const el = document.querySelector("header .muted:last-of-type") || document.querySelector(".muted");
