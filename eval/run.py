@@ -76,6 +76,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--llm", action="store_true", help="use Qwen3-4B instead of heuristic")
     ap.add_argument(
+        "--hybrid", action="store_true", help="heuristic + LLM second opinion on unsure units"
+    )
+    ap.add_argument(
         "--fail-under",
         type=float,
         default=None,
@@ -83,7 +86,7 @@ def main() -> int:
     )
     args = ap.parse_args()
     attributor: Attributor = HeuristicAttributor()
-    if args.llm:
+    if args.llm or args.hybrid:
         from castbook.analyze.llm import LlamaCppAttributor
         from castbook.config import Settings
         from castbook.models import resolve_model
@@ -92,7 +95,13 @@ def main() -> int:
         path = resolve_model(cfg.models_dir, cfg.llm.model)
         if path is None:
             raise SystemExit(f"model not downloaded: castbook models pull {cfg.llm.model}")
-        attributor = LlamaCppAttributor(path, cfg.llm)
+        llm = LlamaCppAttributor(path, cfg.llm)
+        if args.hybrid:
+            from castbook.analyze.hybrid import HybridAttributor
+
+            attributor = HybridAttributor(HeuristicAttributor(), llm)
+        else:
+            attributor = llm
 
     results = [evaluate(p, attributor) for p in sorted(GOLD_DIR.glob("*.json"))]
     lines = [
