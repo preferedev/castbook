@@ -75,6 +75,12 @@ def evaluate(path: Path, attributor: Attributor) -> dict[str, object]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--llm", action="store_true", help="use Qwen3-4B instead of heuristic")
+    ap.add_argument(
+        "--fail-under",
+        type=float,
+        default=None,
+        help="exit 1 if any book scores below this accuracy (0-1)",
+    )
     args = ap.parse_args()
     attributor: Attributor = HeuristicAttributor()
     if args.llm:
@@ -110,6 +116,11 @@ def main() -> int:
             )
     REPORT.write_text("\n".join(lines) + "\n")
     print(REPORT.read_text())
+    if args.fail_under is not None:
+        below = [r["name"] for r in results if r["accuracy"] < args.fail_under]
+        if below:
+            print(f"FAIL: below {args.fail_under:.0%}: {', '.join(below)}")
+            return 1
     return 0
 
 

@@ -39,11 +39,19 @@
     <input type="file" id="file" accept=".epub,.txt,.md,.pdf" hidden multiple>
     <button id="import">Import</button>
     <button id="pick" class="ghost">Choose file…</button>
+    <input id="import-url" placeholder="…or paste an ebook URL" size="30">
+    <button id="import-url-btn" class="ghost">Fetch</button>
     <span class="muted" id="import-status"></span>
   </div>
 </section>
 
 <div id="books"></div>
+
+<details id="models-details" style="margin-top:1rem">
+  <summary class="muted">Models <b id="models-count"></b> — local weights for LLM + TTS</summary>
+  <table><tbody id="models-table"></tbody></table>
+  <span class="muted" id="models-status"></span>
+</details>
 
 <section id="cast-section" style="display:none">
   <div class="book-head">
@@ -67,12 +75,15 @@
     <button id="regen" class="ghost" title="re-render these chapters">↻</button>
     <button id="play-ch" class="ghost" title="play rendered chapter audio">▶ audio</button>
     <button id="preview-gen" class="ghost">Preview 50</button>
+    <select id="export-fmt" title="export format"><option value="m4b">m4b</option><option>mp3</option><option>both</option></select>
+    <select id="export-layout" title="library layout"><option value="">flat</option><option value="abs">audiobookshelf</option></select>
     <button id="export" class="ghost">Export</button>
     <button id="align" class="ghost" title="word-level karaoke timestamps">Align</button>
     <button id="stop" class="ghost" title="cancel running job">■</button>
   </div>
   <div class="bar" style="margin-top:.75rem"><i id="prog" style="width:0%"></i></div>
   <div class="muted" id="prog-label" style="margin:.25rem 0"></div>
+  <div id="ch-play" class="muted" style="font-size:.8rem"></div>
   <details id="log-details" style="margin-top:.5rem">
     <summary class="muted">Job log</summary>
     <pre id="job-log" class="muted" style="font-size:.75rem;max-height:12rem;overflow:auto"></pre>
@@ -98,27 +109,56 @@
 const $ = (id) => document.getElementById(id);
 let current = null, voices = [], pollTimer = null;
 
+const CB_TOKEN = document.querySelector('meta[name="cb-token"]')?.content || "";
+const tok = p => CB_TOKEN ? p + (p.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(CB_TOKEN) : p;
 async function api(path, opts) {
-  const r = await fetch(path, opts);
+  opts = Object.assign({}, opts);
+  if (CB_TOKEN) opts.headers = Object.assign({"x-castbook-token": CB_TOKEN}, opts.headers);
+  const r = await fetch(tok(path), opts);
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
   return r.json();
 }
 
 async function loadVoices() { voices = await api("/api/voices"); }
 
+async function loadModels() {
+  const models = await api("/api/models");
+  const missing = models.filter(m => !m.downloaded);
+  $("models-count").textContent = missing.length ? `${missing.length} missing` : "all present";
+  $("models-table").innerHTML = models.map(m => `<tr>
+    <td><b>${esc(m.id)}</b></td>
+    <td class="muted">${m.kind} · ${m.size_mb} MB · ${esc(m.license)}${m.required ? " · required" : ""}</td>
+    <td>${m.downloaded ? '<span class="ok">downloaded</span>' : `<button class="ghost" onclick="pullModel('${m.id}')">Pull</button>`}</td>
+  </tr>`).join("");
+  $("models-status").textContent = models.some(m => m.busy) ? "downloading…" : "";
+  return models.some(m => m.busy);
+}
+
+let modelTimer = null;
+async function pullModel(id) {
+  await api(`/api/models/pull?ids=${encodeURIComponent(id)}`, {method: "POST"});
+  if (modelTimer) clearInterval(modelTimer);
+  modelTimer = setInterval(async () => {
+    if (!(await loadModels())) { clearInterval(modelTimer); modelTimer = null; }
+  }, 2000);
+  loadModels();
+}
+
 async function loadBooks() {
   const books = await api("/api/books");
   $("books").innerHTML = books.map(b => `
     <section>
       <div class="book-head">
+        <img src="${tok(`/api/books/${b.book_id}/cover`)}" onerror="this.remove()" style="width:2.2rem;height:2.9rem;object-fit:cover;margin-right:.6rem;border-radius:2px;vertical-align:middle">
         <strong>${esc(b.title)}</strong>
         <span class="muted">${esc(b.author)} · ${b.chapters} ch · ${b.chapters_rendered} rendered</span>
       </div>
       <div class="row" style="margin-top:.5rem">
         <button class="ghost" onclick="openBook('${b.book_id}')">Open</button>
         <button class="ghost" onclick="deleteBook('${b.book_id}')">Delete</button>
-        <a class="ghost" href="/reader/${b.book_id}">Read</a>
-        ${b.exports.map(f => `<a href="/api/books/${b.book_id}/download/${f}">${esc(f)}</a>`).join("")}
+        <a class="ghost" href="${tok(`/reader/${b.book_id}`)}">Read</a>
+        <a class="ghost" href="#" onclick="dlTranscript('${b.book_id}');return false">SRT</a>
+        ${b.exports.map(f => `<a href="${tok(`/api/books/${b.book_id}/download/${f}`)}">${esc(f)}</a>`).join("")}
       </div>
     </section>`).join("");
 }
@@ -135,13 +175,14 @@ async function openBook(id) {
   for (const sp of [...speakers].sort()) {
     const cur = d.casting[sp]?.voice || "";
     const char = d.characters.find(c => c.id === sp);
+    const n = d.unit_counts?.[sp] ?? 0;
     const role = char ? `${char.role} · ${char.gender} · ${char.vibe || ""}` : "";
     rows.push(`<tr>
       <td>${esc(char?.name || sp)}${sp === "narrator" || sp === "ambiguous" ? " <span class=muted>(reserved)</span>" : ""}</td>
-      <td class="muted">${esc(role)}</td>
-      <td><select data-speaker="${sp}">${voices.map(v =>
+      <td class="muted">${esc(role)}${n ? ` · ${n} units` : ""}</td>
+      <td>${voices.length ? `<select data-speaker="${sp}">${voices.map(v =>
         `<option value="${v.id}" ${v.id === cur ? "selected" : ""}>${v.id} — ${esc(v.description)}</option>`
-      ).join("")}</select>
+      ).join("")}</select>` : `<input data-speaker="${sp}" data-voice-text value="${esc(cur)}" placeholder="voice description" style="width:16rem">`}
         <input class="spd" data-sp="${sp}" type="number" min="0.5" max="2" step="0.05" value="${d.casting[sp]?.speed ?? 1}" style="width:4rem" title="speed">
         <input class="mix" data-sp="${sp}" placeholder="mix a:0.7+b:0.3" style="width:9rem" title="custom voice spec" value="${/\+/.test(d.casting[sp]?.voice || '') ? esc(d.casting[sp].voice) : ''}"></td>
       <td><button class="ghost" data-preview="${sp}" type="button">▶</button></td></tr>`);
@@ -152,11 +193,11 @@ async function openBook(id) {
   $("merge-src").innerHTML = opts;
   $("merge-dst").innerHTML = opts;
   document.querySelectorAll("[data-preview]").forEach(b => b.onclick = async () => {
-    const sel = b.closest("tr").querySelector("select");
+    const sel = b.closest("tr").querySelector("select, input[data-voice-text]");
     const mix = b.closest("tr").querySelector("input.mix").value.trim();
     const spd = +b.closest("tr").querySelector("input.spd").value;
     b.textContent = "…";
-    const r = await fetch("/api/preview", {method:"POST",
+    const r = await fetch(tok("/api/preview"), {method:"POST",
       headers:{"content-type":"application/json"},
       body: JSON.stringify({voice: mix || sel.value, speed: spd > 0 ? spd : 1,
         text: `A line spoken by ${b.dataset.preview}.`})});
@@ -171,7 +212,7 @@ async function openBook(id) {
 
 async function saveCast() {
   const overrides = {};
-  document.querySelectorAll("#cast-table select").forEach(s => {
+  document.querySelectorAll("#cast-table select, #cast-table input[data-voice-text]").forEach(s => {
     const spd = +document.querySelector(`input.spd[data-sp="${s.dataset.speaker}"]`).value;
     const mix = document.querySelector(`input.mix[data-sp="${s.dataset.speaker}"]`).value.trim();
     const voice = mix || s.value;
@@ -194,6 +235,14 @@ async function refreshProgress() {
       eta = ` · ~${m < 1 ? "<1" : m} min left`;
     }
     $("prog-label").textContent = `${p.done}/${p.total} units rendered` + (p.failed ? ` · ${p.failed} failed` : "") + eta;
+    if (p.audio_chapters && p.audio_chapters.length) {
+      $("ch-play").innerHTML = "listen so far: " + p.audio_chapters.map(n =>
+        `<a href="#" data-ch="${n}" style="margin-right:.4rem">▶ ch${n}</a>`).join("");
+      $("ch-play").querySelectorAll("a").forEach(a => a.onclick = e => {
+        e.preventDefault();
+        new Audio(tok(`/api/books/${current}/chapters/${a.dataset.ch}/audio`)).play();
+      });
+    }
     if (p.log) { $("log").style.display = ""; $("log").textContent = p.log; }
     if (p.busy) {
       clearTimeout(pollTimer);
@@ -231,6 +280,26 @@ $("import").onclick = async () => {
     loadBooks();
   } catch (e) { $("import-status").textContent = e.message; }
 };
+$("import-url-btn").onclick = async () => {
+  const url = $("import-url").value.trim();
+  if (!url) return;
+  $("import-status").textContent = "fetching…";
+  const fd = new FormData();
+  fd.append("url", url);
+  try {
+    const r = await api("/api/import", {method: "POST", body: fd});
+    $("import-status").textContent = `imported: ${r.book_id}`;
+    $("import-url").value = "";
+    loadBooks();
+  } catch (e) { $("import-status").textContent = e.message; }
+};
+async function dlTranscript(id) {
+  let r;
+  try { r = await api(`/api/books/${id}/transcript`, {method: "POST"}); }
+  catch (e) { $("import-status").textContent = e.message; return; }
+  if (r.first_chapter == null) { $("import-status").textContent = "no rendered chapters yet"; return; }
+  window.open(tok(`/api/books/${id}/chapters/${r.first_chapter}/transcript?fmt=srt`), "_blank");
+}
 async function loadLexicon(id) {
   const r = await api(`/api/books/${id}/lexicon`);
   $("lex-txt").value = Object.keys(r.book).length ? JSON.stringify(r.book, null, 2) : "";
@@ -242,11 +311,39 @@ $("lex-save").onclick = async () => {
   const r = await api(`/api/books/${current}/lexicon`, {method: "PUT", headers: {"content-type":"application/json"}, body: JSON.stringify(body)});
   $("lex-meta").textContent = ` · saved ${r.saved} entries`;
 };
+loadModels().catch(() => {});
+
+async function loadMachine() {
+  const m = await api("/api/machine");
+  const note = document.createElement("span");
+  note.className = "muted"; note.style.marginLeft = "1rem"; note.style.fontSize = ".75rem";
+  const c = await api("/api/config");
+  const sel = document.createElement("select");
+  sel.title = "tts backend";
+  for (const b of ["kokoro", "pocket", "qwen"]) {
+    const o = document.createElement("option");
+    o.value = o.textContent = b;
+    if (b === c.tts.backend) o.selected = true;
+    sel.appendChild(o);
+  }
+  sel.onchange = async () => {
+    sel.disabled = true;
+    const rc = await api("/api/config", {method: "PUT", headers: {"content-type":"application/json"}, body: JSON.stringify({tts: {backend: sel.value}})});
+    if (rc.recast && rc.recast.length) alert(`voice specs dropped (old backend) — recast: ${rc.recast.join(", ")}`);
+    sel.disabled = false;
+    await loadVoices();
+    if (current) openBook(current);
+  };
+  note.appendChild(sel);
+  note.append(" " + m.verdict);
+  document.body.insertBefore(note, document.body.firstElementChild.nextSibling);
+}
+loadMachine();
 async function loadReview(id) {
   const r = await api(`/api/books/${id}/review`);
   const units = r.units || [];
   $("review-count").textContent = `(${units.length})`;
-  const names = [...document.querySelectorAll("#cast-table select")]
+  const names = [...document.querySelectorAll("#cast-table select, #cast-table input[data-voice-text]")]
     .map(x => x.dataset.speaker).concat(["narrator"]);
   $("review-table").innerHTML = units.map(u =>
     `<tr><td class="muted" style="font-size:.8rem">ch${u.chapter}</td>` +
@@ -281,7 +378,7 @@ $("regen").onclick = () => {
 $("play-ch").onclick = () => {
   const m = $("gen-chapters").value.trim().match(/\d+/);
   const ch = m ? +m[0] : 0;
-  new Audio(`/api/books/${current}/chapters/${ch}/audio`).play();
+  new Audio(tok(`/api/books/${current}/chapters/${ch}/audio`)).play();
 };
 $("align").onclick = () => api(`/api/books/${current}/align`, {method: "POST"}).then(refreshProgress);
 $("stop").onclick = () => api(`/api/books/${current}/cancel`, {method: "POST"}).then(refreshProgress);
@@ -298,7 +395,11 @@ $("export").onclick = async () => {
   $("export").disabled = true;
   $("export").textContent = "Exporting…";
   try {
-    await api(`/api/books/${current}/export`, {method: "POST"});
+    const q = [];
+    const f = $("export-fmt").value, l = $("export-layout").value;
+    if (f) q.push(`format=${f}`);
+    if (l) q.push(`layout=${l}`);
+    await api(`/api/books/${current}/export${q.length ? "?" + q.join("&") : ""}`, {method: "POST"});
   } catch (e) {
     $("export").disabled = false;
     $("export").textContent = "Export";
@@ -310,7 +411,7 @@ $("export").onclick = async () => {
       const books = await api(`/api/books`);
       const b = books.find(x => x.book_id === current);
       if (b) $("downloads").innerHTML = b.exports.map(f =>
-        `<a href="/api/books/${current}/download/${f}">${esc(f)}</a>`).join("");
+        `<a href="${tok(`/api/books/${current}/download/${f}`)}">${esc(f)}</a>`).join("");
       const p = await api(`/api/books/${current}/progress`);
       if (!p.busy) {
         clearInterval(timer);

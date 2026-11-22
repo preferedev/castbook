@@ -154,11 +154,32 @@ def generate(
 def export(
     book: str,
     format: Annotated[str, typer.Option("--format", "-f")] = "m4b",
+    layout: Annotated[str | None, typer.Option("--layout", help="abs for Audiobookshelf")] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Mux finished chapters to M4B or MP3."""
     cfg = _cfg(config)
-    export_book(_book(cfg, book), cfg, format=format)
+    export_book(_book(cfg, book), cfg, format=format, layout=layout)
+
+
+@app.command()
+def transcript(
+    book: str,
+    fmt: Annotated[str, typer.Option("--fmt", help="srt | vtt | txt")] = "srt",
+    out: Annotated[Path | None, typer.Option("--out", "-o")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Write per-chapter speaker-labeled transcripts (needs analyze + generate)."""
+    from ..transcript import write_transcript
+
+    cfg = _cfg(config)
+    book_paths = _book(cfg, book)
+    if fmt not in ("srt", "vtt", "txt"):
+        raise typer.BadParameter("fmt must be srt, vtt or txt")
+    written = write_transcript(book_paths, out or book_paths.dir / "transcript", fmt)
+    typer.echo(
+        f"wrote {len(written)} transcript file(s) to {written[0].parent if written else out}"
+    )
 
 
 @app.command()
@@ -210,21 +231,22 @@ def voices(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """List the voice library; --play writes a sample WAV for a voice id."""
-    from ..cast.library import LIBRARY
+    from ..cast.library import LIBRARY, POCKET_LIBRARY
 
     cfg = _cfg(config)
+    lib = {"kokoro": LIBRARY, "pocket": POCKET_LIBRARY}.get(cfg.tts.backend, [])
     if play:
         from ..artifacts import VoiceSpec
         from ..tts import make_backend
 
-        if play not in {v.id for v in LIBRARY}:
-            raise typer.BadParameter(f"unknown voice {play!r}")
+        if play not in {v.id for v in lib}:
+            raise typer.BadParameter(f"unknown voice {play!r} for backend {cfg.tts.backend}")
         out = cfg.data_dir / "previews" / f"{play}.wav"
         out.parent.mkdir(parents=True, exist_ok=True)
-        make_backend(cfg).synthesize(text, VoiceSpec(backend="kokoro", voice=play), out)
+        make_backend(cfg).synthesize(text, VoiceSpec(backend=cfg.tts.backend, voice=play), out)
         typer.echo(str(out))
         return
-    for v in LIBRARY:
+    for v in lib:
         typer.echo(f"{v.id:16} {v.gender or '?':3} {v.description}")
 
 
@@ -248,6 +270,17 @@ def doctor(
     for m in models_mod.MANIFEST:
         present = (cfg.models_dir / m.filename).exists()
         typer.echo(f"{m.id:22} {'ok' if present else 'not downloaded'}")
+    import importlib.util
+
+    for pkg, extra in [("pocket_tts", "pocket"), ("qwen_tts", "qwen"), ("faster_whisper", "align")]:
+        installed = importlib.util.find_spec(pkg) is not None
+        typer.echo(f"extra {extra:10} {'installed' if installed else 'not installed'}")
+    typer.echo(f"tts backend  {cfg.tts.backend}")
+    from ..probe import detect
+
+    mi = detect()
+    typer.echo(f"machine:     {mi.tier} · {mi.cores} cores · {mi.ram_gb} GB RAM")
+    typer.echo(mi.verdict)
     raise typer.Exit(0 if ok else 1)
 
 
@@ -284,10 +317,12 @@ def run_cmd(
     file: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     speed: Annotated[float, typer.Option("--speed", min=0.5, max=2.0)] = 1.0,
+    workers: Annotated[int, typer.Option("--workers", min=1, max=16)] = 1,
+    layout: Annotated[str | None, typer.Option("--layout", help="abs for Audiobookshelf")] = None,
 ) -> None:
     """Full pipeline: import → analyze → cast → generate → export."""
     cfg = _cfg(config)
-    book = run_book(file, cfg, speed=speed)
+    book = run_book(file, cfg, speed=speed, workers=workers, layout=layout)
     typer.echo(f"done: {book.export}")
 
 
@@ -340,15 +375,22 @@ def models_pull(
 @app.command()
 def serve(
     port: Annotated[int, typer.Option("--port", "-p")] = 8484,
+    host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
-    """Run the local web UI."""
+    """Run the local web UI (--host 0.0.0.0 to share on the LAN)."""
     import uvicorn
 
     from ..app.server import create_app
 
     cfg = _cfg(config)
-    uvicorn.run(create_app(cfg), host="127.0.0.1", port=port, log_level="info")
+    token = None
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        import secrets
+
+        token = secrets.token_urlsafe(16)
+        typer.echo(f"LAN mode — share as ?token= or header x-castbook-token:\n  {token}")
+    uvicorn.run(create_app(cfg, token=token), host=host, port=port, log_level="info")
 
 
 @app.command()

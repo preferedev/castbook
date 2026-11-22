@@ -17,7 +17,7 @@
   #bar button { font:inherit; background:#333; color:#eee; border:0; padding:.3rem .8rem; border-radius:.25rem; cursor:pointer; }
   #spd { margin-left:auto; }
 </style>
-<header><a href="/">← castbook</a> — <b id="title"></b></header>
+<header><a id="home-link" href="/">← castbook</a> — <b id="title"></b></header>
 <div id="body"></div>
 <div id="bar">
   <button id="prev">⏮</button><button id="back">−15s</button><button id="play">▶</button><button id="fwd">+15s</button><button id="next">⏭</button>
@@ -31,15 +31,18 @@ const BOOK = "__BOOK_ID__";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 let units = [], cur = -1, align = {}, curWord = -1;
+const CB_TOKEN = document.querySelector('meta[name="cb-token"]')?.content || "";
+const tok = p => CB_TOKEN ? p + (p.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(CB_TOKEN) : p;
+if (CB_TOKEN) document.getElementById("home-link").href = tok("/");
 const audio = new Audio();
 audio.onended = () => playAt(nextPlayable(cur));
 $("spd").onchange = e => audio.playbackRate = +e.target.value;
 
 async function boot() {
   $("title").textContent = BOOK;
-  const d = await (await fetch(`/api/books/${BOOK}/units`)).json();
+  const d = await (await fetch(tok(`/api/books/${BOOK}/units`))).json();
   units = d.units;
-  align = await (await fetch(`/api/books/${BOOK}/align`)).json();
+  align = await (await fetch(tok(`/api/books/${BOOK}/align`))).json();
   let lastCh = -1;
   $("body").innerHTML = units.map((u, i) => {
     const ch = u.chapter !== lastCh ? `<h2>Chapter ${u.chapter + 1}</h2>` : "";
@@ -110,7 +113,7 @@ function playAt(i) {
   el.classList.add("playing");
   $("chap").value = String(units[i].chapter);
   el.scrollIntoView({block: "center", behavior: "smooth"});
-  audio.src = `/api/books/${BOOK}/audio/${units[i].id}`;
+  audio.src = tok(`/api/books/${BOOK}/audio/${units[i].id}`);
   audio.playbackRate = +$("spd").value;
   audio.play();
   $("bar").style.display = "flex";

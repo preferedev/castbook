@@ -33,6 +33,15 @@ dependencies = [
 align = [
     "faster-whisper>=1.0",
 ]
+pocket = [
+    # pip install torch --index-url https://download.pytorch.org/whl/cpu first for a CPU build
+    "torch>=2.2",
+    "pocket-tts>=4.0",
+]
+qwen = [
+    # quality tier — VoiceDesign needs a GPU (CUDA/MPS); see `castbook doctor`
+    "qwen-tts>=0.1",
+]
 dev = [
     "tomli>=2.0; python_version>='3.11'",
     "pytest>=8.0",

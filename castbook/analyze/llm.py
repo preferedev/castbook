@@ -7,6 +7,7 @@ for throughput. All model I/O lives here — nothing upstream sees raw text.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 from typing import cast as tcast
@@ -79,10 +80,24 @@ class LlamaCppAttributor:
 
     def attribute(self, chapter: Chapter, cast: list[Character]) -> list[Unit]:
         units = split_units(chapter)
-        cast_names = ", ".join(c.name for c in cast) or "(none yet)"
+        cast_names = (
+            ", ".join(
+                c.name + (f" (aka {', '.join(c.aliases[:3])})" if c.aliases else "") for c in cast
+            )
+            or "(none yet)"
+        )
+        prev_speaker, prev_text = "narrator", ""
         for start in range(0, len(units), BATCH):
             batch = units[start : start + BATCH]
-            passages = "\n\n".join(f"<{i + 1}> {u.text}" for i, u in enumerate(batch))
+            passages = "\n\n".join(
+                f'<{i + 1}> [prev: {prev}: "{_tail(ptext)}"] {u.text}'
+                for i, u in enumerate(batch)
+                for prev, ptext in [
+                    (prev_speaker, prev_text)
+                    if i == 0
+                    else (batch[i - 1].speaker, batch[i - 1].text)
+                ]
+            )
             try:
                 data = self._chat(
                     prompts.ATTRIBUTE.format(cast_names=cast_names, passages=passages),
@@ -97,13 +112,85 @@ class LlamaCppAttributor:
                 tag = tagged.get(i + 1)
                 if tag is None:
                     u.speaker = "ambiguous" if u.kind == "dialogue" else "narrator"
-                    continue
-                u.speaker = str(tag.get("speaker") or "ambiguous").strip().lower()
-                if u.speaker not in ("narrator", "ambiguous"):
+                else:
+                    raw = str(tag.get("speaker") or "ambiguous").strip().lower()
+                    u.speaker = _normalize_speaker(raw, cast)
+                    if u.speaker not in ("narrator", "ambiguous"):
+                        u.kind = "dialogue"
+                    emotion = str(tag.get("emotion", "neutral")).lower()
+                    u.emotion = tcast(Emotion, emotion if emotion in _EMOTIONS else "neutral")
+            prev_speaker, prev_text = batch[-1].speaker, batch[-1].text
+        for u in units:  # narration without quotes can only be the narrator's
+            if u.kind == "narration" and u.speaker not in ("narrator", "ambiguous"):
+                u.speaker = "narrator"
+        for u in units:  # rescue: '"quote," X said' mislabeled as narration
+            if u.speaker in ("narrator", "ambiguous"):
+                rescue = _said_speaker(u.text, cast)
+                if rescue:
+                    u.speaker = rescue
                     u.kind = "dialogue"
-                emotion = str(tag.get("emotion", "neutral")).lower()
-                u.emotion = tcast(Emotion, emotion if emotion in _EMOTIONS else "neutral")
         return units
+
+
+def _tail(text: str, n: int = 160) -> str:
+    return text[-n:].replace("\n", " ")
+
+
+_VERBS = "said|asked|replied|cried|exclaimed|answered|whispered|added|observed|continued|returned"
+_NAME = r"(?:[A-Z][a-zA-Z'.\-]+\s+){0,2}[A-Z][a-zA-Z'.\-]+"
+_SAID = re.compile(
+    rf"[\"“”].{{0,400}}[\"“”]\s*,?\s*(?:{_VERBS})\s+"
+    rf"({_NAME})(?:[.,;!?:)\"“”]|\s+to\s|$)"
+    rf"|\b({_NAME})\s+(?:{_VERBS})\b.{{0,80}}[\"“]"
+)
+
+
+def _said_speaker(text: str, cast: list[Character]) -> str | None:
+    if '"' not in text and "\u201c" not in text:
+        return None
+    for m in _SAID.finditer(text):
+        name = (m.group(1) or m.group(2) or "").strip().rstrip(".").lower()
+        if not name:
+            continue
+        found = _exact_speaker(name, cast) or _surname_speaker(name, cast)
+        if found:
+            return found
+    return None
+
+
+def _exact_speaker(name: str, cast: list[Character]) -> str | None:
+    for c in cast:
+        if any(name == str(o).lower() for o in {c.name, *c.aliases}):
+            return c.name.lower()
+    return None
+
+
+def _surname_speaker(name: str, cast: list[Character]) -> str | None:
+    tokens = name.split()
+    first_tok = tokens[0].rstrip(".") if tokens else ""
+    fallback = None
+    for c in cast:
+        for o in {c.name, *c.aliases}:
+            parts = str(o).lower().split()
+            if not parts or not name.endswith(" " + parts[-1].rstrip(".")):
+                continue
+            if parts[0].rstrip(".") == first_tok:
+                return c.name.lower()
+            fallback = fallback or c.name.lower()
+    return fallback
+
+
+def _normalize_speaker(name: str, cast: list[Character]) -> str:
+    if name in ("narrator", "ambiguous"):
+        return name
+    found = _exact_speaker(name, cast) or _surname_speaker(name, cast)
+    if found:
+        return found
+    for c in cast:
+        for o in {c.name.lower(), *(a.lower() for a in c.aliases)}:
+            if len(name) >= 4 and (name in o or o in name):
+                return c.name.lower()
+    return name
 
 
 _EMOTIONS = {"neutral", "angry", "sad", "joyful", "fearful", "whispered", "shouted", "sarcastic"}

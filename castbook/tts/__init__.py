@@ -31,6 +31,14 @@ from .kokoro import KokoroBackend
 
 
 def make_backend(cfg: Settings) -> Backend:
+    if cfg.tts.backend == "qwen":
+        from .qwen import QwenBackend
+
+        return QwenBackend()
+    if cfg.tts.backend == "pocket":
+        from .pocket import PocketBackend
+
+        return PocketBackend()
     if cfg.tts.backend != "kokoro":
         raise ValueError(f"unknown tts backend {cfg.tts.backend!r}")
     model = resolve_model(cfg.models_dir, "kokoro-v1")
@@ -52,14 +60,17 @@ EMOTION_SPEED = {
 
 
 def _unit_voice(voice: VoiceSpec, emotion: str, speed: float = 1.0) -> VoiceSpec:
-    factor = EMOTION_SPEED.get(emotion, 1.0) * speed
-    if factor == 1.0 or voice.speed <= 0:
+    if voice.speed <= 0:
         return voice
+    out = voice if emotion == "neutral" else voice.model_copy(update={"emotion": emotion})
+    factor = EMOTION_SPEED.get(emotion, 1.0) * speed
+    if factor == 1.0:
+        return out
     # clamp the factor to what keeps voice.speed * factor inside the backend's
     # range — clamping the product directly could invert the intended direction
     lo, hi = 0.5 / voice.speed, 2.0 / voice.speed
     factor = max(lo, min(hi, factor))
-    return voice.model_copy(update={"speed": voice.speed * factor})
+    return out.model_copy(update={"speed": voice.speed * factor})
 
 
 def _load_lexicon(book: BookPaths, cfg: Settings) -> dict[str, str]:

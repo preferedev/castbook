@@ -9,7 +9,17 @@ EPUB, PDF and TXT in, chaptered M4B out. Python CLI plus a minimal local web UI.
 
 ```bash
 uv venv && uv pip install -e '.[dev]'
-castbook models pull kokoro-v1 kokoro-voices-v1   # ~350 MB, required
+castbook models pull kokoro-v1 kokoro-voices-v1   # ~350 MB, required for the kokoro backend
+
+# faster alternative on CPU (cloning + streaming), optional:
+pip install -e '.[pocket]'   # torch CPU wheel first: pip install torch --index-url https://download.pytorch.org/whl/cpu
+# then set backend = "pocket" under [tts] in config.toml — the model auto-downloads from HF.
+# clone a voice: castbook cast <book> --map "<speaker>=/path/to/clip.wav" (requires HF terms
+# accepted for kyutai/pocket-tts); catalog voices need no auth.
+
+# quality tier (GPU only — check 'castbook doctor' for your tier):
+pip install -e '.[qwen]'     # Qwen3-TTS VoiceDesign: every character gets a designed voice
+# then backend = "qwen" under [tts]. Each character's vibe note becomes the voice description.
 castbook models pull qwen3-4b-q4                  # ~2.5 GB, optional — better attribution
 castbook run book.epub          # parse → analyze → cast → generate → export
 castbook run examples/lighthouse.txt   # or try the bundled sample
@@ -35,7 +45,8 @@ un-rendered units are synthesized.
 | `castbook run <file>` | all of the above |
 | `castbook books` | list books with render progress |
 | `castbook models list\|pull` | model management |
-| `castbook serve -p 8484` | local web UI |
+| `castbook serve -p 8484` | local web UI (`--host 0.0.0.0` shares on LAN behind a printed token) |
+| `castbook transcript <book>` | per-chapter SRT/VTT/TXT with speaker labels (`--fmt`, `-o`) |
 
 ## Docker
 
@@ -46,7 +57,7 @@ docker run -v $PWD/data:/data castbook doctor
 
 ## Web UI
 
-`castbook serve` then open `http://localhost:8484`: import files (multi-select or drag-and-drop), audition voices
+`castbook serve` then open `http://localhost:8484`: pick the TTS backend in the header (kokoro/pocket/qwen — switching drops stale castings so you recast), pull models from the Models panel, import files (multi-select, drag-and-drop, or an http(s) ebook URL — private-network URLs are refused), audition voices
 with the ▶ button, review and
 override voice casting (including per-speaker speed, `voiceA:0.7+voiceB:0.3` mixes, and merging duplicate speakers), generate (or "Preview 50" for a quick sample), play any rendered chapter with ▶ audio, re-render just a range with ↻, and export in the background — download the M4B when it lands.
 The reader view highlights the spoken word when `castbook align` has run, remembers

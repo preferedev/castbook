@@ -6,16 +6,23 @@ artifacts, so the UI survives a server restart.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import shutil
+import socket
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from collections import Counter
 from collections.abc import Callable
+from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from ..artifacts import (
@@ -31,12 +38,43 @@ from ..artifacts import (
 )
 from ..cast.library import LIBRARY
 from ..config import Settings
+from ..models import MANIFEST, resolve_model
+from ..models import pull as models_pull
 from ..pipeline import analyze_book, cast_book, export_book, generate_book, import_book
 from ..tts.backend import Backend
 from ..workdir import BookPaths
 
 STATIC = Path(__file__).parent / "static"
 MAX_UPLOAD = 200 * 1024 * 1024
+SUPPORTED_SUFFIXES = (".epub", ".txt", ".md", ".pdf")
+
+
+def _public_host(url: str) -> None:
+    host = urllib.parse.urlparse(url).hostname or ""
+    try:
+        ip = ipaddress.ip_address(host)
+        addrs = [ip]
+    except ValueError:
+        try:
+            addrs = [ipaddress.ip_address(i[4][0]) for i in socket.getaddrinfo(host, None)]
+        except (socket.gaierror, ValueError) as e:
+            raise HTTPException(502, f"cannot resolve host {host}") from e
+    if not addrs or not all(a.is_global for a in addrs):
+        raise HTTPException(400, "url host is not public")
+
+
+class _CheckedRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str
+    ) -> Any:
+        if not newurl.lower().startswith(("http://", "https://")):
+            raise HTTPException(400, "redirect to unsupported scheme")
+        _public_host(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_url_opener = urllib.request.build_opener(_CheckedRedirect())
+
 
 _jobs: dict[str, threading.Thread] = {}
 _cancels: dict[str, threading.Event] = {}
@@ -71,16 +109,74 @@ def _spawn(key: str, target: Callable[[], object], log: Callable[[str], None]) -
         t.start()
 
 
-def create_app(cfg: Settings) -> FastAPI:
+def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     app = FastAPI(title="Castbook")
+
+    if token:
+        from fastapi import Request
+        from fastapi.responses import JSONResponse
+
+        @app.middleware("http")
+        async def _auth(request: Request, call_next):  # type: ignore[no-untyped-def]
+            if not request.url.path.startswith("/favicon"):
+                given = request.headers.get("x-castbook-token") or request.query_params.get("token")
+                if given != token:
+                    return JSONResponse({"detail": "missing token"}, status_code=401)
+            return await call_next(request)
+
+    def _page(name: str) -> str:
+        html = (STATIC / name).read_text()
+        if token:
+            html = html.replace("</head>", f'<meta name="cb-token" content="{token}"></head>')
+        return html
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
-        return (STATIC / "index.html").read_text()
+        return _page("index.html")
+
+    @app.get("/api/machine")
+    def machine() -> dict[str, Any]:
+        from ..probe import detect
+
+        mi = detect()
+        return {
+            "tier": mi.tier,
+            "gpu": mi.gpu,
+            "cores": mi.cores,
+            "ram_gb": mi.ram_gb,
+            "quality_capable": mi.quality_capable,
+            "verdict": mi.verdict,
+        }
+
+    @app.get("/api/config")
+    def get_config() -> dict[str, Any]:
+        return cfg.model_dump(mode="json")
+
+    @app.put("/api/config")
+    def put_config(patch: dict[str, Any]) -> dict[str, Any]:
+        tts = patch.get("tts") or {}
+        backend = tts.get("backend")
+        if backend is not None:
+            if backend not in ("kokoro", "pocket", "qwen"):
+                raise HTTPException(422, f"unknown tts backend: {backend}")
+            cfg.tts.backend = backend
+            recast = _drop_mismatched_casting(cfg)
+            global _backend
+            with _backend_lock:
+                _backend = None
+        else:
+            recast = []
+        cfg.save()
+        out = cfg.model_dump(mode="json")
+        out["recast"] = recast
+        return out
 
     @app.get("/api/voices")
     def voices() -> list[dict[str, Any]]:
-        return [v.model_dump() for v in LIBRARY]
+        from ..cast.library import POCKET_LIBRARY
+
+        lib = {"kokoro": LIBRARY, "pocket": POCKET_LIBRARY}.get(cfg.tts.backend, [])
+        return [v.model_dump() for v in lib]
 
     @app.get("/api/books")
     def books() -> list[dict[str, Any]]:
@@ -96,22 +192,90 @@ def create_app(cfg: Settings) -> FastAPI:
             out.append(_status(d, ch))
         return out
 
-    @app.post("/api/import")
-    def upload(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
+    @app.get("/api/models")
+    def models() -> list[dict[str, Any]]:
+        busy = _jobs.get("models:pull")
+        return [
+            {
+                "id": m.id,
+                "kind": m.kind,
+                "size_mb": round(m.size_bytes / 1e6),
+                "license": m.license,
+                "required": m.required,
+                "downloaded": resolve_model(cfg.models_dir, m.id) is not None,
+                "busy": busy is not None and busy.is_alive(),
+            }
+            for m in MANIFEST
+        ]
+
+    @app.get("/api/models/log")
+    def models_log(lines: int = 100) -> dict[str, Any]:
+        path = cfg.models_dir / "models.log"
+        text = path.read_text(errors="replace") if path.exists() else ""
+        return {"lines": text.splitlines()[-lines:]}
+
+    @app.post("/api/models/pull")
+    def pull_models(ids: str = "") -> dict[str, Any]:
+        wanted = [i for i in ids.split(",") if i] or None
+        log = _log_to(cfg.models_dir / "models.log")
+        _spawn("models:pull", lambda: models_pull(cfg.models_dir, wanted, log=log), log)
+        return {"ok": True}
+
+    def _save_upload(file: UploadFile, tmp_dir: Path) -> Path:
         suffix = Path(file.filename or "").suffix.lower()
-        if suffix not in (".epub", ".txt", ".md", ".pdf"):
+        if suffix not in SUPPORTED_SUFFIXES:
             raise HTTPException(400, f"unsupported format {suffix}")
-        filename = Path(file.filename or f"book{suffix}").name
-        tmp_dir = Path(tempfile.mkdtemp())
-        tmp_path = tmp_dir / filename
+        tmp_path = tmp_dir / Path(file.filename or f"book{suffix}").name
         size = 0
+        with tmp_path.open("wb") as out:
+            while chunk := file.file.read(1 << 20):
+                size += len(chunk)
+                if size > MAX_UPLOAD:
+                    raise HTTPException(413, "file too large")
+                out.write(chunk)
+        return tmp_path
+
+    def _save_url(url: str, tmp_dir: Path) -> Path:
+        if not url.lower().startswith(("http://", "https://")):
+            raise HTTPException(400, "url must start with http:// or https://")
+        _public_host(url)
+        req = urllib.request.Request(url, headers={"User-Agent": "castbook/0.1"})
         try:
+            resp = _url_opener.open(req, timeout=60)
+        except HTTPException:
+            raise
+        except urllib.error.URLError as e:
+            raise HTTPException(502, f"fetch failed: {e.reason}") from e
+        with resp:
+            name = Path(urllib.parse.urlparse(resp.geturl()).path).name or "book.epub"
+            suffix = Path(name).suffix.lower()
+            if suffix not in SUPPORTED_SUFFIXES:
+                raise HTTPException(400, f"unsupported format {suffix or '(none)'}")
+            tmp_path = tmp_dir / name
+            size = 0
             with tmp_path.open("wb") as out:
-                while chunk := file.file.read(1 << 20):
+                while chunk := resp.read(1 << 20):
                     size += len(chunk)
                     if size > MAX_UPLOAD:
                         raise HTTPException(413, "file too large")
                     out.write(chunk)
+        return tmp_path
+
+    @app.post("/api/import")
+    def upload(
+        file: Annotated[UploadFile | None, File()] = None,
+        url: Annotated[str | None, Form()] = None,
+    ) -> dict[str, Any]:
+        if (file is None) == (not url):
+            raise HTTPException(400, "pass exactly one of file or url")
+        tmp_dir = Path(tempfile.mkdtemp())
+        try:
+            if url:
+                tmp_path = _save_url(url, tmp_dir)
+            else:
+                tmp_path = _save_upload(file or UploadFile(BytesIO(), filename=None), tmp_dir)
+            if tmp_path.stat().st_size == 0:
+                raise HTTPException(400, "empty file")
             try:
                 with _import_lock:
                     book = import_book(tmp_path, cfg)
@@ -135,7 +299,17 @@ def create_app(cfg: Settings) -> FastAPI:
             "casting": {k: v.model_dump() for k, v in casting.map.items()} if casting else {},
             "needs_review": attrib.needs_review if attrib else [],
             "units": len(attrib.units) if attrib else 0,
+            "unit_counts": (dict(Counter(u.speaker for u in attrib.units)) if attrib else {}),
         }
+
+    @app.get("/api/books/{book_id}/cover")
+    def cover(book_id: str) -> FileResponse:
+        book = _require_book(cfg, book_id)
+        for base in (book.dir, book.source):
+            for f in sorted(base.glob("cover.*")):
+                if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
+                    return FileResponse(f)
+        raise HTTPException(404, "no cover")
 
     @app.get("/api/books/{book_id}/lexicon")
     def get_lexicon(book_id: str) -> dict[str, Any]:
@@ -325,6 +499,30 @@ def create_app(cfg: Settings) -> FastAPI:
             raise HTTPException(404, "chapter not rendered")
         return FileResponse(wav, media_type="audio/wav")
 
+    @app.get("/api/books/{book_id}/chapters/{chapter}/transcript")
+    def chapter_transcript(book_id: str, chapter: int, fmt: str | None = None) -> FileResponse:
+        book = _require_book(cfg, book_id)
+        tr_dir = book.dir / "transcript"
+        for ext in [fmt] if fmt else ["srt", "vtt", "txt"]:
+            f = tr_dir / f"ch{chapter:03d}.{ext}"
+            if f.exists():
+                return FileResponse(f)
+        raise HTTPException(404, "no transcript — run `castbook transcript`")
+
+    @app.post("/api/books/{book_id}/transcript")
+    def make_transcript(book_id: str, fmt: str = "srt") -> dict[str, Any]:
+        from ..transcript import write_transcript
+
+        book = _require_book(cfg, book_id)
+        if fmt not in ("srt", "vtt", "txt"):
+            raise HTTPException(400, "fmt must be srt, vtt or txt")
+        try:
+            written = write_transcript(book, book.dir / "transcript", fmt)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+        first = int(written[0].stem[2:]) if written else None
+        return {"ok": True, "count": len(written), "first_chapter": first}
+
     @app.post("/api/preview")
     def preview(spec: dict[str, Any]) -> FileResponse:
         voice = str(spec.get("voice", "af_sarah"))
@@ -336,7 +534,7 @@ def create_app(cfg: Settings) -> FastAPI:
         if not out.exists():
             backend = _preview_backend(cfg)
             backend.synthesize(
-                text[:300], VoiceSpec(backend="kokoro", voice=voice, speed=speed), out
+                text[:300], VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed), out
             )
         return FileResponse(out, media_type="audio/wav")
 
@@ -406,10 +604,9 @@ def create_app(cfg: Settings) -> FastAPI:
 
     @app.get("/reader/{book_id}", response_class=HTMLResponse)
     def reader(book_id: str) -> HTMLResponse:
-        page = STATIC / "reader.html"
         import json as _json
 
-        return HTMLResponse(page.read_text().replace('"__BOOK_ID__"', _json.dumps(book_id)))
+        return HTMLResponse(_page("reader.html").replace('"__BOOK_ID__"', _json.dumps(book_id)))
 
     @app.get("/api/books/{book_id}/progress")
     def progress(book_id: str) -> dict[str, Any]:
@@ -431,6 +628,12 @@ def create_app(cfg: Settings) -> FastAPI:
                 rate = (time.time() - manifest.started_at) / rendered_this_run
                 eta_s = round(rate * (total - done - failed))
         log_tail = (d / "job.log").read_text()[-2000:] if (d / "job.log").exists() else ""
+        audio_dir = d / "audio"
+        chapters_ready = (
+            sorted(int(p.stem[2:]) for p in audio_dir.glob("ch*.wav") if p.stem[2:].isdigit())
+            if audio_dir.is_dir()
+            else []
+        )
         return {
             "total": total,
             "done": done,
@@ -438,6 +641,7 @@ def create_app(cfg: Settings) -> FastAPI:
             "busy": busy,
             "eta_s": eta_s,
             "log": log_tail,
+            "audio_chapters": chapters_ready,
         }
 
     @app.post("/api/books/{book_id}/cancel")
@@ -465,15 +669,19 @@ def create_app(cfg: Settings) -> FastAPI:
         return {"started": True}
 
     @app.post("/api/books/{book_id}/export")
-    def export(book_id: str, format: str | None = None) -> dict[str, Any]:
+    def export(
+        book_id: str, format: str | None = None, layout: str | None = None
+    ) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         if format is not None and format not in ("m4b", "mp3", "both"):
             raise HTTPException(422, f"bad format {format!r}")
+        if layout is not None and layout not in ("abs",):
+            raise HTTPException(422, f"bad layout {layout!r}")
         log = _log_to(book.dir / "job.log")
         log(f"[export] started ({format or cfg.export.format})")
 
         def work() -> None:
-            outs = export_book(book, cfg, format=format, log=log)
+            outs = export_book(book, cfg, format=format, layout=layout, log=log)
             log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
         _spawn(f"job:{book_id}", work, log)
@@ -529,3 +737,21 @@ def _status(d: Path, ch: ChaptersFile) -> dict[str, Any]:
         if (d / "export").exists()
         else [],
     }
+
+
+def _drop_mismatched_casting(cfg: Settings) -> list[str]:
+    """Backend switch invalidates saved voice specs from the previous backend."""
+    recast: list[str] = []
+    if not cfg.data_dir.is_dir():
+        return recast
+    for d in sorted(cfg.data_dir.iterdir()):
+        casting = load_artifact(CastingFile, d)
+        if not casting:
+            continue
+        stale = [k for k, v in casting.map.items() if v.backend != cfg.tts.backend]
+        if stale:
+            for k in stale:
+                del casting.map[k]
+            save_artifact(casting, d)
+            recast.append(d.name)
+    return recast

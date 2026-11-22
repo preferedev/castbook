@@ -30,6 +30,9 @@ def mux_m4b(
     if not chapter_wavs:
         raise ValueError("no chapters to mux")
     cover = workdir / meta.cover_path if meta.cover_path else None
+    if cover is not None and not cover.exists():
+        alt = workdir / "source" / Path(meta.cover_path or "").name
+        cover = alt if alt.exists() else cover
 
     durations = [float(_probe_duration(p)) for p in chapter_wavs]
     meta_file = workdir / ".ffmetadata"
@@ -55,6 +58,7 @@ def mux_m4b(
 
     concat = _concat_file(chapter_wavs)
     tmp = out.with_suffix(".tmp.m4b")
+    has_cover = cover is not None and cover.exists()
     args = [
         "-f",
         "concat",
@@ -64,15 +68,17 @@ def mux_m4b(
         str(concat),
         "-i",
         str(meta_file),
+    ]
+    if has_cover:
+        args += ["-i", str(cover)]
+    args += [
         "-map_metadata",
         "1",
         "-map_chapters",
         "1",
     ]
-    if cover and cover.exists():
+    if has_cover:
         args += [
-            "-i",
-            str(cover),
             "-map",
             "0:a",
             "-map",

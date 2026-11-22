@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 
@@ -81,11 +83,51 @@ def assemble_chapters(book: BookPaths, cfg: Settings, log: Callable[[str], None]
     return book.dir / "manifest.json"
 
 
+def abs_layout(book: BookPaths, meta: object, outputs: list[Path], out_root: Path) -> Path:
+    """Audiobookshelf layout: <root>/<Author>/<Title>/<Title>.m4b + cover + metadata."""
+    author = _safe_dir(getattr(meta, "author", "") or "Unknown Author")
+    title = _safe_dir(getattr(meta, "title", book.book_id))
+    dest = out_root / author / title
+    dest.mkdir(parents=True, exist_ok=True)
+    for out in outputs:
+        if out.is_file():
+            shutil.copy2(out, dest / f"{title}{out.suffix}")
+        else:
+            for f in sorted(out.iterdir()):
+                if f.is_file() and f.suffix.lower() in {".mp3", ".m4a"}:
+                    shutil.copy2(f, dest / f.name)
+    cover_path = getattr(meta, "cover_path", None)
+    if cover_path:
+        cover = book.dir / cover_path
+        if not cover.exists():
+            cover = book.source / Path(cover_path).name
+        if cover.exists():
+            shutil.copy2(cover, dest / "cover.jpg")
+    (dest / "metadata.json").write_text(
+        json.dumps(
+            {
+                "title": getattr(meta, "title", ""),
+                "authors": [getattr(meta, "author", "")],
+                "genres": ["Audiobook"],
+            },
+            indent=2,
+        )
+    )
+    return dest
+
+
+def _safe_dir(name: str) -> str:
+    import re
+
+    return re.sub(r'[\\/:*?"<>|]', "-", name).strip(". ") or "untitled"
+
+
 def export(
     book: BookPaths,
     cfg: Settings,
     log: Callable[[str], None] = print,
     format: str | None = None,
+    layout: str | None = None,
 ) -> list[Path]:
     manifest = load_artifact(AudioManifest, book.dir)
     chapters = load_artifact(ChaptersFile, book.dir)
@@ -113,4 +155,14 @@ def export(
         out = export_mp3(wavs, titles, book.export)
         outputs.append(out)
         log(f"[export] mp3 chapters → {out.name}/")
+    if layout == "abs":
+        dest = abs_layout(book, chapters.meta, outputs, book.export / "abs")
+        zip_path = shutil.make_archive(
+            str(book.export / f"{_safe_dir(getattr(chapters.meta, 'title', 'book'))}-abs"),
+            "zip",
+            dest.parent,
+        )
+        out_zip = Path(zip_path)
+        outputs.append(out_zip)
+        log(f"[export] audiobookshelf → {dest} ({out_zip.name})")
     return outputs

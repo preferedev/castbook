@@ -24,7 +24,7 @@ def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) ->
         book_id = f"{book_id}-{n}"
     book = BookPaths(cfg.data_dir, book_id).ensure()
     src = book.import_source(src)
-    meta, chapters = parse.parse(src, cover_dir=book.source)
+    meta, chapters = parse.parse(src, cover_dir=book.dir)
     save_artifact(
         ChaptersFile(
             book_id=book.book_id,
@@ -84,8 +84,9 @@ def export_book(
     cfg: Settings,
     log: Callable[[str], None] = print,
     format: str | None = None,
+    layout: str | None = None,
 ) -> list[Path]:
-    return audio.export(book, cfg, log, format=format)
+    return audio.export(book, cfg, log, format=format, layout=layout)
 
 
 def run_book(
@@ -93,10 +94,12 @@ def run_book(
     cfg: Settings,
     log: Callable[[str], None] = print,
     speed: float = 1.0,
+    workers: int = 1,
+    layout: str | None = None,
 ) -> BookPaths:
     book = import_book(src, cfg, log)
     analyze_book(book, cfg, log)
     cast_book(book, cfg, log=log)
-    generate_book(book, cfg, log=log, speed=speed)
-    export_book(book, cfg, log)
+    generate_book(book, cfg, log=log, speed=speed, workers=workers)
+    export_book(book, cfg, log, layout=layout)
     return book
