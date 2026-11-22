@@ -475,6 +475,56 @@ def meta(
 
 
 @app.command()
+def watch(
+    folder: Annotated[Path, typer.Argument(help="directory to watch for new ebooks")],
+    chain: Annotated[
+        bool, typer.Option("--chain", help="also run analyze + cast on each import")
+    ] = False,
+    interval: Annotated[float, typer.Option("--interval", help="poll seconds")] = 5.0,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    lang: Annotated[str | None, typer.Option("--lang", help="override detected language")] = None,
+) -> None:
+    """Watch a folder: import (and optionally analyze/cast) every ebook dropped in."""
+    from ..net import supported_suffixes
+
+    cfg = _cfg(config)
+    if not folder.is_dir():
+        typer.echo(f"{folder}: not a directory")
+        raise typer.Exit(1)
+    exts = set(supported_suffixes())
+    seen = {p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in exts}
+    typer.echo(f"watching {folder} ({len(seen)} existing ebook(s) skipped) — Ctrl-C to stop")
+    try:
+        while True:
+            for p in sorted(folder.iterdir()):
+                if (
+                    p not in seen
+                    and p.is_file()
+                    and p.suffix.lower() in exts
+                    and not p.name.endswith(".part")
+                ):
+                    seen.add(p)
+                    try:
+                        book = import_book(p, cfg, lang=lang)
+                    except Exception as e:
+                        typer.echo(f"{p.name}: import failed: {e}")
+                        continue
+                    typer.echo(f"imported {p.name} → {book.book_id}")
+                    if chain:
+                        try:
+                            analyze_book(book, cfg)
+                            cast_book(book, cfg)
+                            typer.echo(f"{book.book_id}: analyzed + cast")
+                        except Exception as e:
+                            typer.echo(f"{book.book_id}: {e}")
+            import time as _t
+
+            _t.sleep(interval)
+    except KeyboardInterrupt:
+        typer.echo("stopped")
+
+
+@app.command()
 def clean(
     yes: Annotated[bool, typer.Option("--yes", "-y", help="skip confirmation")] = False,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
