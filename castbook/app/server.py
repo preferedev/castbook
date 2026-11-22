@@ -123,6 +123,10 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     def webmanifest() -> FileResponse:
         return FileResponse(STATIC / "manifest.json", media_type="application/manifest+json")
 
+    @app.get("/favicon.ico")
+    def favicon() -> FileResponse:
+        return FileResponse(STATIC / "icon-192.png")
+
     @app.get("/static/icon-{size}.png")
     def app_icon(size: int) -> FileResponse:
         if size not in (192, 512):
