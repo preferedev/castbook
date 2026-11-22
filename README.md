@@ -5,6 +5,17 @@ voice, a narrator reads the rest. Free, open-source, local-first.
 
 EPUB, PDF and TXT in, chaptered M4B out. Python CLI plus a minimal local web UI.
 
+## Hear it
+
+Same *Pride and Prejudice* passage — once as a flat single voice, once cast:
+
+- [Flat single-voice](demo/flat.mp3)
+- [Full cast](demo/cast.mp3) — Bingley, Darcy, Elizabeth and narrator get distinct voices
+
+![Library](demo/library.png)
+![Cast table — per-speaker voices, mixes, speeds and auditions](demo/cast.png)
+![Reader mode](demo/reader.png)
+
 ## Quickstart
 
 ```bash
@@ -77,8 +88,23 @@ pronoun/context resolution.
 
 ## Eval
 
-`python -m eval.run` scores attribution on labeled excerpts (Pride & Prejudice
-ch. II, Alice's Mad Tea-Party) and writes `eval/report.md`.
+`python -m eval.run` scores speaker attribution on labeled excerpts (Pride &
+Prejudice ch. I-II, Alice's Mad Tea-Party) and writes `eval/report.md`.
+Current numbers (Qwen3-4B, CPU): **alice 95% · pride-and-prejudice 85%** —
+misses are ambiguous-vs-character granularity, surfaced in `needs_review`
+rather than silently misattributed.
+
+## FAQ
+
+**Is it legal?** For legally acquired, DRM-free books only. Castbook removes no
+DRM and uploads nothing. Output is for personal use.
+
+**Does my book leave the machine?** No. Parsing, attribution, voices and export
+all run locally; there is no telemetry.
+
+**Do I need a GPU?** No — Kokoro and Pocket-TTS render on CPU. A GPU unlocks
+the Qwen3-TTS VoiceDesign tier (per-character designed voices); run
+`castbook doctor` for your machine's tier.
 
 ## Legality
 

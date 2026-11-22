@@ -11,7 +11,7 @@ import re
 from collections import Counter
 
 from ..artifacts import Chapter, Character, Unit
-from .units import quoted_spans, split_units
+from .units import _apostrophe, _inside_quote, _quote_step, split_units
 
 SAID_VERBS = (
     "said|asked|replied|cried|whispered|shouted|exclaimed|answered|continued|"
@@ -24,7 +24,12 @@ _NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:(?:de|van|von|of|the|al|bin)\s+)?[A-Z][a-z]+
 _NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+"
 NAME = rf"(?-i:((?:the\s+)?(?:{_NAME_TITLED}|{_NAME_PLAIN})))"
 
-TAG_AFTER = re.compile(rf"[”\"']\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
+TAG_AFTER = re.compile(rf"[”\"'\u2019]\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
+_QUOTE_CHAR = re.compile(r"[\"\u201c\u201d\u2018\u2019']")
+FIRST_PERSON = re.compile(
+    rf"[”\"']\s*,?\s*(?:I\s+(?:{SAID_VERBS})|(?:{SAID_VERBS})\s+I)\b",
+    re.IGNORECASE,
+)
 NAME_SAYS = re.compile(rf"{NAME}\s+({SAID_VERBS})", re.IGNORECASE)
 VOCATIVE = re.compile(rf"\b({SAID_VERBS})\b[^.!?]*,\s*{NAME}\s*[.!?]", re.IGNORECASE)
 
@@ -128,36 +133,66 @@ class HeuristicAttributor:
     def attribute(self, chapter: Chapter, cast: list[Character]) -> list[Unit]:
         units = split_units(chapter)
         names = _name_index(cast)
-        last_speaker = ""
+        runs: list[list[tuple[Unit, str | None]]] = []
+        run_after_narration: list[bool] = []
+        in_quote = False
+        cur_para = -1
+        narr_break = True
         for u in units:
             if u.kind != "dialogue":
                 u.speaker = "narrator"
-                last_speaker = ""
+                in_quote = False
+                narr_break = True
                 continue
-            speaker = self._speaker_for(u.text, names) or last_speaker
-            u.speaker = speaker if speaker else "ambiguous"
-            if speaker:
+            if u.paragraph != cur_para:
+                in_quote = False
+                cur_para = u.paragraph
+            hit = self._speaker_for(u.text, names, in_quote)
+            if in_quote and runs:
+                runs[-1].append((u, hit))
+            else:
+                runs.append([(u, hit)])
+                run_after_narration.append(narr_break)
+            narr_break = False
+            in_quote = _inside_quote(u.text, in_quote)
+        last_speaker = ""
+        prev_speaker = ""
+        for run, after_narration in zip(runs, run_after_narration, strict=True):
+            if after_narration:
+                last_speaker = prev_speaker = ""
+            speaker = next((s for _, s in run if s), None)
+            if speaker is None:
+                speaker = prev_speaker or last_speaker or "ambiguous"
+            for u, _ in run:
+                u.speaker = speaker
+            if speaker != "ambiguous" and speaker != last_speaker:
+                prev_speaker = last_speaker or prev_speaker
                 last_speaker = speaker
         return units
 
-    def _speaker_for(self, text: str, names: dict[str, str]) -> str | None:
-        if not quoted_spans(text):
+    def _speaker_for(self, text: str, names: dict[str, str], in_quote: bool = False) -> str | None:
+        zone = _tag_zone(text, in_quote)
+        if not _QUOTE_CHAR.search(zone):
             return None
-        for m in TAG_AFTER.finditer(text):
+        for m in TAG_AFTER.finditer(zone):
             hit = _lookup(m.group(2), names)
             if hit:
                 return hit
-        for m in NAME_SAYS.finditer(text):
+        for m in NAME_SAYS.finditer(zone):
             hit = _lookup(m.group(1), names)
             if hit:
                 return hit
-        residual = quoted_free(text)
+        if FIRST_PERSON.search(zone):
+            hit = _lookup("I", names)
+            if hit:
+                return hit
+        residual = zone
         for raw, cid in names.items():
             if len(raw) <= 3:
                 continue
             pat = re.escape(raw)
             if re.search(
-                rf"\b({SAID_VERBS})\s+(?!to\b|with\b|for\b|of\b)(?:the\s+)?{pat}",
+                rf"\b({SAID_VERBS})\s+(?!to\b|with\b|for\b|of\b)(?:his|her|their|the)?\s*{pat}",
                 residual,
                 re.IGNORECASE,
             ):
@@ -224,12 +259,18 @@ def _gender_of(raw: str) -> str:
     return FIRST_NAME_GENDER.get(first, "unknown")
 
 
-def quoted_free(text: str) -> str:
-    """Text with quoted spans blanked — the zone where speech tags live."""
-    out = text
-    for span in quoted_spans(text):
-        out = out.replace(span, " ", 1)
-    return out
+def _tag_zone(text: str, inside: bool = False) -> str:
+    """Text outside quoted speech — where speaker tags live. Quote marks stay
+    as regex anchors; everything said inside a quote is dropped."""
+    stack: list[str] = ["d"] if inside else []
+    out: list[str] = []
+    for i, ch in enumerate(text):
+        if ch in '"\u201c\u201d\u2018' or (ch == "\u2019" and not _apostrophe(text, i)):
+            _quote_step(stack, ch, text, i)
+            out.append(ch)
+        elif not stack:
+            out.append(ch)
+    return "".join(out)
 
 
 def identity(name: str) -> str:

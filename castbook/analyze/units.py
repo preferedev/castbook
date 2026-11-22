@@ -18,19 +18,54 @@ MAX_UNIT_WORDS = 180
 def split_units(chapter: Chapter) -> list[Unit]:
     units: list[Unit] = []
     seq = 0
-    for para in _paragraphs(chapter.text):
+    for p_index, para in enumerate(_paragraphs(chapter.text)):
+        inside = False
         for piece in _cap(para):
             seq += 1
+            after = _inside_quote(piece, inside)
+            kind = "dialogue" if inside or after or QUOTE_RE.search(piece) else "narration"
             units.append(
                 Unit(
                     id=f"ch{chapter.index:03d}-u{seq:04d}",
                     chapter=chapter.index,
                     text=piece,
                     speaker="",
-                    kind="dialogue" if QUOTE_RE.search(piece) else "narration",
+                    kind=kind,
+                    paragraph=p_index,
                 )
             )
+            inside = after
     return units
+
+
+def _quote_step(stack: list[str], ch: str, text: str, i: int) -> None:
+    """One char of quote tracking: 'd'/'s' levels so nested quotes of the other
+    kind can't close the enclosing speech."""
+    if ch == '"':
+        if stack and stack[-1] == "d":
+            stack.pop()
+        else:
+            stack.append("d")
+    elif ch == "\u201c":
+        stack.append("d")
+    elif ch == "\u2018":
+        stack.append("s")
+    elif stack and (
+        (ch == "\u201d" and stack[-1] == "d")
+        or (ch == "\u2019" and stack[-1] == "s" and not _apostrophe(text, i))
+    ):
+        stack.pop()
+
+
+def _inside_quote(text: str, inside: bool = False) -> bool:
+    stack: list[str] = ["d"] if inside else []
+    for i, ch in enumerate(text):
+        _quote_step(stack, ch, text, i)
+    return bool(stack)
+
+
+def _apostrophe(text: str, i: int) -> bool:
+    return i > 0 and i + 1 < len(text) and text[i - 1].isalnum() and text[i + 1].isalnum()
 
 
 def _paragraphs(text: str) -> list[str]:

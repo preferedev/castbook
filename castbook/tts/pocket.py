@@ -20,7 +20,7 @@ MAX_CHARS = 2000
 
 class PocketBackend(Backend):
     def __init__(self, language: str = "english") -> None:
-        from pocket_tts import TTSModel  # type: ignore[import-untyped]
+        from pocket_tts import TTSModel
 
         self._model = TTSModel.load_model(language)
         self._states: dict[str, object] = {}

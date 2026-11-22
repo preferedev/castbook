@@ -229,6 +229,52 @@ def test_transcript_endpoints(client_setup) -> None:  # type: ignore[no-untyped-
     assert r.status_code == 422  # needs analyze + generate
     assert client.post(f"/api/books/{book_id}/transcript?fmt=docx").status_code == 400
     assert client.get(f"/api/books/{book_id}/chapters/0/transcript").status_code == 404
-    assert (
-        client.get(f"/api/books/{book_id}/chapters/0/transcript?fmt=vtt").status_code == 404
+    assert client.get(f"/api/books/{book_id}/chapters/0/transcript?fmt=vtt").status_code == 404
+
+
+def test_gutenberg_endpoint(client_setup) -> None:  # type: ignore[no-untyped-def]
+    import io
+    import json
+
+    client, _ = client_setup
+    body = json.dumps(
+        {
+            "next": None,
+            "results": [
+                {
+                    "id": 1342,
+                    "title": "Pride and Prejudice",
+                    "authors": [{"name": "Austen, Jane"}],
+                    "download_count": 50000,
+                    "formats": {
+                        "text/html": "https://gutenberg.org/ebooks/1342.html",
+                        "application/epub+zip": "https://gutenberg.org/ebooks/1342.epub3.images",
+                    },
+                },
+                {"id": 1, "title": "No EPUB", "formats": {"text/html": "x"}},
+            ],
+        }
+    ).encode()
+
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    mp = __import__("pytest").MonkeyPatch()
+    mp.setattr("castbook.app.server._public_host", lambda url: None)
+    mp.setattr(
+        "castbook.app.server._url_opener",
+        type("O", (), {"open": lambda self, req, timeout=0: _Resp(body)})(),
     )
+    try:
+        r = client.get("/api/gutenberg?q=pride")
+        assert r.status_code == 200, r.text
+        rows = r.json()["results"]
+        assert len(rows) == 1 and rows[0]["title"] == "Pride and Prejudice"
+        assert rows[0]["author"] == "Austen, Jane" and rows[0]["url"].endswith("epub3.images")
+        assert r.json()["next"] is False
+    finally:
+        mp.undo()

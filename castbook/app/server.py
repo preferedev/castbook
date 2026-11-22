@@ -261,6 +261,43 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                     out.write(chunk)
         return tmp_path
 
+    @app.get("/api/gutenberg")
+    def gutenberg(q: str = "", page: int = 1) -> dict[str, Any]:
+        import json
+
+        params = {"page": str(page)}
+        if q.strip():
+            params["search"] = q.strip()
+        url = "https://gutendex.com/books/?" + urllib.parse.urlencode(params)
+        _public_host(url)
+        req = urllib.request.Request(url, headers={"User-Agent": "castbook/0.1"})
+        for attempt in range(2):
+            try:
+                with _url_opener.open(req, timeout=30) as resp:
+                    data = json.loads(resp.read())
+                break
+            except TimeoutError:
+                if attempt:
+                    raise HTTPException(502, "gutendex timed out — retry") from None
+            except urllib.error.URLError as e:
+                raise HTTPException(502, f"gutendex failed: {e.reason}") from e
+        results = []
+        for r in data.get("results", []):
+            fmts = r.get("formats") or {}
+            epub = next((u for k, u in fmts.items() if "epub" in k), None)
+            if not epub:
+                continue
+            results.append(
+                {
+                    "id": r.get("id"),
+                    "title": r.get("title", "?"),
+                    "author": ((r.get("authors") or [{}])[0] or {}).get("name", ""),
+                    "downloads": r.get("download_count", 0),
+                    "url": epub,
+                }
+            )
+        return {"results": results, "next": bool(data.get("next"))}
+
     @app.post("/api/import")
     def upload(
         file: Annotated[UploadFile | None, File()] = None,

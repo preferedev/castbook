@@ -45,6 +45,16 @@
   </div>
 </section>
 
+<details id="gutenberg-details">
+  <summary class="muted">Find free books — Project Gutenberg</summary>
+  <div class="row" style="margin-top:.4rem">
+    <input id="gb-q" placeholder="search title or author" size="28">
+    <button id="gb-go" class="ghost">Search</button>
+    <span class="muted" id="gb-status"></span>
+  </div>
+  <div id="gb-results"></div>
+</details>
+
 <div id="books"></div>
 
 <details id="models-details" style="margin-top:1rem">
@@ -280,6 +290,40 @@ $("import").onclick = async () => {
     loadBooks();
   } catch (e) { $("import-status").textContent = e.message; }
 };
+async function gbSearch() {
+  const q = $("gb-q").value.trim();
+  $("gb-status").textContent = "searching…";
+  $("gb-results").innerHTML = "";
+  let r;
+  try { r = await api(`/api/gutenberg?q=${encodeURIComponent(q)}`); }
+  catch (e) { $("gb-status").textContent = e.message; return; }
+  $("gb-status").textContent = r.results.length ? "" : "no EPUBs found";
+  for (const b of r.results) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const label = document.createElement("span");
+    label.className = "muted";
+    label.style.flex = "1";
+    label.textContent = `${b.title} — ${b.author} (${b.downloads.toLocaleString()} dl)`;
+    const btn = document.createElement("button");
+    btn.className = "ghost";
+    btn.textContent = "Get";
+    btn.onclick = async () => {
+      btn.disabled = true; btn.textContent = "fetching…";
+      const fd = new FormData(); fd.append("url", b.url);
+      try {
+        const res = await api("/api/import", {method: "POST", body: fd});
+        btn.textContent = "imported";
+        loadBooks();
+      } catch (e) { btn.textContent = "Get"; btn.disabled = false; $("gb-status").textContent = e.message; }
+    };
+    row.appendChild(label); row.appendChild(btn);
+    $("gb-results").appendChild(row);
+  }
+}
+$("gb-go").onclick = gbSearch;
+$("gb-q").onkeydown = (e) => { if (e.key === "Enter") gbSearch(); };
+
 $("import-url-btn").onclick = async () => {
   const url = $("import-url").value.trim();
   if (!url) return;
