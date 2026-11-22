@@ -82,6 +82,12 @@ POCKET_AMBIGUOUS = "george"
 def defaults_for(backend: str) -> tuple[str, str]:
     if backend == "pocket":
         return POCKET_NARRATOR, POCKET_AMBIGUOUS
+    if backend == "qwen":
+        # voice slot holds a VoiceDesign description, not an id — mirror auto_cast
+        return (
+            "calm measured middle-aged narrator, neutral accent, warm timbre",
+            "neutral adult voice, mid pitch, unhurried",
+        )
     return DEFAULT_NARRATOR, DEFAULT_AMBIGUOUS
 
 
