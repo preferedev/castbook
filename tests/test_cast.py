@@ -86,3 +86,12 @@ def test_qwen_cast_uses_vibe_descriptions() -> None:
     assert "narrator" in m["narrator"].voice
     for v in m.values():
         assert _valid_voice(v.voice, set(), "qwen")
+
+
+def test_preset_detection_by_handle_not_punctuation() -> None:
+    from castbook.cast.match import _looks_like_preset
+
+    assert not _looks_like_preset("warm/raspy contralto")
+    assert _looks_like_preset("paul")
+    assert _looks_like_preset("af_heart")
+    assert _looks_like_preset("a+b")

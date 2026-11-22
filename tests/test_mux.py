@@ -67,3 +67,17 @@ def test_abs_layout_dirs_and_metadata(tmp_path: Path) -> None:
     m = json.loads((dest / "metadata.json").read_text())
     assert m["authors"] == ["Jane Austen"]
     assert dest.name == "Pride-Prejudice" and dest.parent.name == "Jane Austen"
+
+
+def test_abs_layout_ignores_stale_m4b_in_mp3_export(tmp_path: Path) -> None:
+    import castbook.audio as audio
+    from castbook.workdir import BookPaths
+
+    book = BookPaths(tmp_path, "b").ensure()
+    outputs = [book.export]
+    (book.export / "old.m4b").write_bytes(b"x")
+    (book.export / "c1.mp3").write_bytes(b"x")
+    (book.export / "playlist.m3u").write_text("")
+    audio.abs_layout(book, BookMeta(title="T", author="A"), outputs, tmp_path / "lib")
+    dest = tmp_path / "lib" / "A" / "T"
+    assert (dest / "c1.mp3").exists() and not (dest / "old.m4b").exists()
