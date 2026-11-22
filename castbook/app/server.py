@@ -292,9 +292,15 @@ def create_app(cfg: Settings) -> FastAPI:
         book = _require_book(cfg, book_id)
         if format is not None and format not in ("m4b", "mp3", "both"):
             raise HTTPException(422, f"bad format {format!r}")
-        outs = export_book(book, cfg, format=format)
-        files = [p.name if p.is_file() else f"{p.name}/" for p in outs]
-        return {"files": files}
+        log = _log_to(book.dir / "job.log")
+        log(f"[export] started ({format or cfg.export.format})")
+
+        def work() -> None:
+            outs = export_book(book, cfg, format=format, log=log)
+            log(f"[export] wrote {', '.join(p.name for p in outs)}")
+
+        _spawn(f"export:{book_id}", work)
+        return {"started": True}
 
     @app.get("/api/books/{book_id}/download/{name}")
     def download(book_id: str, name: str) -> FileResponse:

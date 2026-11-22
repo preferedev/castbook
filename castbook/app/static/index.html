@@ -225,9 +225,23 @@ $("analyze").onclick = () => api(`/api/books/${current}/analyze`, {method: "POST
 $("generate").onclick = () => api(`/api/books/${current}/generate`, {method: "POST"}).then(refreshProgress);
 $("preview-gen").onclick = () => api(`/api/books/${current}/generate?limit=50`, {method: "POST"}).then(refreshProgress);
 $("export").onclick = async () => {
-  const r = await api(`/api/books/${current}/export`, {method: "POST"});
-  $("downloads").innerHTML = r.files.map(f =>
-    `<a href="/api/books/${current}/download/${f}">${esc(f)}</a>`).join("");
+  $("export").disabled = true;
+  $("export").textContent = "Exporting…";
+  await api(`/api/books/${current}/export`, {method: "POST"});
+  const timer = setInterval(async () => {
+    try {
+      const books = await api(`/api/books`);
+      const b = books.find(x => x.book_id === current);
+      if (b) $("downloads").innerHTML = b.exports.map(f =>
+        `<a href="/api/books/${current}/download/${f}">${esc(f)}</a>`).join("");
+      const p = await api(`/api/books/${current}/progress`);
+      if (!p.busy) {
+        clearInterval(timer);
+        $("export").disabled = false;
+        $("export").textContent = "Export";
+      }
+    } catch (e) { /* keep polling */ }
+  }, 1500);
 };
 
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }

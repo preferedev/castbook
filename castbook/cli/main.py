@@ -13,6 +13,7 @@ from ..artifacts import (
     AudioManifest,
     CastingFile,
     ChaptersFile,
+    UnitStatus,
     load_artifact,
     save_artifact,
 )
@@ -274,9 +275,23 @@ def books(
     if not cfg.data_dir.exists():
         typer.echo("(no books yet)")
         return
+    from ..artifacts import load_artifact
+
     for d in sorted(cfg.data_dir.iterdir()):
-        if d.is_dir() and (d / "chapters.json").exists():
-            typer.echo(d.name)
+        if not d.is_dir() or not (d / "chapters.json").exists():
+            continue
+        chapters = load_artifact(ChaptersFile, d)
+        attrib = load_artifact(AttributionFile, d)
+        manifest = load_artifact(AudioManifest, d)
+        title = chapters.meta.title if chapters else "?"
+        done = (
+            sum(1 for e in manifest.units.values() if e.status == UnitStatus.done)
+            if manifest
+            else 0
+        )
+        total = len(attrib.units) if attrib else 0
+        rendered = f" · {done}/{total} rendered" if manifest else " · not rendered"
+        typer.echo(f"{d.name:30} {title}{rendered}")
 
 
 @models_app.command("list")
