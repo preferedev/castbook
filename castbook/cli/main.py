@@ -943,6 +943,15 @@ def serve(
     shown = f"[{host}]" if ":" in host else host
     tqs = f"?token={token}" if token else ""
     typer.echo(f"OPDS catalog (e-reader apps): http://{shown}:{port}/api/opds{tqs}")
+    if token and host not in ("0.0.0.0", "::"):
+        try:
+            import segno
+
+            url = f"http://{shown}:{port}/?token={token}"
+            typer.echo("scan to open on this network:")
+            segno.make(url).terminal(compact=True)
+        except ImportError:
+            pass
     uvicorn.run(create_app(cfg, token=token), host=host, port=port, log_level="info")
 
 

@@ -78,6 +78,7 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = [
     "docx.*",
+    "segno.*",
     "ebooklib.*",
     "kokoro_onnx.*",
     "llama_cpp.*",
