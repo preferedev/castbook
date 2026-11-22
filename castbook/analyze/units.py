@@ -19,18 +19,33 @@ def split_units(chapter: Chapter) -> list[Unit]:
     units: list[Unit] = []
     seq = 0
     for para in _paragraphs(chapter.text):
+        inside = False
         for piece in _cap(para):
             seq += 1
+            after = _inside_quote(piece, inside)
+            kind = "dialogue" if inside or after or QUOTE_RE.search(piece) else "narration"
             units.append(
                 Unit(
                     id=f"ch{chapter.index:03d}-u{seq:04d}",
                     chapter=chapter.index,
                     text=piece,
                     speaker="",
-                    kind="dialogue" if QUOTE_RE.search(piece) else "narration",
+                    kind=kind,
                 )
             )
+            inside = after
     return units
+
+
+def _inside_quote(text: str, inside: bool = False) -> bool:
+    for ch in text:
+        if ch == '"':
+            inside = not inside
+        elif ch in "“‘":
+            inside = True
+        elif ch in "”’":
+            inside = False
+    return inside
 
 
 def _paragraphs(text: str) -> list[str]:

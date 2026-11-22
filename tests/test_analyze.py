@@ -31,3 +31,13 @@ def test_normalize_speaker_shared_surname() -> None:
         Character(id="b", name="Lady Catherine", aliases=["Lady Catherine de Bourgh"]),
     ]
     assert _normalize_speaker("elder mr. bennet", cast2) == "mr. bennet"
+
+
+def test_split_units_keeps_long_quote_dialogue() -> None:
+    from castbook.analyze.units import split_units
+    from castbook.artifacts import Chapter
+
+    speech = "“" + " ".join(" ".join(["word"] * 20) + "." for _ in range(20)) + "”"
+    ch = Chapter(index=0, title="t", text=speech, word_count=len(speech.split()))
+    kinds = [u.kind for u in split_units(ch)]
+    assert len(kinds) > 1 and all(k == "dialogue" for k in kinds), kinds
