@@ -62,7 +62,12 @@ def align_unit(wav: Path, text: str) -> list[list[float | str]]:
     return out
 
 
-def run(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> Path:
+def run(
+    book: BookPaths,
+    cfg: Settings,
+    log: Callable[[str], None] = print,
+    chapters: set[int] | None = None,
+) -> Path:
     attrib = load_artifact(AttributionFile, book.dir)
     manifest = load_artifact(AudioManifest, book.dir)
     if attrib is None or manifest is None:
@@ -83,6 +88,7 @@ def run(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> P
         and u.id in manifest.units
         and manifest.units[u.id].status == UnitStatus.done
         and book.unit_wav(u.id).exists()
+        and (chapters is None or u.chapter in chapters)
     ]
     for i, u in enumerate(pending):
         done[u.id] = {

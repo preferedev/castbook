@@ -925,12 +925,13 @@ def serve(
 def align(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    chapters: Annotated[str | None, typer.Option("--chapters")] = None,
 ) -> None:
     """Word-level timestamps via faster-whisper (needs castbook[align])."""
     from ..audio import align as align_mod
 
     cfg = _cfg(config)
-    align_mod.run(_book(cfg, book), cfg)
+    align_mod.run(_book(cfg, book), cfg, chapters=_chapter_range(chapters))
 
 
 @app.command()
