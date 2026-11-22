@@ -275,10 +275,26 @@ loadModels().catch(() => {});
 
 async function loadMachine() {
   const m = await api("/api/machine");
-  const el = document.querySelector("header .muted:last-of-type") || document.querySelector(".muted");
   const note = document.createElement("span");
   note.className = "muted"; note.style.marginLeft = "1rem"; note.style.fontSize = ".75rem";
-  note.textContent = m.verdict;
+  const c = await api("/api/config");
+  const sel = document.createElement("select");
+  sel.title = "tts backend";
+  for (const b of ["kokoro", "pocket", "qwen"]) {
+    const o = document.createElement("option");
+    o.value = o.textContent = b;
+    if (b === c.tts.backend) o.selected = true;
+    sel.appendChild(o);
+  }
+  sel.onchange = async () => {
+    sel.disabled = true;
+    await api("/api/config", {method: "PUT", headers: {"content-type":"application/json"}, body: JSON.stringify({tts: {backend: sel.value}})});
+    sel.disabled = false;
+    await loadVoices();
+    if (current) openBook(current);
+  };
+  note.appendChild(sel);
+  note.append(" " + m.verdict);
   document.body.insertBefore(note, document.body.firstElementChild.nextSibling);
 }
 loadMachine();

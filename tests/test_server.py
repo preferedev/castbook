@@ -124,3 +124,14 @@ def test_models_endpoints(tmp_path, monkeypatch) -> None:
     assert client.post("/api/models/pull?ids=kokoro-v1").json() == {"ok": True}
     log = client.get("/api/models/log").json()["lines"]
     assert any("kokoro-v1" in line for line in log)
+
+
+def test_config_backend_switch(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    cfg_file = tmp_path / "config.toml"
+    monkeypatch.setenv("CASTBOOK_CONFIG", str(cfg_file))
+    client = _client(tmp_path, monkeypatch)
+    r = client.put("/api/config", json={"tts": {"backend": "nope"}})
+    assert r.status_code == 422
+    r = client.put("/api/config", json={"tts": {"backend": "pocket"}})
+    assert r.status_code == 200 and r.json()["tts"]["backend"] == "pocket"
+    assert 'backend = "pocket"' in cfg_file.read_text()

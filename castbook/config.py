@@ -47,7 +47,7 @@ class LlmSettings(BaseModel):
 
 
 class TtsSettings(BaseModel):
-    backend: str = "kokoro"  # kokoro | pocket
+    backend: str = "kokoro"  # kokoro | pocket | qwen
 
 
 class ExportSettings(BaseModel):
@@ -76,3 +76,23 @@ class Settings(BaseModel):
     def save_default(self, path: Path) -> Path:
         path.write_text(DEFAULT_CONFIG)
         return path
+
+    def save(self, path: Path | None = None) -> Path:
+        path = path or Path(os.environ.get("CASTBOOK_CONFIG", "config.toml"))
+        lines = [f'data_dir = "{self.data_dir}"', f'models_dir = "{self.models_dir}"']
+        for section in ("llm", "tts", "export"):
+            lines.append(f"\n[{section}]")
+            for k, v in getattr(self, section).model_dump().items():
+                if v is None:
+                    continue
+                lines.append(f"{k} = {_toml_val(v)}")
+        path.write_text("\n".join(lines) + "\n")
+        return path
+
+
+def _toml_val(v: object) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, (int, float)):
+        return str(v)
+    return f'"{v}"'

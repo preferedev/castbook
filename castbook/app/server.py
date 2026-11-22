@@ -94,6 +94,24 @@ def create_app(cfg: Settings) -> FastAPI:
             "verdict": mi.verdict,
         }
 
+    @app.get("/api/config")
+    def get_config() -> dict[str, Any]:
+        return cfg.model_dump(mode="json")
+
+    @app.put("/api/config")
+    def put_config(patch: dict[str, Any]) -> dict[str, Any]:
+        tts = patch.get("tts") or {}
+        backend = tts.get("backend")
+        if backend is not None:
+            if backend not in ("kokoro", "pocket", "qwen"):
+                raise HTTPException(422, f"unknown tts backend: {backend}")
+            cfg.tts.backend = backend
+        cfg.save()
+        global _backend
+        with _backend_lock:
+            _backend = None
+        return cfg.model_dump(mode="json")
+
     @app.get("/api/voices")
     def voices() -> list[dict[str, Any]]:
         from ..cast.library import POCKET_LIBRARY
