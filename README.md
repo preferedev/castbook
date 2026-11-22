@@ -63,6 +63,9 @@ un-rendered units are synthesized.
 | `castbook search <book> <text>` | who said it: every matching unit with chapter, speaker, excerpt |
 | `castbook rename <book> <sp> <name>` | rename a character (old name kept as an alias) |
 | `castbook chapters <book>` | chapter indexes, titles, word counts |
+| `castbook verify <book>` | health check: coverage, failed units, chapter gaps, stale export |
+| `castbook import <files> --lang fr` | override detected language (misdetected epubs) |
+| `castbook export <book> --split 8` | split the M4B into parts of at most N hours |
 
 ## Docker
 
