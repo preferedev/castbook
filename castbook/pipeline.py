@@ -171,12 +171,13 @@ def run_book(
     lang: str | None = None,
     split_hours: float | None = None,
     epub: bool = False,
+    chapters: set[int] | None = None,
 ) -> BookPaths:
     book = import_book(src, cfg, log, lang=lang)
     analyze_book(book, cfg, log)
     cast_book(book, cfg, log=log)
-    generate_book(book, cfg, log=log, speed=speed, workers=workers)
-    export_book(book, cfg, log, layout=layout, split_hours=split_hours)
+    generate_book(book, cfg, log=log, speed=speed, workers=workers, chapters=chapters)
+    export_book(book, cfg, log, layout=layout, only=chapters, split_hours=split_hours)
     if epub:
         from .epubout import build_media_epub
 

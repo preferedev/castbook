@@ -794,6 +794,9 @@ def run_cmd(
     epub: Annotated[
         bool, typer.Option("--epub", help="also write a read-along EPUB3 (media overlay)")
     ] = False,
+    chapters: Annotated[
+        str | None, typer.Option("--chapters", help="render+export a subset, e.g. 1-3")
+    ] = None,
 ) -> None:
     """Full pipeline: import → analyze → cast → generate → export."""
     cfg = _cfg(config)
@@ -816,6 +819,7 @@ def run_cmd(
                 lang=lang,
                 split_hours=split,
                 epub=epub,
+                chapters=_chapter_range(chapters),
             )
             typer.echo(f"done: {book.export}")
     finally:
