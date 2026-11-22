@@ -26,7 +26,7 @@ un-rendered units are synthesized.
 | `castbook import <file> [<file>…]` | import one or more ebooks (EPUB/PDF/TXT/MD) → `chapters.json` |
 | `castbook analyze <book>` | attribute every line (`--backend heuristic\|llamacpp` to override config) |
 | `castbook cast <book>` | auto-assign voices; `--map name=voice` (mix voices as `a:0.7+b:0.3`), `--speed name=rate` |
-| `castbook generate <book>` | synthesize audio (resumable; `--chapters 1-3,7`, `--limit 50` preview, `--align` word timestamps) |
+| `castbook generate <book>` | synthesize audio (resumable; `--chapters 1-3,7`, `--limit 50` preview, `--workers 4` parallel, `--align` word timestamps) |
 | `castbook export <book>` | mux chaptered M4B (+ `--format mp3`/`both`) |
 | `castbook review <book>` | list ambiguous units; `--set unit=speaker` to fix |
 | `castbook merge <book> <a> <b>` | fold duplicate speaker `a` into `b` |
@@ -48,7 +48,7 @@ docker run -v $PWD/data:/data castbook doctor
 
 `castbook serve` then open `http://localhost:8484`: import files (multi-select or drag-and-drop), audition voices
 with the ▶ button, review and
-override voice casting (including per-speaker speed and merging duplicate speakers), generate (or "Preview 50" for a quick sample), export runs in the background — download the M4B when it lands.
+override voice casting (including per-speaker speed, `voiceA:0.7+voiceB:0.3` mixes, and merging duplicate speakers), generate (or "Preview 50" for a quick sample), play any rendered chapter with ▶ audio, re-render just a range with ↻, and export in the background — download the M4B when it lands.
 The reader view highlights the spoken word when `castbook align` has run, remembers
 your position, and supports space/←/→/↑/↓ shortcuts.
 
