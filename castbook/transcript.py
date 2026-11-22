@@ -41,8 +41,6 @@ def write_transcript(
         want = next((k for k, v in speakers.items() if v.lower() == speaker.lower()), speaker)
     by_chapter: dict[int, list[Any]] = {}
     for u in attribution.units:
-        if want is not None and u.speaker != want:
-            continue
         by_chapter.setdefault(u.chapter, []).append(u)
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -50,6 +48,8 @@ def write_transcript(
     for ch_index, units in sorted(by_chapter.items()):
         ch_audio = manifest.chapters.get(str(ch_index))
         if ch_audio is not None and ch_audio.status != ChapterStatus.done:
+            continue
+        if want is not None and not any(u.speaker == want for u in units):
             continue
         t = 0.0
         prev = None
@@ -60,8 +60,9 @@ def write_transcript(
                 continue
             if prev is not None:
                 t += pause_after(prev, u)
-            speaker = speakers.get(u.speaker, u.speaker)
-            cues.append((t, t + entry.duration_s, speaker, u.text))
+            if want is None or u.speaker == want:
+                speaker_name = speakers.get(u.speaker, u.speaker)
+                cues.append((t, t + entry.duration_s, speaker_name, u.text))
             t += entry.duration_s
             prev = u
         if not cues:
