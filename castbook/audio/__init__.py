@@ -173,12 +173,17 @@ def export(
         out = mux_m4b(wavs, titles, chapters.meta, m4b_path, book.dir)
         outputs.append(out)
         log(f"[export] {out.name}")
+    label = _range_label(sorted(only)) if only is not None else ""
     if fmt in ("mp3", "both"):
-        out = export_mp3(wavs, titles, book.export)
+        mp3_dir = book.export
+        if label:
+            mp3_dir = book.export / f"{_safe_dir(getattr(chapters.meta, 'title', 'book'))}-{label}"
+        out = export_mp3(wavs, titles, mp3_dir)
         outputs.append(out)
         log(f"[export] mp3 chapters → {out.name}/")
     if layout == "abs":
-        dest = abs_layout(book, chapters.meta, outputs, book.export / "abs")
+        abs_root = book.export / (f"abs-{label}" if label else "abs")
+        dest = abs_layout(book, chapters.meta, outputs, abs_root)
         zip_path = shutil.make_archive(
             str(
                 book.export
