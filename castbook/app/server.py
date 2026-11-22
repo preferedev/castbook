@@ -792,7 +792,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         manifest = load_artifact(AudioManifest, book.dir)
         if attribution is None or manifest is None:
             raise HTTPException(409, "nothing to regenerate")
-        unit_ids = {u.id for u in attribution.units if u.chapter in sel}
+        if failed:
+            unit_ids = {
+                u.id
+                for u in attribution.units
+                if u.chapter in sel
+                and manifest.units.get(u.id) is not None
+                and manifest.units[u.id].status == UnitStatus.failed
+            }
+        else:
+            unit_ids = {u.id for u in attribution.units if u.chapter in sel}
         popped = sum(1 for uid in unit_ids if uid in manifest.units)
 
         def work() -> None:
