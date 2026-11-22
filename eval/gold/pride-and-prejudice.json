@@ -18,9 +18,10 @@
       "aliases": [
         "Mr. Bennet",
         "Mrs. Bennet",
-        "her mother"
+        "her mother",
+        "her father"
       ],
-      "gender": "unknown"
+      "gender": "m"
     }
   ],
   "labels": {
@@ -31,19 +32,19 @@
     "ch001-u0005": "elizabeth",
     "ch001-u0006": "bennet",
     "ch001-u0007": "bennet",
-    "ch001-u0008": "narrator",
-    "ch001-u0009": "bennet",
+    "ch001-u0009": "narrator",
     "ch001-u0010": "bennet",
-    "ch001-u0011": "kitty",
-    "ch001-u0012": "kitty",
-    "ch001-u0013": "elizabeth",
-    "ch001-u0014": "bennet",
-    "ch001-u0015": "bennet",
+    "ch001-u0011": "bennet",
+    "ch001-u0013": "kitty",
+    "ch001-u0014": "kitty",
+    "ch001-u0015": "elizabeth",
     "ch001-u0016": "bennet",
     "ch001-u0017": "bennet",
     "ch001-u0018": "bennet",
     "ch001-u0019": "bennet",
-    "ch001-u0020": "narrator"
+    "ch001-u0020": "bennet",
+    "ch001-u0021": "bennet",
+    "ch001-u0023": "narrator"
   },
   "chapter_index": 1
 }

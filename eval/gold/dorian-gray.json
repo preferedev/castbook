@@ -32,20 +32,20 @@
   ],
   "labels": {
     "ch000-u0001": "dorian-gray",
-    "ch000-u0002": "basil-hallward",
-    "ch000-u0003": "dorian-gray",
-    "ch000-u0004": "basil-hallward",
-    "ch000-u0005": "lord-henry-wotton",
-    "ch000-u0006": "dorian-gray",
+    "ch000-u0003": "basil-hallward",
+    "ch000-u0004": "dorian-gray",
+    "ch000-u0006": "basil-hallward",
     "ch000-u0007": "lord-henry-wotton",
-    "ch000-u0008": "dorian-gray",
-    "ch000-u0010": "lord-henry-wotton",
-    "ch000-u0011": "basil-hallward",
-    "ch000-u0012": "lord-henry-wotton",
-    "ch000-u0013": "dorian-gray",
+    "ch000-u0009": "dorian-gray",
+    "ch000-u0011": "lord-henry-wotton",
+    "ch000-u0012": "dorian-gray",
     "ch000-u0014": "lord-henry-wotton",
     "ch000-u0015": "basil-hallward",
     "ch000-u0016": "lord-henry-wotton",
-    "ch000-u0017": "dorian-gray"
+    "ch000-u0017": "dorian-gray",
+    "ch000-u0018": "lord-henry-wotton",
+    "ch000-u0019": "basil-hallward",
+    "ch000-u0020": "lord-henry-wotton",
+    "ch000-u0021": "dorian-gray"
   }
 }

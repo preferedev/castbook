@@ -224,18 +224,78 @@ class HeuristicAttributor:
                 if not left and not tagged and total and quoted / total < 0.3:
                     resolved[i] = "narrator"
                     continue
-                cands = [p for p in parties if p not in _addressed(run, names)]
+                spans = [
+                    m.group(1).strip() for m in _QUOTED.finditer(" ".join(u.text for u, _ in run))
+                ]
+                named = {
+                    _lookup(
+                        re.sub(
+                            r"\b(?:sir|ma'am|miss|madam)\b",
+                            "",
+                            sp,
+                            flags=re.IGNORECASE,
+                        ).strip(" .,!?'\u2019"),
+                        names,
+                    )
+                    for sp in spans
+                    if sp
+                }
+                named.discard(None)
+                honorific = any(
+                    re.search(r"\b(?:sir|ma'am|miss|madam)\b", sp, re.IGNORECASE) for sp in spans
+                )
+                self_id = (
+                    len(named) == 1
+                    and len(named) == len([sp for sp in spans if sp])
+                    and (honorific or len([sp for sp in spans if sp]) > 1)
+                )
+                if self_id:
+                    resolved[i] = named.pop()
+                    continue
+                pool = parties or cast_ids
+                cands = [p for p in pool if p not in _addressed(run, names)]
                 if len(cands) == 1:
                     resolved[i] = cands[0]
                     continue
+                if len(cands) > 1 and _pronoun_tag(run):
+                    g = {c.id: c.gender for c in cast}
+                    zone_text = " ".join(_tag_zone(u.text) for u, _ in run)
+                    want = "m" if re.search(r"\bhe\b", zone_text, re.IGNORECASE) else "f"
+                    gendered = [p for p in cands if (g.get(p) or "").lower().startswith(want)]
+                    if len(gendered) == 1:
+                        resolved[i] = gendered[0]
+                        for u, _ in run:
+                            u.guess = True
+                        continue
                 if len(cands) != 2:
+                    continue
+                if first_person and re.search(
+                    r"(?:^|[.!?]\s+)[“”\"']*\s*(?:he|she)\b[^.!?]*\b(?:me|us)\b",
+                    zone,
+                    re.IGNORECASE,
+                ):
+                    resolved[i] = next((p for p in cands if p != names["I"]), None)
                     continue
                 if first_person and _pronoun_tag(run):
                     resolved[i] = next((p for p in cands if p != names["I"]), None)
                     continue
-                anchor = left if left in cands else next(
-                    (resolved[j] for j in seg[pos + 1 :] if resolved[j] in cands),
-                    None,
+                qtext = " ".join(u.text for u, _ in run)
+                if (
+                    left in cands
+                    and quoted >= 15 * 6
+                    and not re.search(r'[!?]["\u201d\'\u2019]*\s*$', qtext.strip())
+                ):
+                    resolved[i] = left
+                    for u, _ in run:
+                        u.guess = True
+                    continue
+                anchor = (
+                    left
+                    if left in cands
+                    else next(
+                        (resolved[j] for j in seg[pos + 1 :] if resolved[j] in cands),
+                        None,
+                    )
                 )
                 if anchor:
                     resolved[i] = cands[1] if anchor == cands[0] else cands[0]
@@ -448,10 +508,20 @@ def _addressed(run: list[tuple[Unit, str | None]], names: dict[str, str]) -> set
     for u, _ in run:
         for m in _QUOTED.finditer(u.text):
             span = m.group(1)
+            lone = re.sub(
+                r"\b(?:sir|ma'am|miss|madam)\b", "", span.strip(), flags=re.IGNORECASE
+            ).strip(" .,!?'\u2019")
+            lone_is_name = lone in names or (
+                len(lone) > 3
+                and any(
+                    re.fullmatch(re.escape(raw).replace(r"\ ", r"\s+"), lone, re.IGNORECASE)
+                    for raw in names
+                )
+            )
             for raw, cid in names.items():
-                if len(raw) <= 3:
-                    continue
                 pat = re.escape(raw).replace(r"\ ", r"\s+")
+                if lone_is_name and re.fullmatch(pat, lone, re.IGNORECASE):
+                    continue
                 if re.search(
                     rf"(?:^|[,.!?;\u2014\u2013]\s*)(?:my\s+(?:dear|dearest|love)\s+)?{pat}\s*(?=[,.!?;\u2014\u2013]|$)",
                     span,
@@ -486,14 +556,18 @@ def _beat_speaker(zone: str, names: dict[str, str]) -> str | None:
     if not sents:
         return None
     last = sents[-1]
-    if re.match(r"(?:He|She|They)\b", last.lstrip("“”\"', ")):
+    head = last.lstrip("“”\"', ")
+    pronoun_subject = re.match(r"(?:he|she|they)\b", head, re.IGNORECASE) or re.search(
+        rf"\b{SAID_VERBS}\s+(?:he|she|they)\b", last, re.IGNORECASE
+    )
+    if pronoun_subject:
         if not re.search(rf"\b{SAID_VERBS}\b", last):
             return None
         for prev in reversed(sents[:-1]):
             hit = _subject_name(prev, names) or _any_name(prev, names)
             if hit:
                 return hit
-            if not re.match(r"(?:He|She|They)\b", prev.lstrip("“”\"', ")):
+            if not re.match(r"(?:he|she|they)\b", prev.lstrip("“”\"', "), re.IGNORECASE):
                 return None
         return None
     return _subject_name(last, names)
