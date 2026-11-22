@@ -545,14 +545,14 @@ def _addressed(run: list[tuple[Unit, str | None]], names: dict[str, str]) -> set
                     span,
                 ) or re.search(rf"\b{pat}\s+\w*\s*(?:{SAID_VERBS})\b", span):
                     out.add(cid)
-        for collective in ("crew", "crowd", "chorus", "seamen", "mariners"):
-            group_id = _lookup(collective, names) or _lookup(collective.title(), names)
-            if group_id and re.search(
-                r"(?:^|[,.!?;\u2014\u2013]\s*)(?:my\s+)?(?:men|lads|mates|hearties|boys|friends)\s*(?=[,.!?;\u2014\u2013]|$)",
-                span,
-                re.IGNORECASE,
-            ):
-                out.add(group_id)
+            for collective in ("crew", "crowd", "chorus", "seamen", "mariners"):
+                group_id = _lookup(collective, names) or _lookup(collective.title(), names)
+                if group_id and re.search(
+                    r"(?:^|[,.!?;\u2014\u2013]\s*)(?:my\s+)?(?:men|lads|mates|hearties|boys|friends)\s*(?=[,.!?;\u2014\u2013]|$)",
+                    span,
+                    re.IGNORECASE,
+                ):
+                    out.add(group_id)
     return out
 
 
