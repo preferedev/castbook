@@ -41,6 +41,7 @@
     <button id="pick" class="ghost">Choose file…</button>
     <input id="import-url" placeholder="…or paste an ebook URL" size="30">
     <button id="import-url-btn" class="ghost">Fetch</button>
+    <label class="muted" style="font-size:.8rem" title="after import, run analyze → cast → generate → export"><input type="checkbox" id="import-run"> +run</label>
     <span class="muted" id="import-status"></span>
     <button id="run-library" class="ghost" title="run every imported book through the pipeline">Run library</button>
     <span class="muted" id="lib-status" style="font-size:.8rem"></span>
@@ -397,27 +398,26 @@ $("pick").onclick = () => $("file").click();
 }));
 
 $("import").onclick = async () => {
+  const ids = [];
   for (const f of $("file").files) {
     const form = new FormData();
     form.append("file", f);
     $("import-status").textContent = `importing ${f.name}…`;
-    try { await api("/api/import", {method: "POST", body: form}); }
+    try {
+      const r = await api("/api/import", {method: "POST", body: form});
+      ids.push(r.book_id);
+    }
     catch (e) { $("import-status").textContent = e.message; loadBooks(); return; }
   }
   $("import-status").textContent = "imported";
   $("file").value = "";
+  if ($("import-run").checked) {
+    for (const id of ids) {
+      $("import-status").textContent = `imported — pipeline started for ${id}`;
+      api(`/api/books/${id}/run`, {method: "POST"}).catch(e => { $("import-status").textContent = e.message; });
+    }
+  }
   loadBooks();
-  return;
-  const f = $("file").files[0];
-  if (!f) return;
-  $("import-status").textContent = "parsing…";
-  const fd = new FormData();
-  fd.append("file", f);
-  try {
-    const r = await api("/api/import", {method: "POST", body: fd});
-    $("import-status").textContent = `imported: ${r.book_id}`;
-    loadBooks();
-  } catch (e) { $("import-status").textContent = e.message; }
 };
 async function gbSearch() {
   const q = $("gb-q").value.trim();
@@ -443,6 +443,7 @@ async function gbSearch() {
       try {
         const res = await api("/api/import", {method: "POST", body: fd});
         btn.textContent = "imported";
+        if ($("import-run").checked) api(`/api/books/${res.book_id}/run`, {method: "POST"}).catch(() => {});
         loadBooks();
       } catch (e) { btn.textContent = "Get"; btn.disabled = false; $("gb-status").textContent = e.message; }
     };
@@ -463,6 +464,7 @@ $("import-url-btn").onclick = async () => {
     const r = await api("/api/import", {method: "POST", body: fd});
     $("import-status").textContent = `imported: ${r.book_id}`;
     $("import-url").value = "";
+    if ($("import-run").checked) api(`/api/books/${r.book_id}/run`, {method: "POST"}).catch(() => {});
     loadBooks();
   } catch (e) { $("import-status").textContent = e.message; }
 };
