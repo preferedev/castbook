@@ -181,6 +181,7 @@ class HeuristicAttributor:
             if after_narration:
                 last_speaker = prev_speaker = ""
             speaker = next((s for _, s in run if s), None)
+            guessed = speaker is None
             if speaker is None:
                 quoted = sum(len(q) for u, _ in run for q in quoted_spans(u.text))
                 total = sum(len(u.text) for u, _ in run)
@@ -190,6 +191,8 @@ class HeuristicAttributor:
                     speaker = prev_speaker or last_speaker or "ambiguous"
             for u, _ in run:
                 u.speaker = speaker
+                if guessed and speaker not in ("ambiguous", "narrator"):
+                    u.guess = True
             if speaker not in ("ambiguous", "narrator") and speaker != last_speaker:
                 prev_speaker = last_speaker or prev_speaker
                 last_speaker = speaker
