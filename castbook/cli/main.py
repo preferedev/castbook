@@ -264,6 +264,9 @@ def transcript(
     speaker: Annotated[
         str | None, typer.Option("--speaker", help="only this speaker's lines (id or name)")
     ] = None,
+    merge: Annotated[
+        bool, typer.Option("--merge", help="one file with continuous timestamps")
+    ] = False,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Write per-chapter speaker-labeled transcripts (needs analyze + generate)."""
@@ -273,9 +276,10 @@ def transcript(
     book_paths = _book(cfg, book)
     if fmt not in ("srt", "vtt", "txt"):
         raise typer.BadParameter("fmt must be srt, vtt or txt")
-    written = write_transcript(
-        book_paths, out or book_paths.dir / "transcript", fmt, speaker=speaker
+    dest = out or (
+        book_paths.dir / "transcript" / f"full.{fmt}" if merge else book_paths.dir / "transcript"
     )
+    written = write_transcript(book_paths, dest, fmt, speaker=speaker)
     typer.echo(
         f"wrote {len(written)} transcript file(s) to {written[0].parent if written else out}"
     )
