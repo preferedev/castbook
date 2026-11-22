@@ -294,9 +294,11 @@ $("import-url-btn").onclick = async () => {
   } catch (e) { $("import-status").textContent = e.message; }
 };
 async function dlTranscript(id) {
-  try { await api(`/api/books/${id}/transcript`, {method: "POST"}); }
+  let r;
+  try { r = await api(`/api/books/${id}/transcript`, {method: "POST"}); }
   catch (e) { $("import-status").textContent = e.message; return; }
-  window.open(tok(`/api/books/${id}/chapters/1/transcript`), "_blank");
+  if (r.first_chapter == null) { $("import-status").textContent = "no rendered chapters yet"; return; }
+  window.open(tok(`/api/books/${id}/chapters/${r.first_chapter}/transcript?fmt=srt`), "_blank");
 }
 async function loadLexicon(id) {
   const r = await api(`/api/books/${id}/lexicon`);

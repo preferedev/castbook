@@ -500,10 +500,10 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         return FileResponse(wav, media_type="audio/wav")
 
     @app.get("/api/books/{book_id}/chapters/{chapter}/transcript")
-    def chapter_transcript(book_id: str, chapter: int) -> FileResponse:
+    def chapter_transcript(book_id: str, chapter: int, fmt: str | None = None) -> FileResponse:
         book = _require_book(cfg, book_id)
         tr_dir = book.dir / "transcript"
-        for ext in ("srt", "vtt", "txt"):
+        for ext in [fmt] if fmt else ["srt", "vtt", "txt"]:
             f = tr_dir / f"ch{chapter:03d}.{ext}"
             if f.exists():
                 return FileResponse(f)
@@ -520,7 +520,8 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             written = write_transcript(book, book.dir / "transcript", fmt)
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
-        return {"ok": True, "count": len(written)}
+        first = int(written[0].stem[2:]) if written else None
+        return {"ok": True, "count": len(written), "first_chapter": first}
 
     @app.post("/api/preview")
     def preview(spec: dict[str, Any]) -> FileResponse:

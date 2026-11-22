@@ -228,4 +228,7 @@ def test_transcript_endpoints(client_setup) -> None:  # type: ignore[no-untyped-
     r = client.post(f"/api/books/{book_id}/transcript")
     assert r.status_code == 422  # needs analyze + generate
     assert client.post(f"/api/books/{book_id}/transcript?fmt=docx").status_code == 400
-    assert client.get(f"/api/books/{book_id}/chapters/1/transcript").status_code == 404
+    assert client.get(f"/api/books/{book_id}/chapters/0/transcript").status_code == 404
+    assert (
+        client.get(f"/api/books/{book_id}/chapters/0/transcript?fmt=vtt").status_code == 404
+    )
