@@ -164,9 +164,8 @@ async function readNow() {
   if (readPoll) clearInterval(readPoll);
   readPoll = setInterval(async () => {
     const s = await api(`/api/read/${readId}/status`);
-    $("read-status").textContent = `${s.done}/${s.total} chunks`;
-    if (s.done >= s.total) clearInterval(readPoll);
-    if (a.paused && !a.src) advanceRead();
+    $("read-status").textContent = s.error ? `failed: ${s.error}` : `${s.done}/${s.total} chunks`;
+    if (s.done >= s.total || s.error) clearInterval(readPoll);
   }, 1500);
   advanceRead();
 }
