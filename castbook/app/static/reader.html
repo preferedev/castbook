@@ -7,6 +7,7 @@
   .u { display:block; margin:0 0 .6rem; padding:.1rem .3rem; border-radius:.2rem; cursor:default; }
   .u[data-audio] { cursor:pointer; }
   .u.playing { background:#fff3c4; }
+  .w.playing { background:#ffd54d; border-radius:.15rem; }
   .who { font-size:.7rem; color:#888; vertical-align:.1rem; margin-right:.4rem; font-family:system-ui; }
   h2 { font-family:system-ui; font-size:1.1rem; margin-top:2rem; }
   header { font-family:system-ui; margin-bottom:1rem; }
@@ -27,7 +28,7 @@
 const BOOK = "__BOOK_ID__";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
-let units = [], cur = -1;
+let units = [], cur = -1, align = {}, curWord = -1;
 const audio = new Audio();
 audio.onended = () => playAt(nextPlayable(cur));
 $("spd").onchange = e => audio.playbackRate = +e.target.value;
@@ -36,6 +37,7 @@ async function boot() {
   $("title").textContent = BOOK;
   const d = await (await fetch(`/api/books/${BOOK}/units`)).json();
   units = d.units;
+  align = await (await fetch(`/api/books/${BOOK}/align`)).json();
   let lastCh = -1;
   $("body").innerHTML = units.map((u, i) => {
     const ch = u.chapter !== lastCh ? `<h2>Chapter ${u.chapter + 1}</h2>` : "";
@@ -55,11 +57,37 @@ async function boot() {
 const nextPlayable = i => units.findIndex((u, j) => j > i && u.has_audio);
 const prevPlayable = i => { for (let j = i - 1; j >= 0; j--) if (units[j].has_audio) return j; return -1; };
 
+function spanWords(i) {
+  const words = align[units[i].id];
+  if (!words) return;
+  const el = $(`u${i}`);
+  const who = el.querySelector(".who");
+  el.innerHTML = (who ? who.outerHTML : "") +
+    words.map(w => `<span class="w">${esc(w[0])}</span>`).join(" ");
+}
+
+audio.ontimeupdate = () => {
+  const words = cur >= 0 && align[units[cur].id];
+  if (!words) return;
+  const t = audio.currentTime;
+  let idx = -1;
+  for (let k = 0; k < words.length; k++) if (t >= words[k][1]) idx = k;
+  if (idx !== curWord) {
+    curWord = idx;
+    document.querySelectorAll(".w.playing").forEach(e => e.classList.remove("playing"));
+    const el = $(`u${cur}`);
+    const spans = el && el.querySelectorAll(".w");
+    if (spans && spans[idx]) spans[idx].classList.add("playing");
+  }
+};
+
 function playAt(i) {
   if (i < 0 || !units[i].has_audio) { audio.pause(); $("play").textContent = "▶"; return; }
   document.querySelectorAll(".u.playing").forEach(e => e.classList.remove("playing"));
   cur = i;
+  curWord = -1;
   const el = $(`u${i}`);
+  spanWords(i);
   el.classList.add("playing");
   el.scrollIntoView({block: "center", behavior: "smooth"});
   audio.src = `/api/books/${BOOK}/audio/${units[i].id}`;

@@ -126,6 +126,13 @@ def create_app(cfg: Settings) -> FastAPI:
             "units": len(attrib.units) if attrib else 0,
         }
 
+    @app.get("/api/books/{book_id}/align")
+    def alignment(book_id: str) -> Any:
+        import json
+
+        f = _require_book(cfg, book_id).dir / "align.json"
+        return json.loads(f.read_text()) if f.exists() else {}
+
     @app.post("/api/books/{book_id}/merge")
     def merge(book_id: str, src: str, dst: str) -> dict[str, Any]:
         from ..analyze.reconcile import merge_speakers

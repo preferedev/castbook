@@ -312,6 +312,18 @@ def serve(
 
 
 @app.command()
+def align(
+    book: str,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Word-level timestamps via faster-whisper (needs castbook[align])."""
+    from ..audio import align as align_mod
+
+    cfg = _cfg(config)
+    align_mod.run(_book(cfg, book), cfg)
+
+
+@app.command()
 def merge(
     book: str,
     src: Annotated[str, typer.Argument(help="speaker id to fold away")],
