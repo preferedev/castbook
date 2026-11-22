@@ -824,13 +824,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         voice = str(spec.get("voice", "af_sarah"))
         speed = float(spec.get("speed") or 1.0)
         speed = speed if 0 < speed <= 2 else 1.0
+        emotion = str(spec.get("emotion", "neutral"))
         text = str(spec.get("text") or "A quick preview of this voice.")
-        out = cfg.data_dir / ".previews" / f"{voice}-{speed}-{abs(hash(text))}.wav"
+        out = cfg.data_dir / ".previews" / f"{voice}-{speed}-{emotion}-{abs(hash(text))}.wav"
         out.parent.mkdir(parents=True, exist_ok=True)
         if not out.exists():
             backend = _preview_backend(cfg)
             backend.synthesize(
-                text[:300], VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed), out
+                text[:300],
+                VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed, emotion=emotion),
+                out,
             )
         return FileResponse(out, media_type="audio/wav")
 

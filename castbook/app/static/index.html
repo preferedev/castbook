@@ -561,7 +561,8 @@ async function loadReview(id) {
   const names = [...document.querySelectorAll("#cast-table select, #cast-table input[data-voice-text]")]
     .map(x => x.dataset.speaker).concat(["narrator"]);
   $("review-table").innerHTML = units.map(u =>
-    `<tr><td class="muted" style="font-size:.8rem">ch${u.chapter}${u.guess ? " ~" : ""}</td>` +
+    `<tr data-utext="${esc(u.text.slice(0, 300))}" data-uspeaker="${esc(u.speaker || "")}">` +
+    `<td class="muted" style="font-size:.8rem">ch${u.chapter}${u.guess ? " ~" : ""}</td>` +
     `<td>${esc(u.text.slice(0,140))}</td>` +
     `<td><select data-unit="${u.id}">` +
     `<option value="">pick speaker…</option>` +
@@ -570,7 +571,22 @@ async function loadReview(id) {
     `<td><select data-emotion-unit="${u.id}">` +
     ["neutral","angry","sad","joyful","fearful","whispered","shouted","sarcastic"].map(e =>
       `<option value="${e}" ${e === u.emotion ? "selected" : ""}>${e}</option>`).join("") +
-    `</select></td></tr>`).join("");
+    `</select></td>` +
+    `<td><button class="ghost" data-hear type="button" title="hear this line">▶</button></td></tr>`).join("");
+  document.querySelectorAll("[data-hear]").forEach(b => b.onclick = async () => {
+    const tr = b.closest("tr");
+    const sp = tr.querySelector("select[data-unit]").value || tr.dataset.uspeaker || "narrator";
+    const voiceEl = document.querySelector(`#cast-table select[data-speaker="${sp}"], #cast-table input[data-voice-text][data-speaker="${sp}"]`);
+    const spdEl = document.querySelector(`#cast-table input.spd[data-sp="${sp}"]`);
+    const voice = voiceEl ? voiceEl.value : "af_sarah";
+    b.textContent = "…";
+    const r = await fetch(tok("/api/preview"), {method: "POST",
+      headers: {"content-type": "application/json"},
+      body: JSON.stringify({voice, speed: spdEl ? +spdEl.value || 1 : 1,
+        text: tr.dataset.utext, emotion: tr.querySelector("select[data-emotion-unit]").value})});
+    new Audio(URL.createObjectURL(await r.blob())).play();
+    b.textContent = "▶";
+  });
 }
 
 $("save-review").onclick = async () => {
