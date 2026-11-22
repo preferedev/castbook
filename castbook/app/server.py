@@ -126,6 +126,12 @@ def create_app(cfg: Settings) -> FastAPI:
             "units": len(attrib.units) if attrib else 0,
         }
 
+    @app.delete("/api/books/{book_id}")
+    def delete_book(book_id: str) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        shutil.rmtree(book.dir)
+        return {"ok": True}
+
     @app.post("/api/books/{book_id}/cast")
     def set_cast(book_id: str, overrides: dict[str, str]) -> dict[str, Any]:
         book = _require_book(cfg, book_id)

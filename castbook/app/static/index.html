@@ -36,7 +36,7 @@
 
 <section>
   <div class="row">
-    <input type="file" id="file" accept=".epub,.txt,.md">
+    <input type="file" id="file" accept=".epub,.txt,.md,.pdf">
     <button id="import">Import</button>
     <span class="muted" id="import-status"></span>
   </div>
@@ -95,6 +95,7 @@ async function loadBooks() {
       </div>
       <div class="row" style="margin-top:.5rem">
         <button class="ghost" onclick="openBook('${b.book_id}')">Open</button>
+        <button class="ghost" onclick="deleteBook('${b.book_id}')">Delete</button>
         <a class="ghost" href="/reader/${b.book_id}">Read</a>
         ${b.exports.map(f => `<a href="/api/books/${b.book_id}/download/${f}">${esc(f)}</a>`).join("")}
       </div>
@@ -207,6 +208,13 @@ $("export").onclick = async () => {
 };
 
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function deleteBook(id) {
+  if (!confirm(`Delete ${id} and all its audio?`)) return;
+  await api(`/api/books/${id}`, {method: "DELETE"});
+  $("cast-section").style.display = "none";
+  loadBooks();
+}
 
 loadVoices().then(loadBooks);
 </script>
