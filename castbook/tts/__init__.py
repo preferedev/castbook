@@ -31,6 +31,10 @@ from .kokoro import KokoroBackend
 
 
 def make_backend(cfg: Settings) -> Backend:
+    if cfg.tts.backend == "qwen":
+        from .qwen import QwenBackend
+
+        return QwenBackend()
     if cfg.tts.backend == "pocket":
         from .pocket import PocketBackend
 

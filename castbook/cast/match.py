@@ -24,6 +24,8 @@ def _valid_ids(backend: str) -> set[str]:
 def _valid_voice(name: str, valid: set[str], backend: str) -> bool:
     if not name:
         return False
+    if backend == "qwen":
+        return True  # free-text voice description for VoiceDesign
     from pathlib import Path
 
     if Path(name).suffix.lower() in {".wav", ".mp3", ".flac"} and Path(name).exists():
@@ -49,6 +51,8 @@ def auto_cast(
     backend: str = "kokoro",
 ) -> dict[str, VoiceSpec]:
     memory = memory or {}
+    if backend == "qwen":
+        return _auto_cast_descriptions(characters, book_id, memory)
     valid = _valid_ids(backend)
     narrator, ambiguous = defaults_for(backend)
     order = sorted(characters, key=lambda c: (_role_rank(c.role), c.name))
@@ -71,6 +75,28 @@ def auto_cast(
         out[c.id] = VoiceSpec(backend=pick.backend, voice=pick.id, seed=_seed(f"{book_id}:{c.id}"))
     out["narrator"] = VoiceSpec(backend=backend, voice=narrator, seed=_seed(book_id))
     out["ambiguous"] = VoiceSpec(backend=backend, voice=ambiguous, seed=_seed(book_id + "?"))
+    return out
+
+
+def _auto_cast_descriptions(
+    characters: list[Character], book_id: str, memory: dict[str, str]
+) -> dict[str, VoiceSpec]:
+    """Qwen VoiceDesign tier: every character's `vibe` becomes a voice description."""
+    out: dict[str, VoiceSpec] = {}
+    for c in sorted(characters, key=lambda c: (_role_rank(c.role), c.name)):
+        remembered = memory.get(_norm(c.name))
+        desc = remembered or c.vibe or f"{c.gender} voice, {c.age}, {c.role}"
+        out[c.id] = VoiceSpec(backend="qwen", voice=desc, seed=_seed(f"{book_id}:{c.id}"))
+    out["narrator"] = VoiceSpec(
+        backend="qwen",
+        voice="calm measured middle-aged narrator, neutral accent, warm timbre",
+        seed=_seed(book_id),
+    )
+    out["ambiguous"] = VoiceSpec(
+        backend="qwen",
+        voice="neutral adult voice, mid pitch, unhurried",
+        seed=_seed(book_id + "?"),
+    )
     return out
 
 

@@ -69,3 +69,20 @@ def test_pocket_split_bounds() -> None:
     assert len(parts) > 1
     assert all(len(p) <= MAX_CHARS for p in parts)
     assert "".join(parts)
+
+
+def test_qwen_cast_uses_vibe_descriptions() -> None:
+    from castbook.cast.match import _valid_voice
+
+    chars = [
+        Character(
+            id="alice", name="Alice", gender="f", role="protagonist", vibe="bright curious girl"
+        ),
+        Character(id="hatter", name="Hatter", gender="m", role="major", vibe="nervous quick tenor"),
+    ]
+    m = auto_cast(chars, "book1", backend="qwen")
+    assert m["alice"].backend == "qwen"
+    assert m["alice"].voice == "bright curious girl"
+    assert "narrator" in m["narrator"].voice
+    for v in m.values():
+        assert _valid_voice(v.voice, set(), "qwen")
