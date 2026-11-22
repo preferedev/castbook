@@ -972,6 +972,9 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed, emotion=emotion),
                 out,
             )
+            cached = sorted(out.parent.glob("*.wav"), key=lambda f: f.stat().st_mtime)
+            for stale in cached[: max(0, len(cached) - 64)]:
+                stale.unlink(missing_ok=True)
         return FileResponse(out, media_type="audio/wav")
 
     @app.post("/api/read")
