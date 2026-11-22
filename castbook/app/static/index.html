@@ -236,6 +236,7 @@ async function openBook(id) {
   $("cast-section").style.display = "";
   $("cast-title").textContent = id;
   $("cast-meta").textContent = `${d.units} units · ${d.needs_review.length} need review`;
+  showEstimate();
   const rows = [];
   const speakers = new Set(Object.keys(d.casting));
   for (const c of d.characters) speakers.add(c.id);
@@ -306,6 +307,14 @@ async function saveCast() {
     method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(overrides)});
 }
 
+async function showEstimate() {
+  try {
+    const e = await api(`/api/books/${current}/estimate`);
+    const base = $("cast-meta").textContent.replace(/ · ~\d+ min render.*$/, "");
+    $("cast-meta").textContent = base + (e.pending ? ` · ~${Math.round(e.est_render_min)} min render (${e.backend})` : "");
+  } catch (_) { /* no attribution yet */ }
+}
+
 async function refreshProgress() {
   api(`/api/books/${current}/log`).then(r => { $("job-log").textContent = r.lines.join("\n"); });
   if (!current) return;
@@ -331,6 +340,8 @@ async function refreshProgress() {
     if (p.busy) {
       clearTimeout(pollTimer);
       pollTimer = setTimeout(refreshProgress, 1500);
+    } else {
+      showEstimate();
     }
   } catch (e) { /* book may not have artifacts yet */ }
 }

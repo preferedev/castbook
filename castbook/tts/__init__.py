@@ -113,23 +113,6 @@ def run(
     if attribution is None or casting is None:
         raise FileNotFoundError(f"{book.dir} — run `castbook analyze` and `castbook cast` first")
 
-    if backend is None:
-        stale = [k for k, v in casting.map.items() if v.backend != cfg.tts.backend]
-        if stale:
-            from ..cast.library import defaults_for
-
-            narrator_voice, ambiguous_voice = defaults_for(cfg.tts.backend)
-            for k in stale:
-                if k == "narrator":
-                    casting.map[k] = VoiceSpec(backend=cfg.tts.backend, voice=narrator_voice)
-                elif k == "ambiguous":
-                    casting.map[k] = VoiceSpec(backend=cfg.tts.backend, voice=ambiguous_voice)
-                else:
-                    del casting.map[k]
-            log(f"[tts] dropped {len(stale)} voice(s) from another backend: {', '.join(stale)}")
-            if not dry_run:
-                save_artifact(casting, book.dir)
-
     injected_backend = backend is not None
     lexicon = _load_lexicon(book, cfg)
     manifest = load_artifact(AudioManifest, book.dir)
@@ -271,6 +254,8 @@ def run(
                     f"({rendered} new, {skipped} cached, {failed} failed)"
                 )
 
+    save_artifact(manifest, book.dir)
+    return book.dir / "manifest.json"
     save_artifact(manifest, book.dir)
     return book.dir / "manifest.json"
 
