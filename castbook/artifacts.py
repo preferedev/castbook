@@ -148,6 +148,7 @@ class AudioEntry(BaseModel):
     duration_s: float
     status: UnitStatus
     unit_hash: str
+    done_at: float = 0.0
 
 
 class ChapterAudio(BaseModel):

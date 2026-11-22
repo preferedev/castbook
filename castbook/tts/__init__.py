@@ -143,7 +143,7 @@ def run(
     if dry_run:
         log(f"[tts] {total} units: {len(pending)} pending, {skipped} cached")
         return book.dir / "manifest.json"
-    if pending and manifest.started_at == 0.0:
+    if pending:
         manifest.started_at = time.time()
         save_artifact(manifest, book.dir)
 
@@ -179,6 +179,7 @@ def run(
                         duration_s=round(dur, 3),
                         status=UnitStatus.done,
                         unit_hash=uh,
+                        done_at=time.time(),
                     )
                     rendered += 1
                 except Exception as e:
@@ -208,6 +209,7 @@ def run(
                     duration_s=round(dur, 3),
                     status=UnitStatus.done,
                     unit_hash=uh,
+                    done_at=time.time(),
                 )
                 rendered += 1
             except Exception as e:

@@ -199,7 +199,7 @@ def create_app(cfg: Settings) -> FastAPI:
             analyze_book(book, local_cfg, log)
             cast_book(book, local_cfg, log=log)
 
-        _spawn(f"analyze:{book_id}", work, log)
+        _spawn(f"job:{book_id}", work, log)
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/generate")
@@ -226,6 +226,8 @@ def create_app(cfg: Settings) -> FastAPI:
                     raise ValueError("range too wide")
             except ValueError as e:
                 raise HTTPException(422, f"bad chapters {chapters!r}") from e
+        if export and limit is not None:
+            raise HTTPException(422, "export needs chapter assembly — drop limit or export after")
         log = _log_to(book.dir / "job.log")
 
         def work() -> None:
@@ -235,7 +237,7 @@ def create_app(cfg: Settings) -> FastAPI:
                 outs = export_book(book, cfg, log=log)
                 log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
-        _spawn(f"generate:{book_id}", work, log)
+        _spawn(f"job:{book_id}", work, log)
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/regenerate")
@@ -270,7 +272,7 @@ def create_app(cfg: Settings) -> FastAPI:
             generate_book(book, cfg, log=log, chapters=sel)
 
         log = _log_to(book.dir / "job.log")
-        _spawn(f"generate:{book_id}", work, log)
+        _spawn(f"job:{book_id}", work, log)
         return {"ok": True, "popped": popped}
 
     @app.get("/api/books/{book_id}/chapters/{chapter}/audio")
@@ -379,9 +381,13 @@ def create_app(cfg: Settings) -> FastAPI:
             failed = sum(1 for u in manifest.units.values() if u.status == UnitStatus.failed)
         busy = any(k.endswith(book_id) and t.is_alive() for k, t in _jobs.items())
         eta_s = None
-        if manifest and manifest.started_at > 0 and done > 0 and total > done:
-            rate = (time.time() - manifest.started_at) / done
-            eta_s = round(rate * (total - done - failed))
+        if manifest and manifest.started_at > 0 and total > done + failed:
+            rendered_this_run = sum(
+                1 for u in manifest.units.values() if u.done_at > manifest.started_at
+            )
+            if rendered_this_run > 0:
+                rate = (time.time() - manifest.started_at) / rendered_this_run
+                eta_s = round(rate * (total - done - failed))
         log_tail = (d / "job.log").read_text()[-2000:] if (d / "job.log").exists() else ""
         return {
             "total": total,
@@ -401,7 +407,7 @@ def create_app(cfg: Settings) -> FastAPI:
             raise HTTPException(422, "install castbook[align] for word timestamps") from None
         log = _log_to(book.dir / "job.log")
         log("[align] started")
-        _spawn(f"align:{book_id}", lambda: align_mod.run(book, cfg, log=log), log)
+        _spawn(f"job:{book_id}", lambda: align_mod.run(book, cfg, log=log), log)
         return {"started": True}
 
     @app.post("/api/books/{book_id}/export")
@@ -416,7 +422,7 @@ def create_app(cfg: Settings) -> FastAPI:
             outs = export_book(book, cfg, format=format, log=log)
             log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
-        _spawn(f"export:{book_id}", work, log)
+        _spawn(f"job:{book_id}", work, log)
         return {"started": True}
 
     @app.get("/api/books/{book_id}/download/{name}")
