@@ -208,6 +208,7 @@ def create_app(cfg: Settings) -> FastAPI:
         limit: Annotated[int | None, Query(ge=1)] = None,
         chapters: str | None = None,
         workers: Annotated[int, Query(ge=1, le=16)] = 1,
+        export: bool = False,
     ) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         sel: set[int] | None = None
@@ -226,11 +227,15 @@ def create_app(cfg: Settings) -> FastAPI:
             except ValueError as e:
                 raise HTTPException(422, f"bad chapters {chapters!r}") from e
         log = _log_to(book.dir / "job.log")
-        _spawn(
-            f"generate:{book_id}",
-            lambda: generate_book(book, cfg, log=log, chapters=sel, limit=limit, workers=workers),
-            log,
-        )
+
+        def work() -> None:
+            generate_book(book, cfg, log=log, chapters=sel, limit=limit, workers=workers)
+            if export:
+                log("[export] started")
+                outs = export_book(book, cfg, log=log)
+                log(f"[export] wrote {', '.join(p.name for p in outs)}")
+
+        _spawn(f"generate:{book_id}", work, log)
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/regenerate")
