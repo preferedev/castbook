@@ -249,6 +249,12 @@ def doctor(
     for m in models_mod.MANIFEST:
         present = (cfg.models_dir / m.filename).exists()
         typer.echo(f"{m.id:22} {'ok' if present else 'not downloaded'}")
+    import importlib.util
+
+    for pkg, extra in [("pocket_tts", "pocket"), ("qwen_tts", "qwen"), ("faster_whisper", "align")]:
+        installed = importlib.util.find_spec(pkg) is not None
+        typer.echo(f"extra {extra:10} {'installed' if installed else 'not installed'}")
+    typer.echo(f"tts backend  {cfg.tts.backend}")
     from ..probe import detect
 
     mi = detect()
