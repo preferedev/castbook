@@ -11,7 +11,7 @@ import re
 from collections import Counter
 
 from ..artifacts import Chapter, Character, Unit
-from .units import quoted_spans, split_units
+from .units import _inside_quote, quoted_spans, split_units
 
 SAID_VERBS = (
     "said|asked|replied|cried|whispered|shouted|exclaimed|answered|continued|"
@@ -25,6 +25,10 @@ _NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+
 NAME = rf"(?-i:((?:the\s+)?(?:{_NAME_TITLED}|{_NAME_PLAIN})))"
 
 TAG_AFTER = re.compile(rf"[”\"']\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
+FIRST_PERSON = re.compile(
+    rf"[”\"']\s*,?\s*(?:I\s+(?:{SAID_VERBS})|(?:{SAID_VERBS})\s+I)\b",
+    re.IGNORECASE,
+)
 NAME_SAYS = re.compile(rf"{NAME}\s+({SAID_VERBS})", re.IGNORECASE)
 VOCATIVE = re.compile(rf"\b({SAID_VERBS})\b[^.!?]*,\s*{NAME}\s*[.!?]", re.IGNORECASE)
 
@@ -129,15 +133,24 @@ class HeuristicAttributor:
         units = split_units(chapter)
         names = _name_index(cast)
         last_speaker = ""
+        prev_speaker = ""
+        prev_text = ""
         for u in units:
             if u.kind != "dialogue":
                 u.speaker = "narrator"
-                last_speaker = ""
+                last_speaker = prev_speaker = prev_text = ""
                 continue
-            speaker = self._speaker_for(u.text, names) or last_speaker
+            speaker = self._speaker_for(u.text, names)
+            if speaker is None:
+                if last_speaker and _inside_quote(prev_text):
+                    speaker = last_speaker
+                else:
+                    speaker = prev_speaker or last_speaker
             u.speaker = speaker if speaker else "ambiguous"
-            if speaker:
+            if speaker and speaker != last_speaker:
+                prev_speaker = last_speaker or prev_speaker
                 last_speaker = speaker
+            prev_text = u.text
         return units
 
     def _speaker_for(self, text: str, names: dict[str, str]) -> str | None:
@@ -151,13 +164,17 @@ class HeuristicAttributor:
             hit = _lookup(m.group(1), names)
             if hit:
                 return hit
+        if FIRST_PERSON.search(text):
+            hit = _lookup("I", names)
+            if hit:
+                return hit
         residual = quoted_free(text)
         for raw, cid in names.items():
             if len(raw) <= 3:
                 continue
             pat = re.escape(raw)
             if re.search(
-                rf"\b({SAID_VERBS})\s+(?!to\b|with\b|for\b|of\b)(?:the\s+)?{pat}",
+                rf"\b({SAID_VERBS})\s+(?!to\b|with\b|for\b|of\b)(?:his|her|their|the)?\s*{pat}",
                 residual,
                 re.IGNORECASE,
             ):
