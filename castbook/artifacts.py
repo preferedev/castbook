@@ -106,6 +106,7 @@ class Unit(BaseModel):
     speaker: str  # character id, RESERVED_NARRATOR, or RESERVED_AMBIGUOUS
     emotion: Emotion = "neutral"
     kind: UnitKind = "narration"
+    paragraph: int = 0
 
 
 class AttributionFile(BaseModel):

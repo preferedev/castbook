@@ -18,7 +18,7 @@ MAX_UNIT_WORDS = 180
 def split_units(chapter: Chapter) -> list[Unit]:
     units: list[Unit] = []
     seq = 0
-    for para in _paragraphs(chapter.text):
+    for p_index, para in enumerate(_paragraphs(chapter.text)):
         inside = False
         for piece in _cap(para):
             seq += 1
@@ -31,6 +31,7 @@ def split_units(chapter: Chapter) -> list[Unit]:
                     text=piece,
                     speaker="",
                     kind=kind,
+                    paragraph=p_index,
                 )
             )
             inside = after
