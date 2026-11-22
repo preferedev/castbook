@@ -27,6 +27,7 @@ from ..pipeline import (
     generate_book,
     import_book,
     run_book,
+    set_cover,
 )
 from ..workdir import BookPaths
 
@@ -622,6 +623,28 @@ def reset(
     if not keep_source:
         shutil.rmtree(b.dir / "source", ignore_errors=True)
     typer.echo(f"reset {book}")
+
+
+@app.command()
+def cover(
+    book: str,
+    image: Annotated[Path, typer.Argument(help="png/jpg/webp image")],
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Set a custom cover image used in the exported audiobook."""
+    b = _book(_cfg(config), book)
+    if not b.dir.is_dir():
+        typer.echo(f"unknown book {book!r}")
+        raise typer.Exit(1)
+    if not image.is_file():
+        typer.echo(f"no such file: {image}")
+        raise typer.Exit(1)
+    try:
+        name = set_cover(b, image)
+    except ValueError as e:
+        typer.echo(str(e))
+        raise typer.Exit(1) from e
+    typer.echo(f"cover → {name}")
 
 
 @app.command()

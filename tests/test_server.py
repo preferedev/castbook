@@ -335,3 +335,18 @@ def test_run_quality_param(client_setup, monkeypatch) -> None:  # type: ignore[n
     assert client.post(f"/api/books/{book_id}/run?quality=bogus").status_code == 422
     r = client.post(f"/api/books/{book_id}/run?quality=fast")
     assert r.status_code == 200
+
+
+def test_custom_cover(client_setup) -> None:  # type: ignore[no-untyped-def]
+    client, tmp_path = client_setup
+    book_id = _import_txt(client, tmp_path)
+    assert client.get(f"/api/books/{book_id}/cover").status_code == 404
+    r = client.post(f"/api/books/{book_id}/cover", files={"file": ("x.txt", b"hello")})
+    assert r.status_code == 422
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+    r = client.post(f"/api/books/{book_id}/cover", files={"file": ("c.png", png)})
+    assert r.status_code == 200
+    assert r.json()["cover"] == "cover.png"
+    got = client.get(f"/api/books/{book_id}/cover")
+    assert got.status_code == 200
+    assert got.content == png

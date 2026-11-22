@@ -38,6 +38,28 @@ def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) ->
     return book
 
 
+_COVER_MAGIC = ((b"\x89PNG", ".png"), (b"\xff\xd8\xff", ".jpg"), (b"RIFF", ".webp"))
+
+
+def set_cover(book: BookPaths, image: Path) -> str:
+    """Replace the book's cover art (png/jpg/webp, sniffed by magic bytes)."""
+    head = image.read_bytes()[:16]
+    ext = next((e for sig, e in _COVER_MAGIC if head.startswith(sig)), None)
+    if ext == ".webp" and head[8:12] != b"WEBP":
+        ext = None
+    if ext is None:
+        raise ValueError("not a png/jpg/webp image")
+    for old in book.dir.glob("cover.*"):
+        old.unlink()
+    dest = book.dir / f"cover{ext}"
+    dest.write_bytes(image.read_bytes())
+    chapters = load_artifact(ChaptersFile, book.dir)
+    if chapters is not None:
+        chapters.meta.cover_path = dest.name
+        save_artifact(chapters, book.dir)
+    return dest.name
+
+
 def analyze_book(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> Path:
     return analyze.run(book, cfg, log)
 

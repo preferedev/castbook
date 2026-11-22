@@ -115,6 +115,8 @@
     <select id="export-layout" title="library layout"><option value="">flat</option><option value="abs">audiobookshelf</option></select>
     <input id="export-ch" placeholder="chapters (e.g. 1-3,7)" size="16" style="width:9rem">
     <button id="export" class="ghost">Export</button>
+    <button id="cover-btn" class="ghost" title="custom cover art for the exported audiobook">cover</button>
+    <input type="file" id="cover-file" accept=".png,.jpg,.jpeg,.webp" hidden>
     <button id="align" class="ghost" title="word-level karaoke timestamps">Align</button>
     <button id="stop" class="ghost" title="cancel running job">■</button>
   </div>
@@ -523,6 +525,21 @@ $("merge-btn").onclick = async () => {
   const r = await api(`/api/books/${current}/merge?src=${encodeURIComponent(src)}&dst=${encodeURIComponent(dst)}`, {method: "POST"});
   $("cast-meta").textContent = `merged ${src} → ${dst} (${r.merged} units)`;
   openBook(current);
+};
+
+$("cover-btn").onclick = () => $("cover-file").click();
+$("cover-file").onchange = async e => {
+  if (!e.target.files.length) return;
+  const fd = new FormData();
+  fd.append("file", e.target.files[0]);
+  try {
+    await api(`/api/books/${current}/cover`, {method: "POST", body: fd});
+    $("prog-label").textContent = "cover updated — re-export to embed it";
+    openBook(current);
+  } catch (err) {
+    $("prog-label").textContent = err.message;
+  }
+  e.target.value = "";
 };
 
 $("export").onclick = async () => {
