@@ -1,18 +1,21 @@
 # Castbook attribution eval
-_2026-11-22T15:41:30+00:00Z — heuristic_
+_2026-11-22T16:15:41+00:00Z — heuristic_
 
 | book | units | labeled | correct | accuracy | ambiguous |
 |---|---|---|---|---|---|
 | alice-in-wonderland | 107 | 21 | 18 | 86% | 2 |
+| dr-jekyll-and-mr-hyde | 20 | 20 | 19 | 95% | 0 |
 | great-expectations | 35 | 35 | 21 | 60% | 10 |
 | pride-and-prejudice | 29 | 20 | 13 | 65% | 7 |
 | sherlock-holmes | 29 | 29 | 19 | 66% | 3 |
+| treasure-island | 25 | 25 | 23 | 92% | 0 |
 
 ## Misses
 
 - **alice-in-wonderland** `ch006-u0004` expected `ambiguous` got `alice` — 'The table was a large one, but the three were all crowded together at one corner'
 - **alice-in-wonderland** `ch006-u0023` expected `hatter` got `dormouse` — 'The Hatter was the first to break the silence. “What day of the month is it?” he'
 - **alice-in-wonderland** `ch006-u0024` expected `alice` got `hatter` — 'Alice considered a little, and then said “The fourth.”'
+- **dr-jekyll-and-mr-hyde** `ch001-u0020` expected `mr.-enfield` got `mr-utterson` — 'Mr. Utterson sighed deeply but said never a word; and the young man\npresently re'
 - **great-expectations** `ch001-u0002` expected `narrator` got `ambiguous` — 'I give Pirrip as my father’s family name, on the authority of his\ntombstone and '
 - **great-expectations** `ch001-u0005` expected `magwitch` got `ambiguous` — '“Hold your noise!” cried a terrible voice, as a man started up from\namong the gr'
 - **great-expectations** `ch001-u0007` expected `pip` got `ambiguous` — '“Oh! Don’t cut my throat, sir,” I pleaded in terror. “Pray don’t do it,\nsir.”'
@@ -44,3 +47,5 @@ _2026-11-22T15:41:30+00:00Z — heuristic_
 - **sherlock-holmes** `ch001-u0023` expected `holmes` got `john-watson` — '“Quite so! You have not observed. And yet you have seen. That is just\nmy point. '
 - **sherlock-holmes** `ch001-u0025` expected `watson` got `ambiguous` — '“There will call upon you to-night, at a quarter to eight o’clock,” it\nsaid, “a '
 - **sherlock-holmes** `ch001-u0027` expected `holmes` got `john-watson` — '“I have no data yet. It is a capital mistake to theorise before one has\ndata. In'
+- **treasure-island** `ch001-u0002` expected `long-john-silver` got `jim-hawkins` — '“Yes, my lad,” said he; “such is my name, to be sure. And who may you\nbe?” And t'
+- **treasure-island** `ch001-u0003` expected `long-john-silver` got `jim-hawkins` — '“Oh!” said he, quite loud, and offering his hand. “I see. You are our\nnew cabin-'
