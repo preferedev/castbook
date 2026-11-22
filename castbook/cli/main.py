@@ -208,8 +208,9 @@ def review(
         for u in attrib.units:
             if u.id in fixes:
                 u.speaker = fixes[u.id]
+                u.guess = False
                 fixed += 1
-        attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous"]
+        attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous" or u.guess]
         save_artifact(attrib, b.dir)
         manifest = load_artifact(AudioManifest, b.dir)
         if manifest is not None:
@@ -218,10 +219,11 @@ def review(
             save_artifact(manifest, b.dir)
         typer.echo(f"fixed {fixed} units (re-run `castbook generate` to render them)")
         return
-    ambiguous = [u for u in attrib.units if u.speaker == "ambiguous"]
-    typer.echo(f"{len(ambiguous)} ambiguous units")
-    for u in ambiguous[:50]:
-        typer.echo(f"  {u.id}  ch{u.chapter}  {u.text[:80]!r}")
+    flagged = [u for u in attrib.units if u.speaker == "ambiguous" or u.guess]
+    typer.echo(f"{len(flagged)} units need review (ambiguous + guessed)")
+    for u in flagged[:50]:
+        tag = "?" if u.speaker == "ambiguous" else f"~{u.speaker}"
+        typer.echo(f"  {u.id}  ch{u.chapter}  {tag}  {u.text[:80]!r}")
 
 
 @app.command()
