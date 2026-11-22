@@ -43,13 +43,14 @@ def detect() -> MachineInfo:
     if gpu:
         return MachineInfo("cuda", gpu, cores, ram, "nvidia-smi")
     if platform.system() == "Darwin" and platform.machine() == "arm64":
-        try:
-            import torch  # type: ignore[import-not-found]
+        import importlib.util
 
+        if importlib.util.find_spec("torch") is not None:
+            import importlib
+
+            torch = importlib.import_module("torch")
             if torch.backends.mps.is_available():
                 return MachineInfo("mps", "apple-silicon", cores, ram, "torch.backends.mps")
-        except ImportError:
-            pass
     return MachineInfo("cpu", None, cores, ram, "no discrete GPU found")
 
 
