@@ -16,6 +16,18 @@ def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) ->
     book_id = book_id_from(src)
     src_hash = file_hash(src)
     existing = load_artifact(ChaptersFile, cfg.data_dir / book_id)
+    if existing is not None and existing.input_hash == src_hash:
+        log(f"[import] {book_id!r} unchanged — skipping re-parse")
+        return BookPaths(cfg.data_dir, book_id)
+    if existing is None:
+        # same content under a different filename → reuse that book instead of duplicating
+        for d in cfg.data_dir.iterdir() if cfg.data_dir.is_dir() else ():
+            if not d.is_dir():
+                continue
+            ch = load_artifact(ChaptersFile, d)
+            if ch is not None and ch.input_hash == src_hash:
+                log(f"[import] identical to existing book {ch.book_id!r} — skipping")
+                return BookPaths(cfg.data_dir, ch.book_id)
     if existing is not None and existing.input_hash != src_hash:
         n = 2
         while (cfg.data_dir / f"{book_id}-{n}").exists():
