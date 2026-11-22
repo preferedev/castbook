@@ -15,6 +15,7 @@ from ..artifacts import (
     AudioManifest,
     CastingFile,
     ChaptersFile,
+    ChapterStatus,
     UnitStatus,
     load_artifact,
     save_artifact,
@@ -27,6 +28,7 @@ from ..pipeline import (
     generate_book,
     import_book,
     run_book,
+    search_units,
     set_cover,
 )
 from ..workdir import BookPaths
@@ -86,13 +88,16 @@ def import_cmd(
     chain: Annotated[
         bool, typer.Option("--chain", help="also run analyze + cast after each import")
     ] = False,
+    lang: Annotated[
+        str | None, typer.Option("--lang", help="override detected language (e.g. fr, de)")
+    ] = None,
 ) -> None:
     """Copy books into the library and parse them into chapters."""
     cfg = _cfg(config)
     paths, tmp_dirs = _resolve_sources(files)
     try:
         for path in paths:
-            book = import_book(path, cfg)
+            book = import_book(path, cfg, lang=lang)
             typer.echo(f"book id: {book.book_id}")
             if chain:
                 analyze_book(book, cfg)
@@ -111,7 +116,9 @@ def _resolve_sources(sources: list[str]) -> tuple[list[Path], list[Path]]:
         p = Path(src)
         if p.is_dir():
             found = sorted(
-                f for f in p.iterdir() if f.is_file() and f.suffix.lower() in net.SUPPORTED_SUFFIXES
+                f
+                for f in p.rglob("*")
+                if f.is_file() and f.suffix.lower() in net.supported_suffixes()
             )
             if not found:
                 typer.echo(f"no supported books in {src}")
@@ -134,7 +141,7 @@ def _resolve_sources(sources: list[str]) -> tuple[list[Path], list[Path]]:
         if not path.exists() or path.is_dir():
             typer.echo(f"no such file: {src}")
             raise typer.Exit(1)
-        if path.suffix.lower() not in net.SUPPORTED_SUFFIXES:
+        if path.suffix.lower() not in net.supported_suffixes():
             typer.echo(f"unsupported format {path.suffix or '(none)'} — {path.name}")
             raise typer.Exit(1)
         paths.append(path)
@@ -220,17 +227,33 @@ def export(
     format: Annotated[str, typer.Option("--format", "-f")] = "m4b",
     layout: Annotated[str | None, typer.Option("--layout", help="abs for Audiobookshelf")] = None,
     chapters: Annotated[str | None, typer.Option("--chapters", help="subset, e.g. 1-3,7")] = None,
+    epub: Annotated[
+        bool, typer.Option("--epub", help="also write a read-aloud EPUB3 (media overlay)")
+    ] = False,
+    split: Annotated[
+        float | None,
+        typer.Option("--split", help="split the M4B into parts of at most N hours"),
+    ] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Mux finished chapters to M4B or MP3."""
     cfg = _cfg(config)
+    book_paths = _book(cfg, book)
     export_book(
-        _book(cfg, book),
+        book_paths,
         cfg,
         format=format,
         layout=layout,
         only=_chapter_range(chapters),
+        split_hours=split,
     )
+    if epub:
+        from ..epubout import build_media_epub
+
+        ch = load_artifact(ChaptersFile, book_paths.dir)
+        title = (ch.meta.title if ch else book_paths.book_id) or book_paths.book_id
+        out = build_media_epub(book_paths, book_paths.export / f"{title}-read-along.epub")
+        typer.echo(f"wrote {out}")
 
 
 @app.command()
@@ -238,6 +261,9 @@ def transcript(
     book: str,
     fmt: Annotated[str, typer.Option("--fmt", help="srt | vtt | txt")] = "srt",
     out: Annotated[Path | None, typer.Option("--out", "-o")] = None,
+    speaker: Annotated[
+        str | None, typer.Option("--speaker", help="only this speaker's lines (id or name)")
+    ] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Write per-chapter speaker-labeled transcripts (needs analyze + generate)."""
@@ -247,7 +273,9 @@ def transcript(
     book_paths = _book(cfg, book)
     if fmt not in ("srt", "vtt", "txt"):
         raise typer.BadParameter("fmt must be srt, vtt or txt")
-    written = write_transcript(book_paths, out or book_paths.dir / "transcript", fmt)
+    written = write_transcript(
+        book_paths, out or book_paths.dir / "transcript", fmt, speaker=speaker
+    )
     typer.echo(
         f"wrote {len(written)} transcript file(s) to {written[0].parent if written else out}"
     )
@@ -351,6 +379,187 @@ def estimate(
     )
 
 
+@app.command("config")
+def show_config(
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Show the effective configuration and where it came from."""
+    cfg = _cfg(config)
+    src = getattr(cfg, "_config_path", None)
+    typer.echo(f"file:      {src if src and src.exists() else '(defaults — no config.toml)'}")
+    typer.echo(f"data_dir:  {cfg.data_dir}")
+    typer.echo(f"models:    {cfg.models_dir}")
+    typer.echo(f"llm:       {cfg.llm.backend}")
+    typer.echo(f"tts:       {cfg.tts.backend}")
+    typer.echo(f"export:    {cfg.export.format}")
+
+
+@app.command()
+def lexicon(
+    book: Annotated[str | None, typer.Argument()] = None,
+    set_: Annotated[
+        list[str] | None,
+        typer.Option("--set", help="word=pronunciation entries to add/replace"),
+    ] = None,
+    rm: Annotated[list[str] | None, typer.Option("--rm", help="words to remove")] = None,
+    global_: Annotated[
+        bool, typer.Option("--global", "-g", help="edit the global lexicon")
+    ] = False,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Show or edit pronunciation overrides (word → spoken form)."""
+    import json
+
+    cfg = _cfg(config)
+    if global_:
+        cfg.data_dir.mkdir(parents=True, exist_ok=True)
+        lex_path = cfg.data_dir / "lexicon.json"
+    else:
+        if book is None:
+            typer.echo("pass a book id or --global")
+            raise typer.Exit(1)
+        lex_path = _book(cfg, book).dir / "lexicon.json"
+        if not lex_path.parent.is_dir():
+            typer.echo(f"{book}: not imported")
+            raise typer.Exit(1)
+    entries: dict[str, str] = json.loads(lex_path.read_text()) if lex_path.exists() else {}
+    for item in set_ or []:
+        word, sep, pron = item.partition("=")
+        if not sep or not word.strip() or not pron.strip():
+            raise typer.BadParameter("--set needs word=pronunciation")
+        entries[word.strip()] = pron.strip()
+    for word in rm or []:
+        entries.pop(word.strip(), None)
+    if set_ or rm:
+        tmp = lex_path.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(entries, indent=2, ensure_ascii=False))
+        tmp.replace(lex_path)
+    if not entries:
+        typer.echo("(empty)")
+    for w, p in sorted(entries.items()):
+        typer.echo(f"{w:24} → {p}")
+
+
+@app.command()
+def meta(
+    book: str,
+    title: Annotated[str | None, typer.Option("--title")] = None,
+    author: Annotated[str | None, typer.Option("--author")] = None,
+    language: Annotated[str | None, typer.Option("--lang")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Show or edit a book's title/author/language."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    ch = load_artifact(ChaptersFile, b.dir)
+    if ch is None:
+        typer.echo("not imported")
+        raise typer.Exit(1)
+    if title is not None:
+        ch.meta.title = title
+    if author is not None:
+        ch.meta.author = author
+    if language is not None:
+        if ch.meta.language != language:
+            manifest = load_artifact(AudioManifest, b.dir)
+            if manifest is not None:
+                manifest.units.clear()
+                save_artifact(manifest, b.dir)
+                typer.echo("audio invalidated — re-render with `castbook generate`")
+        ch.meta.language = language
+    if title is not None or author is not None or language is not None:
+        save_artifact(ch, b.dir)
+    typer.echo(f"title:    {ch.meta.title}")
+    typer.echo(f"author:   {ch.meta.author}")
+    typer.echo(f"language: {ch.meta.language}")
+
+
+@app.command()
+def clean(
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="skip confirmation")] = False,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Remove junk book dirs: tmp leftovers and dirs with no parsed book."""
+    cfg = _cfg(config)
+    if not cfg.data_dir.is_dir():
+        typer.echo("nothing to clean")
+        return
+    junk = [
+        d
+        for d in cfg.data_dir.iterdir()
+        if d.is_dir() and d.name not in ("_reads",) and not (d / "chapters.json").exists()
+    ]
+    for d in junk:
+        typer.echo(f"  {d.name}")
+    if not junk:
+        typer.echo("clean — nothing to remove")
+        return
+    if not yes and not typer.confirm(f"remove {len(junk)} dir(s)?"):
+        raise typer.Abort()
+    for d in junk:
+        shutil.rmtree(d, ignore_errors=True)
+    typer.echo(f"removed {len(junk)}")
+
+
+@app.command()
+def verify(
+    book: str,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Health-check a book: coverage, failed units, chapter gaps, stale export."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    attrib = load_artifact(AttributionFile, b.dir)
+    manifest = load_artifact(AudioManifest, b.dir)
+    problems: list[str] = []
+    if attrib is None:
+        problems.append("no attribution — run analyze")
+    elif manifest is None:
+        problems.append("not rendered — run generate")
+    else:
+        failed = [
+            u.id
+            for u in attrib.units
+            if manifest.units.get(u.id) is not None
+            and manifest.units[u.id].status == UnitStatus.failed
+        ]
+        missing = [
+            u.id
+            for u in attrib.units
+            if manifest.units.get(u.id) is None or manifest.units[u.id].status != UnitStatus.done
+        ]
+        if missing:
+            problems.append(f"{len(missing)} units unrendered")
+        if failed:
+            problems.append(f"{len(failed)} units failed (rerun generate to retry)")
+        expected = {str(u.chapter) for u in attrib.units}
+        gaps = sorted(
+            c
+            for c in expected
+            if manifest.chapters.get(c) is None
+            or manifest.chapters[c].status != ChapterStatus.done
+            or not (b.audio / manifest.chapters[c].path).exists()
+        )
+        if gaps:
+            problems.append(f"missing chapter wavs: {','.join(sorted(gaps, key=int)[:10])}")
+        export_dir = b.dir / "export"
+        if not export_dir.is_dir() or not any(export_dir.iterdir()):
+            problems.append("no exports — run export")
+        else:
+            mpath = b.dir / "manifest.json"
+            if not mpath.exists():
+                mpath = next(b.dir.glob("*manifest*.json"))
+            newest = max(f.stat().st_mtime for f in export_dir.iterdir() if f.is_file())
+            if mpath.stat().st_mtime > newest:
+                problems.append("audio changed after last export — re-export")
+    for msg in problems:
+        typer.echo(f"✗ {msg}")
+    if not problems:
+        typer.echo("✓ book is healthy: fully rendered and exported")
+    else:
+        raise typer.Exit(1)
+
+
 @app.command()
 def doctor(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
@@ -368,6 +577,22 @@ def doctor(
         status = "ok" if found else "MISSING"
         ok &= bool(found)
         typer.echo(f"{name:12} {status}")
+    if shutil.which("ffmpeg"):
+        import subprocess
+
+        try:
+            enc = subprocess.run(
+                ["ffmpeg", "-hide_banner", "-encoders"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            ).stdout
+            missing = [e for e in ("aac", "libmp3lame") if f" {e} " not in enc + " "]
+            if missing:
+                ok = False
+                typer.echo(f"encoders     MISSING {','.join(missing)} — ffmpeg build lacks them")
+        except Exception:
+            pass
     for m in models_mod.MANIFEST:
         present = (cfg.models_dir / m.filename).exists()
         typer.echo(f"{m.id:22} {'ok' if present else 'not downloaded'}")
@@ -382,16 +607,51 @@ def doctor(
     mi = detect()
     typer.echo(f"machine:     {mi.tier} · {mi.cores} cores · {mi.ram_gb} GB RAM")
     typer.echo(mi.verdict)
+    if cfg.data_dir.is_dir():
+        junk = sum(
+            1
+            for d in cfg.data_dir.iterdir()
+            if d.is_dir() and d.name != "_reads" and not (d / "chapters.json").exists()
+        )
+        if junk:
+            typer.echo(f"junk dirs:   {junk} — run `castbook clean`")
     raise typer.Exit(0 if ok else 1)
 
 
 @app.command()
 def stats(
-    book: str,
+    book: Annotated[str | None, typer.Argument()] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Print book metrics: words, units, voices, rendered audio time."""
     cfg = _cfg(config)
+    if book is None:
+        n_books = n_units = n_rendered = 0
+        chars = 0.0
+        for d in cfg.data_dir.iterdir() if cfg.data_dir.is_dir() else ():
+            if not d.is_dir():
+                continue
+            if load_artifact(ChaptersFile, d) is None:
+                continue
+            n_books += 1
+            attrib_f = load_artifact(AttributionFile, d)
+            manifest_f = load_artifact(AudioManifest, d)
+            if attrib_f is None:
+                continue
+            n_units += len(attrib_f.units)
+            done_ids = (
+                {k for k, e in manifest_f.units.items() if e.status == "done"}
+                if manifest_f
+                else set()
+            )
+            for u in attrib_f.units:
+                if u.id in done_ids:
+                    n_rendered += 1
+                    chars += len(u.text)
+        typer.echo(f"books:     {n_books}")
+        typer.echo(f"units:     {n_units:,} ({n_rendered:,} rendered)")
+        typer.echo(f"audio:     ~{chars / 15 / 60:.0f} min rendered")
+        return
     b = _book(cfg, book)
     chapters = load_artifact(ChaptersFile, b.dir)
     attrib = load_artifact(AttributionFile, b.dir)
@@ -411,8 +671,8 @@ def stats(
             a[1] += len(u.text.split())
             a[2] += len(u.text) / 15 / 60
         typer.echo(f"\n{'speaker':24} {'units':>6} {'words':>7} {'~min':>7}")
-        for sp, (n_units, n_words, mins) in sorted(agg.items(), key=lambda kv: -kv[1][2]):
-            typer.echo(f"{sp:24} {int(n_units):>6} {int(n_words):>7} {mins:>7.1f}")
+        for sp, (u_cnt, w_cnt, mins) in sorted(agg.items(), key=lambda kv: -kv[1][2]):
+            typer.echo(f"{sp:24} {int(u_cnt):>6} {int(w_cnt):>7} {mins:>7.1f}")
     if casting:
         voices = {v.voice for v in casting.map.values()}
         typer.echo(f"speakers:  {len(casting.map)} on {len(voices)} voices")
@@ -437,6 +697,13 @@ def run_cmd(
         str | None,
         typer.Option("--quality", "-q", help="fast|balanced|studio — preset llm+tts backends"),
     ] = None,
+    lang: Annotated[str | None, typer.Option("--lang")] = None,
+    split: Annotated[
+        float | None, typer.Option("--split", help="split the M4B into parts of at most N hours")
+    ] = None,
+    epub: Annotated[
+        bool, typer.Option("--epub", help="also write a read-along EPUB3 (media overlay)")
+    ] = False,
 ) -> None:
     """Full pipeline: import → analyze → cast → generate → export."""
     cfg = _cfg(config)
@@ -450,7 +717,16 @@ def run_cmd(
     paths, tmp_dirs = _resolve_sources(files)
     try:
         for path in paths:
-            book = run_book(path, cfg, speed=speed, workers=workers, layout=layout)
+            book = run_book(
+                path,
+                cfg,
+                speed=speed,
+                workers=workers,
+                layout=layout,
+                lang=lang,
+                split_hours=split,
+                epub=epub,
+            )
             typer.echo(f"done: {book.export}")
     finally:
         for d in tmp_dirs:
@@ -480,9 +756,18 @@ def books(
             if manifest
             else 0
         )
+        failed = (
+            sum(1 for e in manifest.units.values() if e.status == UnitStatus.failed)
+            if manifest
+            else 0
+        )
         total = len(attrib.units) if attrib else 0
         rendered = f" · {done}/{total} rendered" if manifest else " · not rendered"
-        typer.echo(f"{d.name:30} {title}{rendered}")
+        rendered += f" · {failed} failed" if failed else ""
+        review = (
+            f" · {len(attrib.needs_review)} to review" if attrib and attrib.needs_review else ""
+        )
+        typer.echo(f"{d.name:30} {title}{rendered}{review}")
 
 
 @models_app.command("list")
@@ -531,6 +816,9 @@ def serve(
         shown = f"[{host}]" if ":" in host else host
         url = f"http://{shown}:{port}" + (f"?token={token}" if token else "")
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+    shown = f"[{host}]" if ":" in host else host
+    tqs = f"?token={token}" if token else ""
+    typer.echo(f"OPDS catalog (e-reader apps): http://{shown}:{port}/api/opds{tqs}")
     uvicorn.run(create_app(cfg, token=token), host=host, port=port, log_level="info")
 
 
@@ -563,6 +851,57 @@ def merge(
         typer.echo(str(e))
         raise typer.Exit(1) from e
     typer.echo(f"merged {src} → {dst} ({n} units re-attributed)")
+
+
+@app.command()
+def rename(
+    book: str,
+    speaker: Annotated[str, typer.Argument(help="speaker id")],
+    name: Annotated[str, typer.Argument(help="new display name")],
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Rename a character's display name (old name kept as an alias)."""
+    from ..analyze.reconcile import rename_speaker
+
+    b = _book(_cfg(config), book)
+    try:
+        typer.echo(f"{speaker} → {rename_speaker(b.dir, speaker, name)}")
+    except (FileNotFoundError, ValueError) as e:
+        typer.echo(str(e))
+        raise typer.Exit(1) from e
+
+
+@app.command()
+def chapters(
+    book: str,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """List chapter indexes, titles and word counts (for --chapters ranges)."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    ch = load_artifact(ChaptersFile, b.dir)
+    if ch is None:
+        typer.echo("not imported yet")
+        raise typer.Exit(1)
+    for c in ch.chapters:
+        typer.echo(f"{c.index:<5} {c.word_count:>7}  {c.title}")
+
+
+@app.command()
+def search(
+    book: str,
+    text: Annotated[str, typer.Argument(help="substring to find in unit text")],
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Who said it: list (chapter, speaker, excerpt) for every unit containing text."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    hits = search_units(b.dir, text)
+    if not hits:
+        typer.echo("no matches")
+        raise typer.Exit(1)
+    for h in hits:
+        typer.echo(f"ch{h['chapter']:<4} {h['speaker']:24} {h['excerpt']}")
 
 
 @app.command()

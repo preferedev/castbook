@@ -7,15 +7,36 @@ from collections.abc import Callable
 from pathlib import Path
 
 from . import analyze, audio, cast, parse, tts
-from .artifacts import ChaptersFile, file_hash, load_artifact, save_artifact
+from .artifacts import (
+    AttributionFile,
+    CastFile,
+    ChaptersFile,
+    file_hash,
+    load_artifact,
+    save_artifact,
+)
 from .config import Settings
 from .workdir import BookPaths, book_id_from
 
 
-def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) -> BookPaths:
+def import_book(
+    src: Path, cfg: Settings, log: Callable[[str], None] = print, lang: str | None = None
+) -> BookPaths:
     book_id = book_id_from(src)
     src_hash = file_hash(src)
     existing = load_artifact(ChaptersFile, cfg.data_dir / book_id)
+    if existing is not None and existing.input_hash == src_hash:
+        log(f"[import] {book_id!r} unchanged — skipping re-parse")
+        return BookPaths(cfg.data_dir, book_id)
+    if existing is None:
+        # same content under a different filename → reuse that book instead of duplicating
+        for d in cfg.data_dir.iterdir() if cfg.data_dir.is_dir() else ():
+            if not d.is_dir():
+                continue
+            ch = load_artifact(ChaptersFile, d)
+            if ch is not None and ch.input_hash == src_hash:
+                log(f"[import] identical to existing book {ch.book_id!r} — skipping")
+                return BookPaths(cfg.data_dir, ch.book_id)
     if existing is not None and existing.input_hash != src_hash:
         n = 2
         while (cfg.data_dir / f"{book_id}-{n}").exists():
@@ -25,6 +46,8 @@ def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) ->
     book = BookPaths(cfg.data_dir, book_id).ensure()
     src = book.import_source(src)
     meta, chapters = parse.parse(src, cover_dir=book.dir)
+    if lang:
+        meta.language = lang.strip().lower() or meta.language
     save_artifact(
         ChaptersFile(
             book_id=book.book_id,
@@ -131,8 +154,11 @@ def export_book(
     format: str | None = None,
     layout: str | None = None,
     only: set[int] | None = None,
+    split_hours: float | None = None,
 ) -> list[Path]:
-    return audio.export(book, cfg, log, format=format, layout=layout, only=only)
+    return audio.export(
+        book, cfg, log, format=format, layout=layout, only=only, split_hours=split_hours
+    )
 
 
 def run_book(
@@ -142,10 +168,51 @@ def run_book(
     speed: float = 1.0,
     workers: int = 1,
     layout: str | None = None,
+    lang: str | None = None,
+    split_hours: float | None = None,
+    epub: bool = False,
 ) -> BookPaths:
-    book = import_book(src, cfg, log)
+    book = import_book(src, cfg, log, lang=lang)
     analyze_book(book, cfg, log)
     cast_book(book, cfg, log=log)
     generate_book(book, cfg, log=log, speed=speed, workers=workers)
-    export_book(book, cfg, log, layout=layout)
+    export_book(book, cfg, log, layout=layout, split_hours=split_hours)
+    if epub:
+        from .epubout import build_media_epub
+
+        ch = load_artifact(ChaptersFile, book.dir)
+        title = (ch.meta.title if ch else book.book_id) or book.book_id
+        out = build_media_epub(book, book.export / f"{title}-read-along.epub")
+        log(f"[export] {out.name}")
     return book
+
+
+def search_units(book_dir: Path, query: str, limit: int = 50) -> list[dict[str, object]]:
+    """Case-insensitive substring search over attributed units → who said it, where."""
+    attrib = load_artifact(AttributionFile, book_dir)
+    if attrib is None:
+        return []
+    cast = load_artifact(CastFile, book_dir)
+    names = {c.id: c.name for c in cast.characters} if cast else {}
+    q = query.lower()
+    out: list[dict[str, object]] = []
+    for u in attrib.units:
+        i = u.text.lower().find(q)
+        if i < 0:
+            continue
+
+        start, end = max(0, i - 60), min(len(u.text), i + len(query) + 60)
+        excerpt = (
+            ("…" if start else "") + u.text[start:end].strip() + ("…" if end < len(u.text) else "")
+        )
+        out.append(
+            {
+                "chapter": u.chapter,
+                "speaker_id": u.speaker,
+                "speaker": names.get(u.speaker, u.speaker),
+                "excerpt": excerpt,
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out

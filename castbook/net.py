@@ -11,7 +11,12 @@ from pathlib import Path
 from typing import Any
 
 MAX_UPLOAD = 200 * 1024 * 1024
-SUPPORTED_SUFFIXES = (".epub", ".txt", ".md", ".pdf", ".mobi", ".azw", ".azw3")
+
+
+def supported_suffixes() -> tuple[str, ...]:
+    from .parse import PARSERS
+
+    return tuple(PARSERS)
 
 
 class FetchError(Exception):
@@ -85,7 +90,7 @@ def fetch_book_url(url: str, tmp_dir: Path, max_size: int = MAX_UPLOAD) -> Path:
         assert_public_peer(resp, resp.geturl())
         name = Path(urllib.parse.urlparse(resp.geturl()).path).name or "book.epub"
         suffix = Path(name).suffix.lower()
-        if suffix not in SUPPORTED_SUFFIXES:
+        if suffix not in supported_suffixes():
             raise FetchError(f"unsupported format {suffix or '(none)'}")
         tmp_path = tmp_dir / name
         size = 0

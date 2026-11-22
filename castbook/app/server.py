@@ -6,6 +6,7 @@ artifacts, so the UI survives a server restart.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -22,7 +23,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from .. import net
@@ -47,6 +48,7 @@ from ..pipeline import (
     export_book,
     generate_book,
     import_book,
+    search_units,
     set_cover,
 )
 from ..reader import MAX_READ_CHARS, article_text, split_for_reading
@@ -55,7 +57,7 @@ from ..workdir import BookPaths
 
 STATIC = Path(__file__).parent / "static"
 MAX_UPLOAD = net.MAX_UPLOAD
-SUPPORTED_SUFFIXES = net.SUPPORTED_SUFFIXES
+SUPPORTED_SUFFIXES = net.supported_suffixes()
 
 
 def _http(e: net.FetchError) -> HTTPException:
@@ -71,6 +73,7 @@ _import_lock = threading.Lock()
 
 def _log_to(path: Path) -> Callable[[str], None]:
     lock = threading.Lock()
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     def log(msg: str) -> None:
         with lock, path.open("a") as f:
@@ -100,7 +103,6 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     app = FastAPI(title="Castbook")
 
     if token:
-        from fastapi import Request
         from fastapi.responses import JSONResponse
 
         @app.middleware("http")
@@ -116,6 +118,10 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         if token:
             html = html.replace("</head>", f'<meta name="cb-token" content="{token}"></head>')
         return html
+
+    @app.get("/static/manifest.json")
+    def webmanifest() -> FileResponse:
+        return FileResponse(STATIC / "manifest.json", media_type="application/manifest+json")
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
@@ -178,6 +184,43 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 continue
             out.append(_status(d, ch))
         return out
+
+    @app.get("/api/stats")
+    def stats() -> dict[str, Any]:
+        books = 0
+        units = rendered = 0
+        chars = 0.0
+        review = 0
+        if cfg.data_dir.exists():
+            for d in cfg.data_dir.iterdir():
+                if not d.is_dir():
+                    continue
+                ch = load_artifact(ChaptersFile, d)
+                if ch is None:
+                    continue
+                books += 1
+                attrib = load_artifact(AttributionFile, d)
+                if attrib is None:
+                    continue
+                units += len(attrib.units)
+                review += len(attrib.needs_review)
+                manifest = load_artifact(AudioManifest, d)
+                done = (
+                    {k for k, e in manifest.units.items() if e.status == UnitStatus.done}
+                    if manifest
+                    else set()
+                )
+                for u in attrib.units:
+                    if u.id in done:
+                        rendered += 1
+                        chars += len(u.text)
+        return {
+            "books": books,
+            "units": units,
+            "rendered_units": rendered,
+            "minutes_rendered": round(chars / 15 / 60),
+            "needs_review": review,
+        }
 
     @app.get("/api/models")
     def models() -> list[dict[str, Any]]:
@@ -267,6 +310,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     def upload(
         file: Annotated[UploadFile | None, File()] = None,
         url: Annotated[str | None, Form()] = None,
+        lang: Annotated[str | None, Form()] = None,
     ) -> dict[str, Any]:
         if (file is None) == (not url):
             raise HTTPException(400, "pass exactly one of file or url")
@@ -280,7 +324,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 raise HTTPException(400, "empty file")
             try:
                 with _import_lock:
-                    book = import_book(tmp_path, cfg)
+                    book = import_book(tmp_path, cfg, lang=lang)
             except ValueError as e:
                 raise HTTPException(422, str(e)) from e
         finally:
@@ -295,6 +339,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         cast_f = load_artifact(CastFile, d)
         casting = load_artifact(CastingFile, d)
         attrib = load_artifact(AttributionFile, d)
+        ch = load_artifact(ChaptersFile, d)
         stats: dict[str, dict[str, float | int]] = {}
         for u in attrib.units if attrib else []:
             s = stats.setdefault(u.speaker, {"units": 0, "words": 0, "minutes": 0.0})
@@ -305,6 +350,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             s["minutes"] = round(s["minutes"], 1)
         return {
             "book_id": book_id,
+            "meta": ch.meta.model_dump() if ch else {},
             "characters": [c.model_dump() for c in cast_f.characters] if cast_f else [],
             "casting": {k: v.model_dump() for k, v in casting.map.items()} if casting else {},
             "needs_review": attrib.needs_review if attrib else [],
@@ -377,6 +423,20 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         Path(tmppath).replace(book.dir / "lexicon.json")
         return {"saved": len(body)}
 
+    @app.put("/api/lexicon")
+    def put_global_lexicon(body: dict[str, str]) -> dict[str, Any]:
+        import json
+
+        cfg.data_dir.mkdir(parents=True, exist_ok=True)
+        for k, v in body.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise HTTPException(422, "lexicon entries must be word→replacement strings")
+        fd, tmppath = tempfile.mkstemp(dir=cfg.data_dir, suffix=".tmp", prefix="lexicon-")
+        with os.fdopen(fd, "w") as fh:
+            fh.write(json.dumps(body, indent=2, ensure_ascii=False))
+        Path(tmppath).replace(cfg.data_dir / "lexicon.json")
+        return {"saved": len(body)}
+
     @app.get("/api/books/{book_id}/align")
     def alignment(book_id: str) -> Any:
         import json
@@ -394,6 +454,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         except (FileNotFoundError, ValueError) as e:
             raise HTTPException(422, str(e)) from e
         return {"merged": n}
+
+    @app.post("/api/books/{book_id}/rename")
+    def rename(book_id: str, speaker: str, name: str) -> dict[str, Any]:
+        from ..analyze.reconcile import rename_speaker
+
+        book = _require_book(cfg, book_id)
+        try:
+            return {"name": rename_speaker(book.dir, speaker, name)}
+        except (FileNotFoundError, ValueError) as e:
+            raise HTTPException(422, str(e)) from e
 
     @app.get("/api/books/{book_id}/log")
     def book_log(book_id: str, lines: int = 100) -> dict[str, Any]:
@@ -551,7 +621,12 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/run")
-    def run(book_id: str, quality: str | None = None) -> dict[str, Any]:
+    def run(
+        book_id: str,
+        quality: str | None = None,
+        epub: bool = False,
+        split: float | None = None,
+    ) -> dict[str, Any]:
         """Full pipeline in one job: analyze → cast → generate → export."""
         book = _require_book(cfg, book_id)
         log = _log_to(book.dir / "job.log")
@@ -575,7 +650,13 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             generate_book(book, job_cfg, log=log, cancel=cancel)
             if not cancel.is_set():
                 log("[export] started")
-                outs = export_book(book, job_cfg, log=log)
+                outs = export_book(book, job_cfg, log=log, split_hours=split)
+                if epub:
+                    from ..epubout import build_media_epub
+
+                    ch = load_artifact(ChaptersFile, book.dir)
+                    title = (ch.meta.title if ch else book_id) or book_id
+                    outs.append(build_media_epub(book, book.export / f"{title}-read-along.epub"))
                 log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
         _spawn(f"job:{book_id}", work, log)
@@ -696,6 +777,94 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         _spawn(f"job:{book_id}", work, log)
         return {"ok": True, "popped": popped}
 
+    @app.get("/api/books/{book_id}/chapters")
+    def chapters(book_id: str) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        ch = load_artifact(ChaptersFile, book.dir)
+        if ch is None:
+            raise HTTPException(404, "not imported")
+        manifest = load_artifact(AudioManifest, book.dir)
+        attrib = load_artifact(AttributionFile, book.dir)
+        rendered: Counter[int] = Counter()
+        if manifest and attrib:
+            ch_by_id = {u.id: u.chapter for u in attrib.units}
+            for uid, e in manifest.units.items():
+                if e.status == UnitStatus.done and (c := ch_by_id.get(uid)) is not None:
+                    rendered[c] += 1
+        return {
+            "chapters": [
+                {
+                    "index": c.index,
+                    "title": c.title,
+                    "words": c.word_count,
+                    "rendered": rendered.get(c.index, 0) > 0,
+                }
+                for c in ch.chapters
+            ]
+        }
+
+    @app.put("/api/books/{book_id}/meta")
+    def update_meta(book_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        ch = load_artifact(ChaptersFile, book.dir)
+        if ch is None:
+            raise HTTPException(404, "not imported")
+        m = ch.meta
+        changed_audio = False
+        for f in ("title", "author", "language"):
+            if f in body and isinstance(body[f], str) and body[f].strip():
+                v = body[f].strip()
+                if len(v) > 200:
+                    raise HTTPException(422, f"{f} >200 chars")
+                if f == "language" and v != m.language:
+                    changed_audio = True
+                setattr(m, f, v)
+        save_artifact(ch, book.dir)
+        popped = 0
+        if changed_audio:
+            manifest = load_artifact(AudioManifest, book.dir)
+            if manifest is not None:
+                popped = len(manifest.units)
+                manifest.units.clear()
+                save_artifact(manifest, book.dir)
+        return {"ok": True, "meta": m.model_dump(), "audio_invalidated": popped}
+
+    @app.put("/api/books/{book_id}/chapters/{chapter}")
+    def rename_chapter(book_id: str, chapter: int, title: str = "") -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        ch = load_artifact(ChaptersFile, book.dir)
+        if ch is None:
+            raise HTTPException(404, "not imported")
+        c = next((c for c in ch.chapters if c.index == chapter), None)
+        if c is None:
+            raise HTTPException(404, "no such chapter")
+        title = title.strip()
+        if not title or len(title) > 200:
+            raise HTTPException(422, "title empty or >200 chars")
+        c.title = title
+        save_artifact(ch, book.dir)
+        return {"ok": True, "index": chapter, "title": title}
+
+    @app.get("/api/opds")
+    def opds(request: Request) -> Response:
+        from ..opds import build_catalog
+
+        base = str(request.base_url).rstrip("/")
+        return Response(
+            build_catalog(cfg, base, token=request.query_params.get("token")),
+            media_type="application/atom+xml",
+        )
+
+    @app.get("/api/books/{book_id}/feed.xml")
+    def feed(book_id: str, request: Request) -> Response:
+        from ..rss import build_feed
+
+        book = _require_book(cfg, book_id)
+        xml = build_feed(book.dir, str(request.base_url), token=request.query_params.get("token"))
+        if xml is None:
+            raise HTTPException(404, "no rendered chapters yet")
+        return Response(content=xml, media_type="application/rss+xml")
+
     @app.get("/api/books/{book_id}/chapters/{chapter}/audio")
     def chapter_audio(book_id: str, chapter: int) -> FileResponse:
         book = _require_book(cfg, book_id)
@@ -708,6 +877,12 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     def chapter_transcript(book_id: str, chapter: int, fmt: str | None = None) -> FileResponse:
         book = _require_book(cfg, book_id)
         tr_dir = book.dir / "transcript"
+        if chapter == -1:
+            for ext in [fmt] if fmt else ["srt", "vtt", "txt"]:
+                f = tr_dir / f"full.{ext}"
+                if f.exists():
+                    return FileResponse(f)
+            raise HTTPException(404, "no merged transcript — run with ?merged=1")
         for ext in [fmt] if fmt else ["srt", "vtt", "txt"]:
             f = tr_dir / f"ch{chapter:03d}.{ext}"
             if f.exists():
@@ -715,17 +890,20 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         raise HTTPException(404, "no transcript — run `castbook transcript`")
 
     @app.post("/api/books/{book_id}/transcript")
-    def make_transcript(book_id: str, fmt: str = "srt") -> dict[str, Any]:
+    def make_transcript(
+        book_id: str, fmt: str = "srt", speaker: str | None = None, merged: bool = False
+    ) -> dict[str, Any]:
         from ..transcript import write_transcript
 
         book = _require_book(cfg, book_id)
         if fmt not in ("srt", "vtt", "txt"):
             raise HTTPException(400, "fmt must be srt, vtt or txt")
+        out = book.dir / "transcript" / f"full.{fmt}" if merged else book.dir / "transcript"
         try:
-            written = write_transcript(book, book.dir / "transcript", fmt)
+            written = write_transcript(book, out, fmt, speaker=speaker)
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
-        first = int(written[0].stem[2:]) if written else None
+        first = int(written[0].stem[2:]) if written and not merged else None
         return {"ok": True, "count": len(written), "first_chapter": first}
 
     @app.post("/api/preview")
@@ -733,13 +911,17 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         voice = str(spec.get("voice", "af_sarah"))
         speed = float(spec.get("speed") or 1.0)
         speed = speed if 0 < speed <= 2 else 1.0
+        emotion = str(spec.get("emotion", "neutral"))
         text = str(spec.get("text") or "A quick preview of this voice.")
-        out = cfg.data_dir / ".previews" / f"{voice}-{speed}-{abs(hash(text))}.wav"
+        text_key = hashlib.sha256(text[:300].encode()).hexdigest()[:16]
+        out = cfg.data_dir / ".previews" / f"{voice}-{speed}-{emotion}-{text_key}.wav"
         out.parent.mkdir(parents=True, exist_ok=True)
         if not out.exists():
             backend = _preview_backend(cfg)
             backend.synthesize(
-                text[:300], VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed), out
+                text[:300],
+                VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed, emotion=emotion),
+                out,
             )
         return FileResponse(out, media_type="audio/wav")
 
@@ -766,6 +948,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         if len(chunks) > 400:
             raise HTTPException(413, "too long")
         voice = str(spec.get("voice") or "af_sarah")
+        dialogue = str(spec.get("dialogue") or "")
         speed = float(spec.get("speed") or 1.0)
         speed = speed if 0 < speed <= 2 else 1.0
         read_id = secrets.token_hex(6)
@@ -792,11 +975,17 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             try:
                 backend = _preview_backend(cfg)
                 vspec = VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed)
+                vspec_d = (
+                    VoiceSpec(backend=cfg.tts.backend, voice=dialogue, speed=speed)
+                    if dialogue
+                    else None
+                )
                 cancel = _cancels.get(f"read:{read_id}")
                 for i, chunk in enumerate(chunks):
                     if cancel is not None and cancel.is_set():
                         break
-                    backend.synthesize(chunk, vspec, d / f"{i:04}.wav")
+                    use = vspec_d if vspec_d is not None and chunk.lstrip()[:1] in '"“„«' else vspec
+                    backend.synthesize(chunk, use, d / f"{i:04}.wav")
                     status["done"] = i + 1
                     save_status()
             except Exception as e:
@@ -836,6 +1025,18 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         attrib = load_artifact(AttributionFile, book.dir)
         if attrib is None:
             raise HTTPException(404, "run analyze first")
+        from ..analyze.reconcile import suggest_merges
+
+        cast_f = load_artifact(CastFile, book.dir)
+        by_id = {c.id: c.name for c in cast_f.characters} if cast_f else {}
+        suggestions = (
+            [
+                {"src": a, "dst": b, "src_name": by_id.get(a, a), "dst_name": by_id.get(b, b)}
+                for a, b in suggest_merges(cast_f.characters)
+            ]
+            if cast_f
+            else []
+        )
         return {
             "units": [
                 {
@@ -843,18 +1044,34 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                     "chapter": u.chapter,
                     "text": u.text[:300],
                     "guess": u.guess and u.speaker != "ambiguous",
+                    "emotion": u.emotion,
                 }
                 for u in attrib.units
                 if u.speaker == "ambiguous" or u.guess
-            ]
+            ],
+            "merge_suggestions": suggestions,
         }
 
     @app.post("/api/books/{book_id}/speakers")
-    def set_speakers(book_id: str, fixes: dict[str, str]) -> dict[str, Any]:
+    def set_speakers(book_id: str, fixes: dict[str, str], cascade: bool = False) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         attrib = load_artifact(AttributionFile, book.dir)
         if attrib is None:
             raise HTTPException(404, "run analyze first")
+        if cascade:
+            text_of = {u.id: u.text for u in attrib.units}
+            by_text: dict[str, str] = {}
+            for uid, sp in fixes.items():
+                if uid in text_of:
+                    by_text.setdefault(text_of[uid], sp)
+            for u in attrib.units:
+                if (
+                    u.id not in fixes
+                    and u.text in by_text
+                    and u.speaker != by_text[u.text]
+                    and (u.speaker == "ambiguous" or u.guess)
+                ):
+                    fixes[u.id] = by_text[u.text]
         fixed = 0
         for u in attrib.units:
             if u.id in fixes:
@@ -869,6 +1086,40 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 manifest.units.pop(uid, None)
             save_artifact(manifest, book.dir)
         return {"ok": True, "fixed": fixed}
+
+    @app.post("/api/books/{book_id}/units/emotions")
+    def set_unit_emotions(book_id: str, fixes: dict[str, str]) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        attrib = load_artifact(AttributionFile, book.dir)
+        if attrib is None:
+            raise HTTPException(404, "run analyze first")
+        from ..artifacts import EMOTIONS
+
+        if len(fixes) > 20000:
+            raise HTTPException(413, "too many units")
+        bad = [v for v in fixes.values() if v not in EMOTIONS]
+        if bad:
+            raise HTTPException(422, f"invalid emotions: {sorted(set(bad))}")
+        fixed = 0
+        changed: list[str] = []
+        for u in attrib.units:
+            if u.id in fixes and u.emotion != fixes[u.id]:
+                u.emotion = fixes[u.id]  # type: ignore[assignment]
+                fixed += 1
+                changed.append(u.id)
+        if fixed:
+            save_artifact(attrib, book.dir)
+            manifest = load_artifact(AudioManifest, book.dir)
+            if manifest is not None:
+                for uid in changed:
+                    manifest.units.pop(uid, None)
+                save_artifact(manifest, book.dir)
+        return {"ok": True, "fixed": fixed}
+
+    @app.get("/api/books/{book_id}/search")
+    def search(book_id: str, q: str = Query(min_length=1)) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        return {"matches": search_units(book.dir, q)}
 
     @app.get("/api/books/{book_id}/units")
     def units(book_id: str) -> dict[str, Any]:
@@ -913,9 +1164,11 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         attrib = load_artifact(AttributionFile, d)
         total = len(attrib.units) if attrib else 0
         done = failed = 0
+        failed_units: list[str] = []
         if manifest:
             done = sum(1 for u in manifest.units.values() if u.status == UnitStatus.done)
-            failed = sum(1 for u in manifest.units.values() if u.status == UnitStatus.failed)
+            failed_units = [k for k, u in manifest.units.items() if u.status == UnitStatus.failed]
+            failed = len(failed_units)
         busy = any(k.endswith(book_id) and t.is_alive() for k, t in _jobs.items())
         eta_s = None
         if manifest and manifest.started_at > 0 and total > done + failed:
@@ -936,6 +1189,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             "total": total,
             "done": done,
             "failed": failed,
+            "failed_units": failed_units[:20],
             "busy": busy,
             "eta_s": eta_s,
             "log": log_tail,
@@ -972,6 +1226,8 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         format: str | None = None,
         layout: str | None = None,
         chapters: str | None = None,
+        epub: bool = False,
+        split: float | None = None,
     ) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         if format is not None and format not in ("m4b", "mp3", "both"):
@@ -991,7 +1247,21 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         log(f"[export] started ({format or cfg.export.format})")
 
         def work() -> None:
-            outs = export_book(book, cfg, format=format, layout=layout, only=only, log=log)
+            outs = export_book(
+                book,
+                cfg,
+                format=format,
+                layout=layout,
+                only=only,
+                log=log,
+                split_hours=split,
+            )
+            if epub:
+                from ..epubout import build_media_epub
+
+                ch = load_artifact(ChaptersFile, book.dir)
+                title = (ch.meta.title if ch else book_id) or book_id
+                outs.append(build_media_epub(book, book.export / f"{title}-read-along.epub"))
             log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
         _spawn(f"job:{book_id}", work, log)

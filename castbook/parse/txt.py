@@ -29,6 +29,10 @@ HEADING = re.compile(
 def parse(path: Path, cover_dir: Path | None = None) -> tuple[BookMeta, list[Chapter]]:
     _ = cover_dir
     text = path.read_text(errors="replace")
+    if path.suffix.lower() in (".html", ".htm"):
+        from ..reader import article_text
+
+        text = article_text(text)
     meta = BookMeta(title=path.stem.replace("_", " ").title(), source_file=path.name)
     return meta, chapters_from_text(text)
 

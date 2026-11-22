@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#7c3aed">
+<link rel="manifest" href="/static/manifest.json">
 <title>Castbook</title>
 <style>
   :root { --ink:#1a1a1a; --muted:#6b7280; --line:#e5e7eb; --accent:#7c3aed; }
@@ -36,11 +38,12 @@
 
 <section>
   <div class="row">
-    <input type="file" id="file" accept=".epub,.txt,.md,.pdf,.mobi,.azw,.azw3" hidden multiple>
+    <input type="file" id="file" accept=".epub,.txt,.md,.pdf,.mobi,.azw,.azw3,.html,.htm,.docx,.fb2" hidden multiple>
     <button id="import">Import</button>
     <button id="pick" class="ghost">Choose file…</button>
     <input id="import-url" placeholder="…or paste an ebook URL" size="30">
     <button id="import-url-btn" class="ghost">Fetch</button>
+    <label class="muted" style="font-size:.8rem" title="after import, run analyze → cast → generate → export"><input type="checkbox" id="import-run"> +run</label>
     <span class="muted" id="import-status"></span>
     <button id="run-library" class="ghost" title="run every imported book through the pipeline">Run library</button>
     <span class="muted" id="lib-status" style="font-size:.8rem"></span>
@@ -64,6 +67,7 @@
     <div class="row" style="margin-top:.3rem">
       <input id="read-url" placeholder="…or an article URL" size="34">
       <select id="read-voice"></select>
+      <select id="read-dialogue" title="optional second voice for quoted speech"><option value="">same voice for quotes</option></select>
       <label class="muted">speed <input id="read-speed" type="number" value="1.0" min="0.5" max="2" step="0.1" style="width:3.4rem"></label>
       <button id="read-go">Listen</button>
       <span class="muted" id="read-status"></span>
@@ -72,6 +76,7 @@
   </div>
 </details>
 
+<div class="muted" id="lib-stats" style="font-size:.8rem;margin-bottom:.4rem"></div>
 <div id="books"></div>
 
 <details id="models-details" style="margin-top:1rem">
@@ -83,6 +88,7 @@
 <section id="cast-section" style="display:none">
   <div class="book-head">
     <h2 id="cast-title" style="font-size:1.05rem"></h2>
+    <button id="meta-edit" class="ghost" title="edit title, author, language">✎</button>
     <span class="muted" id="cast-meta"></span>
   </div>
   <table>
@@ -117,6 +123,8 @@
     <select id="export-fmt" title="export format"><option value="m4b">m4b</option><option>mp3</option><option>both</option></select>
     <select id="export-layout" title="library layout"><option value="">flat</option><option value="abs">audiobookshelf</option></select>
     <input id="export-ch" placeholder="chapters (e.g. 1-3,7)" size="16" style="width:9rem">
+    <input id="export-split" type="number" min="0.5" max="24" step="0.5" placeholder="split h" title="split m4b into parts of at most N hours" style="width:4.5rem">
+    <label class="muted" style="font-size:.8rem" title="also write a read-along EPUB3 (media overlay)"><input type="checkbox" id="export-epub"> +epub</label>
     <button id="export" class="ghost">Export</button>
     <button id="cover-btn" class="ghost" title="custom cover art for the exported audiobook">cover</button>
     <input type="file" id="cover-file" accept=".png,.jpg,.jpeg,.webp" hidden>
@@ -133,23 +141,44 @@
   <pre id="log" style="display:none"></pre>
   <div id="downloads" class="row" style="margin-top:.5rem"></div>
 
+  <div class="row" style="margin-top:1rem">
+    <input id="q" placeholder="who said…" style="width:14rem" title="find text in the book and who says it">
+    <button id="q-btn" class="ghost">Find</button>
+  </div>
+  <div id="q-results" class="muted" style="font-size:.8rem;margin-top:.25rem"></div>
+
+  <details id="ch-details" style="margin-top:1rem">
+    <summary>Chapters</summary>
+    <div id="ch-list" class="muted" style="font-size:.8rem;max-height:16rem;overflow:auto"></div>
+  </details>
+
   <details id="lex-details" style="margin-top:1rem">
     <summary>Pronunciation lexicon</summary>
     <textarea id="lex-txt" rows="6" style="width:100%;font-family:monospace" placeholder='{"Cheshire":"CHEH-shur"}'></textarea>
+    <textarea id="lex-global" rows="4" style="width:100%;font-family:monospace;margin-top:.5rem" placeholder='{"global":"applies to every book"}'></textarea>
     <button id="lex-save" class="ghost" style="margin-top:.5rem">Save lexicon</button>
+    <button id="lex-global-save" class="ghost" style="margin-top:.5rem">Save global</button>
+    <button id="lex-hear" class="ghost" style="margin-top:.5rem" title="hear the first 5 entries">▶ audition</button>
+    <audio id="lex-player" style="display:none" controls></audio>
     <span class="muted" id="lex-meta"></span>
   </details>
   <details id="review-details" style="margin-top:1rem">
     <summary class="muted">Needs review <b id="review-count"></b> — ambiguous or guessed speakers; ~ marks a turn-taking guess</summary>
+    <div id="review-hints" class="muted" style="font-size:.8rem;margin-bottom:.5rem"></div>
     <table><tbody id="review-table"></tbody></table>
     <button id="save-review" class="ghost">Save speakers</button>
+    <label class="muted" style="font-size:.8rem" title="apply each fix to every unit with identical text"><input type="checkbox" id="review-cascade"> cascade</label>
+    <span class="muted" style="font-size:.8rem;margin-left:.8rem">bulk:</span>
+    <select id="bulk-ch" class="muted" style="font-size:.8rem"></select>
+    <select id="bulk-sp" class="muted" style="font-size:.8rem"></select>
+    <button id="bulk-apply" class="ghost" title="assign every flagged unit in that chapter">apply</button>
     <span class="muted" id="review-status"></span>
   </details>
 </section>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let current = null, voices = [], pollTimer = null;
+let current = null, voices = [], pollTimer = null, wasBusy = false;
 
 const CB_TOKEN = document.querySelector('meta[name="cb-token"]')?.content || "";
 const tok = p => CB_TOKEN ? p + (p.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(CB_TOKEN) : p;
@@ -164,6 +193,8 @@ async function api(path, opts) {
 async function loadVoices() {
   voices = await api("/api/voices");
   $("read-voice").innerHTML = voices.map(v => `<option value="${v.id}">${v.id}</option>`).join("");
+  $("read-dialogue").innerHTML = `<option value="">same voice for quotes</option>` +
+    voices.map(v => `<option value="${v.id}">${v.id}</option>`).join("");
 }
 
 let readId = null, readIdx = 0, readPoll = null;
@@ -172,7 +203,8 @@ async function readNow() {
   if (!text && !url) return;
   $("read-status").textContent = "synthesizing…";
   const r = await api("/api/read", {method: "POST", headers: {"content-type": "application/json"},
-    body: JSON.stringify({text, url, voice: $("read-voice").value, speed: +$("read-speed").value || 1})});
+    body: JSON.stringify({text, url, voice: $("read-voice").value,
+    dialogue: $("read-dialogue").value, speed: +$("read-speed").value || 1})});
   readId = r.id; readIdx = 0;
   const a = $("read-player");
   a.style.display = ""; a.onended = () => { readIdx++; advanceRead(); };
@@ -229,6 +261,11 @@ setInterval(async () => {
 }, 4000);
 
 async function loadBooks() {
+  api("/api/stats").then(s => {
+    $("lib-stats").textContent = s.books
+      ? `${s.books} books · ${s.units.toLocaleString()} units · ~${s.minutes_rendered} min rendered · ${s.needs_review} to review`
+      : "";
+  }).catch(() => {});
   const books = await api("/api/books");
   $("books").innerHTML = books.map(b => `
     <section>
@@ -242,6 +279,7 @@ async function loadBooks() {
         <button class="ghost" onclick="deleteBook('${b.book_id}')">Delete</button>
         <a class="ghost" href="${tok(`/reader/${b.book_id}`)}">Read</a>
         <a class="ghost" href="#" onclick="dlTranscript('${b.book_id}');return false">SRT</a>
+        <a class="ghost" href="#" onclick="dlTranscript('${b.book_id}',true);return false" title="single file, continuous timestamps">full SRT</a>
         ${b.exports.map(f => `<a href="${tok(`/api/books/${b.book_id}/download/${f.split("/").map(encodeURIComponent).join("/")}`)}">${esc(f)}</a>`).join("")}
       </div>
     </section>`).join("");
@@ -251,19 +289,36 @@ async function openBook(id) {
   current = id;
   const d = await api(`/api/books/${id}`);
   $("cast-section").style.display = "";
-  $("cast-title").textContent = id;
-  $("cast-meta").textContent = `${d.units} units · ${d.needs_review.length} need review`;
+  const meta = d.meta || {};
+  $("cast-title").textContent = meta.title || id;
+  $("cast-meta").textContent = [meta.author, meta.language, `${d.units} units`, `${d.needs_review.length} need review`].filter(Boolean).join(" · ");
+  $("meta-edit").onclick = async () => {
+    const body = {};
+    const t = prompt("title", meta.title); if (t) body.title = t;
+    const a = prompt("author", meta.author); if (a) body.author = a;
+    const l = prompt("language (e.g. en, fr, de) — changing this re-renders audio", meta.language); if (l) body.language = l;
+    if (!Object.keys(body).length) return;
+    const r = await api(`/api/books/${id}/meta`, {method: "PUT",
+      headers: {"content-type": "application/json"}, body: JSON.stringify(body)});
+    if (r.audio_invalidated) alert(`${r.audio_invalidated} rendered units invalidated — re-generate to apply`);
+    openBook(id); loadBooks();
+  };
+  $("q-results").innerHTML = "";
+  $("q").value = "";
   showEstimate();
   const rows = [];
   const speakers = new Set(Object.keys(d.casting));
   for (const c of d.characters) speakers.add(c.id);
+  for (const sp of Object.keys(d.unit_counts || {})) speakers.add(sp);
   for (const sp of [...speakers].sort()) {
     const cur = d.casting[sp]?.voice || "";
     const char = d.characters.find(c => c.id === sp);
     const n = d.unit_counts?.[sp] ?? 0;
     const role = char ? `${char.role} · ${char.gender} · ${char.vibe || ""}` : "";
     rows.push(`<tr>
-      <td>${esc(char?.name || sp)}${sp === "narrator" || sp === "ambiguous" ? " <span class=muted>(reserved)</span>" : ""}</td>
+      <td>${sp === "narrator" || sp === "ambiguous"
+        ? `${esc(char?.name || sp)} <span class=muted>(reserved)</span>`
+        : `<input data-rename="${sp}" value="${esc(char?.name || sp)}" title="rename character" style="width:10rem">`}</td>
       <td class="muted">${esc(role)}${n ? ` · ${n} units` : ""}${d.speaker_stats?.[sp]?.minutes ? ` · ~${d.speaker_stats[sp].minutes} min` : ""}</td>
       <td>${voices.length ? `<select data-speaker="${sp}">${voices.map(v =>
         `<option value="${v.id}" ${v.id === cur ? "selected" : ""}>${v.id} — ${esc(v.description)}</option>`
@@ -279,6 +334,24 @@ async function openBook(id) {
     .map(sp => `<option value="${sp}">${esc(sp)}</option>`).join("");
   $("merge-src").innerHTML = opts;
   $("merge-dst").innerHTML = opts;
+  api(`/api/books/${id}/chapters`).then(r => {
+    $("ch-list").innerHTML = r.chapters.map(c =>
+      `<div>${c.index} · <span data-ch-title="${c.index}" title="click to rename">${esc(c.title)}</span>` +
+      ` <span class="muted">${c.words}w</span>` +
+      (c.rendered ? ` <a href="${tok(`/api/books/${id}/chapters/${c.index}/audio`)}" target="_blank">▶</a>` : "") +
+      `</div>`).join("");
+    document.querySelectorAll("[data-ch-title]").forEach(el => el.onclick = async () => {
+      const title = prompt("chapter title", el.textContent);
+      if (!title || title.trim() === el.textContent) return;
+      await api(`/api/books/${id}/chapters/${el.dataset.chTitle}?title=` + encodeURIComponent(title.trim()), {method: "PUT"});
+      el.textContent = title.trim();
+    });
+  }).catch(() => {});
+  document.querySelectorAll("[data-rename]").forEach(inp => inp.onchange = async () => {
+    const name = inp.value.trim();
+    if (!name) return;
+    await api(`/api/books/${current}/rename?speaker=${inp.dataset.rename}&name=` + encodeURIComponent(name), {method: "POST"});
+  });
   document.querySelectorAll("[data-preview]").forEach(b => b.onclick = async () => {
     const sel = b.closest("tr").querySelector("select, input[data-voice-text]");
     const mix = b.closest("tr").querySelector("input.mix").value.trim();
@@ -345,6 +418,8 @@ async function refreshProgress() {
       eta = ` · ~${m < 1 ? "<1" : m} min left`;
     }
     $("prog-label").textContent = `${p.done}/${p.total} units rendered` + (p.failed ? ` · ${p.failed} failed` : "") + eta;
+    if (p.failed && p.failed_units)
+      $("prog-label").textContent += ` — ${p.failed_units.slice(0, 5).join(", ")}${p.failed > 5 ? "…" : ""}`;
     if (p.audio_chapters && p.audio_chapters.length) {
       $("ch-play").innerHTML = "listen so far: " + p.audio_chapters.map(n =>
         `<a href="#" data-ch="${n}" style="margin-right:.4rem">▶ ch${n}</a>`).join("");
@@ -355,9 +430,14 @@ async function refreshProgress() {
     }
     if (p.log) { $("log").style.display = ""; $("log").textContent = p.log; }
     if (p.busy) {
+      wasBusy = true;
+      if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
       clearTimeout(pollTimer);
       pollTimer = setTimeout(refreshProgress, 1500);
     } else {
+      if (wasBusy && "Notification" in window && Notification.permission === "granted" && document.hidden)
+        new Notification(`Castbook: ${current} finished`, {body: `${p.done}/${p.total} units rendered`});
+      wasBusy = false;
       showEstimate();
     }
   } catch (e) { /* book may not have artifacts yet */ }
@@ -370,27 +450,26 @@ $("pick").onclick = () => $("file").click();
 }));
 
 $("import").onclick = async () => {
+  const ids = [];
   for (const f of $("file").files) {
     const form = new FormData();
     form.append("file", f);
     $("import-status").textContent = `importing ${f.name}…`;
-    try { await api("/api/import", {method: "POST", body: form}); }
+    try {
+      const r = await api("/api/import", {method: "POST", body: form});
+      ids.push(r.book_id);
+    }
     catch (e) { $("import-status").textContent = e.message; loadBooks(); return; }
   }
   $("import-status").textContent = "imported";
   $("file").value = "";
+  if ($("import-run").checked) {
+    for (const id of ids) {
+      $("import-status").textContent = `imported — pipeline started for ${id}`;
+      api(`/api/books/${id}/run`, {method: "POST"}).catch(e => { $("import-status").textContent = e.message; });
+    }
+  }
   loadBooks();
-  return;
-  const f = $("file").files[0];
-  if (!f) return;
-  $("import-status").textContent = "parsing…";
-  const fd = new FormData();
-  fd.append("file", f);
-  try {
-    const r = await api("/api/import", {method: "POST", body: fd});
-    $("import-status").textContent = `imported: ${r.book_id}`;
-    loadBooks();
-  } catch (e) { $("import-status").textContent = e.message; }
 };
 async function gbSearch() {
   const q = $("gb-q").value.trim();
@@ -416,6 +495,7 @@ async function gbSearch() {
       try {
         const res = await api("/api/import", {method: "POST", body: fd});
         btn.textContent = "imported";
+        if ($("import-run").checked) api(`/api/books/${res.book_id}/run`, {method: "POST"}).catch(() => {});
         loadBooks();
       } catch (e) { btn.textContent = "Get"; btn.disabled = false; $("gb-status").textContent = e.message; }
     };
@@ -436,21 +516,59 @@ $("import-url-btn").onclick = async () => {
     const r = await api("/api/import", {method: "POST", body: fd});
     $("import-status").textContent = `imported: ${r.book_id}`;
     $("import-url").value = "";
+    if ($("import-run").checked) api(`/api/books/${r.book_id}/run`, {method: "POST"}).catch(() => {});
     loadBooks();
   } catch (e) { $("import-status").textContent = e.message; }
 };
-async function dlTranscript(id) {
+async function dlTranscript(id, merged) {
   let r;
-  try { r = await api(`/api/books/${id}/transcript`, {method: "POST"}); }
+  try { r = await api(`/api/books/${id}/transcript${merged ? "?merged=1" : ""}`, {method: "POST"}); }
   catch (e) { $("import-status").textContent = e.message; return; }
+  if (merged) { window.open(tok(`/api/books/${id}/chapters/-1/transcript?fmt=srt`), "_blank"); return; }
   if (r.first_chapter == null) { $("import-status").textContent = "no rendered chapters yet"; return; }
   window.open(tok(`/api/books/${id}/chapters/${r.first_chapter}/transcript?fmt=srt`), "_blank");
 }
 async function loadLexicon(id) {
   const r = await api(`/api/books/${id}/lexicon`);
   $("lex-txt").value = Object.keys(r.book).length ? JSON.stringify(r.book, null, 2) : "";
-  $("lex-meta").textContent = Object.keys(r.global).length ? ` · ${Object.keys(r.global).length} global entries` : "";
+  $("lex-global").value = Object.keys(r.global).length ? JSON.stringify(r.global, null, 2) : "";
 }
+async function runSearch() {
+  const q = $("q").value.trim();
+  if (!q) return;
+  const r = await api(`/api/books/${current}/search?q=` + encodeURIComponent(q));
+  $("q-results").innerHTML = r.matches.length
+    ? r.matches.map(m => `<div>ch${m.chapter} · <b>${esc(m.speaker)}</b> — “${esc(m.excerpt)}”</div>`).join("")
+    : "no matches";
+}
+$("q-btn").onclick = runSearch;
+$("q").addEventListener("keydown", e => { if (e.key === "Enter") runSearch(); });
+
+$("lex-hear").onclick = async () => {
+  let body;
+  try { body = JSON.parse($("lex-txt").value || "{}"); } catch { $("lex-meta").textContent = " · invalid JSON"; return; }
+  const entries = Object.entries(body).slice(0, 5);
+  if (!entries.length) { $("lex-meta").textContent = " · no entries"; return; }
+  const text = entries.map(([w, s]) => `${w}, pronounced ${s}`).join(". ");
+  const voice = $("read-voice").value || "af_sarah";
+  $("lex-meta").textContent = " · rendering…";
+  const r = await fetch(tok("/api/preview"), {method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({voice, text})});
+  if (r.ok) {
+    $("lex-player").src = URL.createObjectURL(await r.blob());
+    $("lex-player").style.display = "";
+    $("lex-player").play();
+    $("lex-meta").textContent = "";
+  } else $("lex-meta").textContent = " · audition failed";
+};
+$("lex-global-save").onclick = async () => {
+  let body;
+  try { body = JSON.parse($("lex-global").value || "{}"); } catch { $("lex-meta").textContent = " · invalid JSON"; return; }
+  const r = await fetch(tok("/api/lexicon"), {method: "PUT",
+    headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  $("lex-meta").textContent = r.ok ? ` · saved ${(await r.json()).saved} global entries` : " · save failed";
+};
 $("lex-save").onclick = async () => {
   let body;
   try { body = JSON.parse($("lex-txt").value || "{}"); } catch { $("lex-meta").textContent = " · invalid JSON"; return; }
@@ -489,24 +607,75 @@ async function loadReview(id) {
   const r = await api(`/api/books/${id}/review`);
   const units = r.units || [];
   $("review-count").textContent = `(${units.length})`;
+  const sug = r.merge_suggestions || [];
+  $("review-hints").innerHTML = sug.length
+    ? "possible duplicates: " + sug.map(s =>
+        `${esc(s.src_name)} / ${esc(s.dst_name)} <button class="ghost" data-merge-hint="${s.src}|${s.dst}">merge</button>`).join(" · ")
+    : "";
+  document.querySelectorAll("[data-merge-hint]").forEach(b => b.onclick = async () => {
+    const [src, dst] = b.dataset.mergeHint.split("|");
+    await api(`/api/books/${current}/merge?src=${src}&dst=${dst}`, {method: "POST"});
+    openBook(current);
+  });
   const names = [...document.querySelectorAll("#cast-table select, #cast-table input[data-voice-text]")]
     .map(x => x.dataset.speaker).concat(["narrator"]);
   $("review-table").innerHTML = units.map(u =>
-    `<tr><td class="muted" style="font-size:.8rem">ch${u.chapter}${u.guess ? " ~" : ""}</td>` +
+    `<tr data-utext="${esc(u.text.slice(0, 300))}" data-uspeaker="${esc(u.speaker || "")}">` +
+    `<td class="muted" style="font-size:.8rem">ch${u.chapter}${u.guess ? " ~" : ""}</td>` +
     `<td>${esc(u.text.slice(0,140))}</td>` +
     `<td><select data-unit="${u.id}">` +
     `<option value="">pick speaker…</option>` +
     names.map(n => `<option value="${n}">${n}</option>`).join("") +
-    `</select></td></tr>`).join("");
+    `</select></td>` +
+    `<td><select data-emotion-unit="${u.id}">` +
+    ["neutral","angry","sad","joyful","fearful","whispered","shouted","sarcastic"].map(e =>
+      `<option value="${e}" ${e === u.emotion ? "selected" : ""}>${e}</option>`).join("") +
+    `</select></td>` +
+    `<td><button class="ghost" data-hear type="button" title="hear this line">▶</button></td></tr>`).join("");
+  $("bulk-ch").innerHTML = [...new Set(units.map(u => u.chapter))].sort((a, b) => a - b)
+    .map(c => `<option value="${c}">ch ${c}</option>`).join("");
+  $("bulk-sp").innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join("");
+  $("bulk-apply").onclick = () => {
+    const ch = +$("bulk-ch").value, sp = $("bulk-sp").value;
+    let n = 0;
+    document.querySelectorAll("#review-table tr").forEach((tr, i) => {
+      if (units[i].chapter === ch) { tr.querySelector("select[data-unit]").value = sp; n++; }
+    });
+    $("review-status").textContent = `${n} rows set to ${sp} — save to apply`;
+  };
+  document.querySelectorAll("[data-hear]").forEach(b => b.onclick = async () => {
+    const tr = b.closest("tr");
+    const sp = tr.querySelector("select[data-unit]").value || tr.dataset.uspeaker || "narrator";
+    const voiceEl = document.querySelector(`#cast-table select[data-speaker="${sp}"], #cast-table input[data-voice-text][data-speaker="${sp}"]`);
+    const spdEl = document.querySelector(`#cast-table input.spd[data-sp="${sp}"]`);
+    const voice = voiceEl ? voiceEl.value : "af_sarah";
+    b.textContent = "…";
+    const r = await fetch(tok("/api/preview"), {method: "POST",
+      headers: {"content-type": "application/json"},
+      body: JSON.stringify({voice, speed: spdEl ? +spdEl.value || 1 : 1,
+        text: tr.dataset.utext, emotion: tr.querySelector("select[data-emotion-unit]").value})});
+    new Audio(URL.createObjectURL(await r.blob())).play();
+    b.textContent = "▶";
+  });
 }
 
 $("save-review").onclick = async () => {
   const fixes = {};
-  document.querySelectorAll("#review-table select").forEach(s => { if (s.value) fixes[s.dataset.unit] = s.value; });
-  if (!Object.keys(fixes).length) return;
-  const r = await api(`/api/books/${current}/speakers`, {
-    method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(fixes)});
-  $("review-status").textContent = `fixed ${r.fixed} — re-generate to render`;
+  document.querySelectorAll("#review-table select[data-unit]").forEach(s => { if (s.value) fixes[s.dataset.unit] = s.value; });
+  const emos = {};
+  document.querySelectorAll("#review-table select[data-emotion-unit]").forEach(s => { emos[s.dataset.emotionUnit] = s.value; });
+  let msg = [];
+  if (Object.keys(fixes).length) {
+    const r = await api(`/api/books/${current}/speakers${$("review-cascade").checked ? "?cascade=1" : ""}`, {
+      method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(fixes)});
+    msg.push(`fixed ${r.fixed} speakers`);
+  }
+  if (Object.keys(emos).length) {
+    const r2 = await api(`/api/books/${current}/units/emotions`, {
+      method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(emos)});
+    if (r2.fixed) msg.push(`${r2.fixed} emotions`);
+  }
+  $("review-status").textContent = (msg.join(" + ") || "nothing changed") + " — re-generate to render";
   loadReview(current);
 };
 
@@ -567,6 +736,9 @@ $("export").onclick = async () => {
     if (l) q.push(`layout=${l}`);
     const ch = $("export-ch").value.trim();
     if (ch) q.push(`chapters=${encodeURIComponent(ch)}`);
+    if ($("export-epub").checked) q.push("epub=1");
+    const sp = +$("export-split").value;
+    if (sp > 0) q.push(`split=${sp}`);
     await api(`/api/books/${current}/export${q.length ? "?" + q.join("&") : ""}`, {method: "POST"});
   } catch (e) {
     $("export").disabled = false;
@@ -579,7 +751,8 @@ $("export").onclick = async () => {
       const books = await api(`/api/books`);
       const b = books.find(x => x.book_id === current);
       if (b) $("downloads").innerHTML = b.exports.map(f =>
-        `<a href="${tok(`/api/books/${current}/download/${f.split("/").map(encodeURIComponent).join("/")}`)}">${esc(f)}</a>`).join("");
+        `<a href="${tok(`/api/books/${current}/download/${f.split("/").map(encodeURIComponent).join("/")}`)}">${esc(f)}</a>`).join("") +
+        ` <a href="${tok(`/api/books/${current}/feed.xml`)}" title="subscribe in a podcast app">RSS</a>`;
       const p = await api(`/api/books/${current}/progress`);
       if (!p.busy) {
         clearInterval(timer);

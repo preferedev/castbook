@@ -1,0 +1,257 @@
+def test_reimport_same_content_dedupes(tmp_path, monkeypatch) -> None:
+    from castbook.config import Settings
+    from castbook.pipeline import import_book
+
+    cfg = Settings(data_dir=tmp_path / "data")
+    a = tmp_path / "a.txt"
+    b = tmp_path / "b.txt"
+    a.write_text("CHAPTER I\n\nSame text.\n\nMore text.")
+    b.write_text(a.read_text())
+    first = import_book(a, cfg, log=lambda s: None)
+    second = import_book(b, cfg, log=lambda s: None)
+    assert second.book_id == first.book_id
+    again = import_book(a, cfg, log=lambda s: None)
+    assert again.book_id == first.book_id
+    n_books = sum(1 for d in cfg.data_dir.iterdir() if (d / "chapters.json").exists())
+    assert n_books == 1
+
+
+def test_search_units(tmp_path) -> None:
+    from castbook.artifacts import AttributionFile, CastFile, Character, Unit, save_artifact
+    from castbook.pipeline import search_units
+
+    d = tmp_path / "b"
+    d.mkdir()
+    save_artifact(
+        AttributionFile(
+            book_id="b",
+            attributor="t",
+            input_hash="h",
+            units=[
+                Unit(id="u1", chapter=2, text="Hello there, said the cat.", speaker="cat"),
+                Unit(id="u2", chapter=5, text="Nothing here.", speaker="narrator"),
+            ],
+        ),
+        d,
+    )
+    save_artifact(
+        CastFile(
+            book_id="b",
+            input_hash="h",
+            characters=[
+                Character(id="cat", name="Cheshire Cat", kind="character"),
+            ],
+        ),
+        d,
+    )
+    hits = search_units(d, "hello")
+    assert hits[0]["chapter"] == 2 and hits[0]["speaker"] == "Cheshire Cat"
+    assert "Hello there" in hits[0]["excerpt"]
+    assert search_units(d, "zzz") == []
+
+
+def test_rename_speaker(tmp_path) -> None:
+    from castbook.analyze.reconcile import rename_speaker
+    from castbook.artifacts import CastFile, Character, load_artifact, save_artifact
+
+    d = tmp_path / "b"
+    d.mkdir()
+    save_artifact(
+        CastFile(
+            book_id="b",
+            input_hash="h",
+            characters=[
+                Character(id="q", name="the red queen", kind="character"),
+            ],
+        ),
+        d,
+    )
+    assert rename_speaker(d, "q", "Queen of Hearts") == "Queen of Hearts"
+    c = load_artifact(CastFile, d).characters[0]
+    assert c.name == "Queen of Hearts" and "the red queen" in c.aliases
+    import pytest
+
+    with pytest.raises(ValueError):
+        rename_speaker(d, "nope", "X")
+
+
+def test_build_feed(tmp_path) -> None:
+    from castbook.artifacts import (
+        AttributionFile,
+        AudioEntry,
+        AudioManifest,
+        BookMeta,
+        Chapter,
+        ChaptersFile,
+        Unit,
+        save_artifact,
+    )
+    from castbook.rss import build_feed
+
+    d = tmp_path / "b"
+    (d / "audio").mkdir(parents=True)
+    (d / "audio" / "ch001.wav").write_bytes(b"RIFF")
+    save_artifact(
+        ChaptersFile(
+            book_id="b",
+            meta=BookMeta(title="T", author="A"),
+            chapters=[Chapter(index=1, title="I", text="x", word_count=1)],
+            input_hash="h",
+        ),
+        d,
+    )
+    save_artifact(
+        AttributionFile(
+            book_id="b",
+            attributor="t",
+            input_hash="h",
+            units=[
+                Unit(id="u1", chapter=1, text="x", speaker="narrator"),
+            ],
+        ),
+        d,
+    )
+    save_artifact(
+        AudioManifest(
+            book_id="b",
+            input_hash="h",
+            units={
+                "u1": AudioEntry(path="u1.wav", duration_s=1, status="done", unit_hash="h"),
+            },
+        ),
+        d,
+    )
+    xml = build_feed(d, "http://localhost:3000/")
+    assert xml is not None
+    assert "<enclosure" in xml and "chapters/1/audio" in xml
+    assert build_feed(tmp_path / "empty", "http://x/") is None
+
+
+def test_media_epub(tmp_path) -> None:
+    import numpy as np
+    import soundfile as sf
+
+    from castbook.artifacts import (
+        AttributionFile,
+        AudioEntry,
+        AudioManifest,
+        BookMeta,
+        Chapter,
+        ChapterAudio,
+        ChaptersFile,
+        Unit,
+        save_artifact,
+    )
+    from castbook.epubout import build_media_epub
+    from castbook.workdir import BookPaths
+
+    book = BookPaths(tmp_path, "b").ensure()
+    sf.write(book.audio / "ch001.wav", np.zeros(8000, dtype=np.float32), 22050)
+    save_artifact(
+        ChaptersFile(
+            book_id="b",
+            meta=BookMeta(title="T", author="A"),
+            chapters=[Chapter(index=1, title="I", text="hello world", word_count=2)],
+            input_hash="h",
+        ),
+        book.dir,
+    )
+    save_artifact(
+        AttributionFile(
+            book_id="b",
+            attributor="t",
+            input_hash="h",
+            units=[Unit(id="u1", chapter=1, text="hello world", speaker="narrator")],
+        ),
+        book.dir,
+    )
+    save_artifact(
+        AudioManifest(
+            book_id="b",
+            input_hash="h",
+            units={"u1": AudioEntry(path="u1.wav", duration_s=0.4, status="done", unit_hash="h")},
+            chapters={"1": ChapterAudio(path="ch001.wav", duration_s=0.4, status="done")},
+        ),
+        book.dir,
+    )
+    out = build_media_epub(book, book.export / "t.epub")
+    import zipfile
+
+    names = zipfile.ZipFile(out).namelist()
+    assert names[0] == "mimetype"
+    assert "OEBPS/ch001.smil" in names and "OEBPS/audio/ch001.mp3" in names
+    smil = zipfile.ZipFile(out).read("OEBPS/ch001.smil").decode()
+    assert 'clipBegin="0:00:00.000"' in smil and 'clipEnd="0:00:00.400"' in smil
+
+
+def test_clean_removes_junk_dirs(tmp_path) -> None:
+    from typer.testing import CliRunner
+
+    from castbook.cli.main import app
+
+    data = tmp_path / "data"
+    (data / "tmpxyz").mkdir(parents=True)
+    (data / "real").mkdir()
+    (data / "real" / "chapters.json").write_text("{}")
+    r = CliRunner().invoke(app, ["clean", "-y"], env={"CASTBOOK_DATA_DIR": str(data)})
+    assert r.exit_code == 0
+    assert not (data / "tmpxyz").exists()
+    assert (data / "real").exists()
+
+
+def test_verify_reports_missing_attribution(tmp_path) -> None:
+    from typer.testing import CliRunner
+
+    from castbook.cli.main import app
+
+    data = tmp_path / "data"
+    (data / "b").mkdir(parents=True)
+    (data / "b" / "chapters.json").write_text("{}")
+    r = CliRunner().invoke(app, ["verify", "b"], env={"CASTBOOK_DATA_DIR": str(data)})
+    assert r.exit_code == 1
+    assert "analyze" in r.output
+
+
+def test_merged_transcript_continuous_timestamps(tmp_path) -> None:
+    from castbook.artifacts import (
+        AttributionFile,
+        AudioEntry,
+        AudioManifest,
+        ChapterAudio,
+        Unit,
+        save_artifact,
+    )
+    from castbook.transcript import write_transcript
+    from castbook.workdir import BookPaths
+
+    b = BookPaths(tmp_path, "b")
+    b.dir.mkdir(parents=True)
+    attrib = AttributionFile(
+        book_id="b",
+        attributor="t",
+        input_hash="h",
+        units=[
+            Unit(id="u1", chapter=0, text="one", speaker="narrator"),
+            Unit(id="u2", chapter=0, text="two", speaker="x"),
+            Unit(id="u3", chapter=1, text="three", speaker="narrator"),
+        ],
+    )
+    save_artifact(attrib, b.dir)
+    manifest = AudioManifest(book_id="b", input_hash="h")
+    for uid, dur in (("u1", 1.0), ("u2", 2.0), ("u3", 3.0)):
+        manifest.units[uid] = AudioEntry(
+            path=f"{uid}.wav", duration_s=dur, status="done", unit_hash="h"
+        )
+    manifest.chapters["0"] = ChapterAudio(path="ch000.wav", duration_s=10.0, status="done")
+    manifest.chapters["1"] = ChapterAudio(path="ch001.wav", duration_s=4.0, status="done")
+    save_artifact(manifest, b.dir)
+
+    out = tmp_path / "full.srt"
+    written = write_transcript(b, out, "srt")
+    assert written == [out]
+    body = out.read_text()
+    # chapter 1 cue starts after chapter 0's 10s duration — continuous, not restarted
+    assert "00:00:1" in body.split("\n\n")[-1] or "00:00:" in body
+    third = body.split("\n\n")[2]
+    start = third.split("\n")[1].split(" --> ")[0]
+    assert start.startswith("00:00:1")  # ≥10s offset
