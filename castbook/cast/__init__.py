@@ -34,7 +34,7 @@ def run(
     for speaker, voice_id in (overrides or {}).items():
         if Path(voice_id).exists() and Path(voice_id).suffix.lower() in {".wav", ".mp3", ".flac"}:
             log(f"[cast] voice clone {speaker} <- {voice_id} (only clone voices you may use)")
-        if speaker in mapping and _valid_voice(voice_id, valid):
+        if speaker in mapping and _valid_voice(voice_id, valid, backend):
             mapping[speaker].voice = voice_id
         elif speaker not in mapping:
             log(f"[cast] no such speaker: {speaker!r}")

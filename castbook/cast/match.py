@@ -21,13 +21,15 @@ def _valid_ids(backend: str) -> set[str]:
     }
 
 
-def _valid_voice(name: str, valid: set[str]) -> bool:
+def _valid_voice(name: str, valid: set[str], backend: str) -> bool:
     if not name:
         return False
     from pathlib import Path
 
     if Path(name).suffix.lower() in {".wav", ".mp3", ".flac"} and Path(name).exists():
-        return True  # voice clone clip (pocket backend; catalog names use the pool)
+        return backend == "pocket"  # voice clone clip — only pocket can consume one
+    if "+" in name and backend != "kokoro":
+        return False  # only kokoro can blend voice vectors
     for spec in name.split("+"):
         vname, _, w = spec.partition(":")
         if vname not in valid:
@@ -55,7 +57,7 @@ def auto_cast(
     pending: list[Character] = []
     for c in order:
         remembered = memory.get(_norm(c.name))
-        if remembered and _valid_voice(remembered, valid):
+        if remembered and _valid_voice(remembered, valid, backend):
             out[c.id] = VoiceSpec(
                 backend=backend, voice=remembered, seed=_seed(f"{book_id}:{c.id}")
             )
