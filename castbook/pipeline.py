@@ -94,10 +94,12 @@ def run_book(
     cfg: Settings,
     log: Callable[[str], None] = print,
     speed: float = 1.0,
+    workers: int = 1,
+    layout: str | None = None,
 ) -> BookPaths:
     book = import_book(src, cfg, log)
     analyze_book(book, cfg, log)
     cast_book(book, cfg, log=log)
-    generate_book(book, cfg, log=log, speed=speed)
-    export_book(book, cfg, log)
+    generate_book(book, cfg, log=log, speed=speed, workers=workers)
+    export_book(book, cfg, log, layout=layout)
     return book

@@ -297,10 +297,12 @@ def run_cmd(
     file: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     speed: Annotated[float, typer.Option("--speed", min=0.5, max=2.0)] = 1.0,
+    workers: Annotated[int, typer.Option("--workers", min=1, max=16)] = 1,
+    layout: Annotated[str | None, typer.Option("--layout", help="abs for Audiobookshelf")] = None,
 ) -> None:
     """Full pipeline: import → analyze → cast → generate → export."""
     cfg = _cfg(config)
-    book = run_book(file, cfg, speed=speed)
+    book = run_book(file, cfg, speed=speed, workers=workers, layout=layout)
     typer.echo(f"done: {book.export}")
 
 
