@@ -752,10 +752,11 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         _spawn(f"job:{book_id}", work, log)
         return {"started": True}
 
-    @app.get("/api/books/{book_id}/download/{name}")
+    @app.get("/api/books/{book_id}/download/{name:path}")
     def download(book_id: str, name: str) -> FileResponse:
-        path = (cfg.data_dir / book_id / "export" / name).resolve()
-        if not path.is_file() or path.parent != (cfg.data_dir / book_id / "export").resolve():
+        export_dir = (cfg.data_dir / book_id / "export").resolve()
+        path = (export_dir / name).resolve()
+        if not path.is_file() or export_dir not in path.parents:
             raise HTTPException(404, "no such export")
         return FileResponse(path, filename=path.name)
 
@@ -798,7 +799,9 @@ def _status(d: Path, ch: ChaptersFile) -> dict[str, Any]:
         "chapters": len(ch.chapters),
         "chapters_rendered": done,
         "stages": stages,
-        "exports": [p.name for p in (d / "export").glob("*") if p.is_file()]
+        "exports": [
+            str(p.relative_to(d / "export")) for p in (d / "export").rglob("*") if p.is_file()
+        ]
         if (d / "export").exists()
         else [],
     }
