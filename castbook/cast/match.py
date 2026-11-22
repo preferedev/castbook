@@ -21,6 +21,7 @@ def auto_cast(
     order = sorted(characters, key=lambda c: (_role_rank(c.role), c.name))
     used: set[str] = {DEFAULT_NARRATOR, DEFAULT_AMBIGUOUS}
     out: dict[str, VoiceSpec] = {}
+    pending: list[Character] = []
     for c in order:
         remembered = memory.get(_norm(c.name))
         if remembered in _VALID:
@@ -29,12 +30,12 @@ def auto_cast(
             )
             used.add(remembered)
         else:
-            choices = pool(c.gender, c.age)
-            pick = _pick(choices, used, f"{book_id}:{c.id}")
-            used.add(pick.id)
-            out[c.id] = VoiceSpec(
-                backend=pick.backend, voice=pick.id, seed=_seed(f"{book_id}:{c.id}")
-            )
+            pending.append(c)
+    for c in pending:
+        choices = pool(c.gender, c.age)
+        pick = _pick(choices, used, f"{book_id}:{c.id}")
+        used.add(pick.id)
+        out[c.id] = VoiceSpec(backend=pick.backend, voice=pick.id, seed=_seed(f"{book_id}:{c.id}"))
     out["narrator"] = VoiceSpec(backend="kokoro", voice=DEFAULT_NARRATOR, seed=_seed(book_id))
     out["ambiguous"] = VoiceSpec(
         backend="kokoro", voice=DEFAULT_AMBIGUOUS, seed=_seed(book_id + "?")
