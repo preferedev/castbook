@@ -25,6 +25,7 @@ _NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+
 NAME = rf"(?-i:((?:the\s+)?(?:{_NAME_TITLED}|{_NAME_PLAIN})))"
 
 TAG_AFTER = re.compile(rf"[”\"']\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
+_QUOTE_CHAR = re.compile(r"[\"\u201c\u201d\u2018\u2019']")
 FIRST_PERSON = re.compile(
     rf"[”\"']\s*,?\s*(?:I\s+(?:{SAID_VERBS})|(?:{SAID_VERBS})\s+I)\b",
     re.IGNORECASE,
@@ -132,29 +133,33 @@ class HeuristicAttributor:
     def attribute(self, chapter: Chapter, cast: list[Character]) -> list[Unit]:
         units = split_units(chapter)
         names = _name_index(cast)
-        last_speaker = ""
-        prev_speaker = ""
-        prev_text = ""
+        runs: list[list[Unit]] = []
+        in_quote = False
         for u in units:
             if u.kind != "dialogue":
                 u.speaker = "narrator"
-                last_speaker = prev_speaker = prev_text = ""
+                in_quote = False
                 continue
-            speaker = self._speaker_for(u.text, names)
+            if in_quote and runs:
+                runs[-1].append(u)
+            else:
+                runs.append([u])
+            in_quote = _inside_quote(u.text, in_quote)
+        last_speaker = ""
+        prev_speaker = ""
+        for run in runs:
+            speaker = next((s for u in run if (s := self._speaker_for(u.text, names))), None)
             if speaker is None:
-                if last_speaker and _inside_quote(prev_text):
-                    speaker = last_speaker
-                else:
-                    speaker = prev_speaker or last_speaker
-            u.speaker = speaker if speaker else "ambiguous"
-            if speaker and speaker != last_speaker:
+                speaker = prev_speaker or last_speaker or "ambiguous"
+            for u in run:
+                u.speaker = speaker
+            if speaker != "ambiguous" and speaker != last_speaker:
                 prev_speaker = last_speaker or prev_speaker
                 last_speaker = speaker
-            prev_text = u.text
         return units
 
     def _speaker_for(self, text: str, names: dict[str, str]) -> str | None:
-        if not quoted_spans(text):
+        if not (quoted_spans(text) or _QUOTE_CHAR.search(text)):
             return None
         for m in TAG_AFTER.finditer(text):
             hit = _lookup(m.group(2), names)
