@@ -311,6 +311,25 @@ def serve(
 
 
 @app.command()
+def merge(
+    book: str,
+    src: Annotated[str, typer.Argument(help="speaker id to fold away")],
+    dst: Annotated[str, typer.Argument(help="speaker id that survives")],
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Merge one speaker into another (aliases, units, casting)."""
+    from ..analyze.reconcile import merge_speakers
+
+    b = _book(_cfg(config), book)
+    try:
+        n = merge_speakers(b.dir, src, dst)
+    except (FileNotFoundError, ValueError) as e:
+        typer.echo(str(e))
+        raise typer.Exit(1) from e
+    typer.echo(f"merged {src} → {dst} ({n} units re-attributed)")
+
+
+@app.command()
 def reset(
     book: str,
     keep_source: Annotated[

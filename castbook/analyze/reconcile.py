@@ -7,6 +7,7 @@ LLM speaker strings map back to character ids by alias and surname overlap.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from ..artifacts import Character
 from .heuristic import TITLE_PREFIXES
@@ -80,3 +81,51 @@ def _find(cast: list[Character], name: str, titled: dict[str, int] | None) -> Ch
         and bare in {_bare(normalize(o)) for o in [c.name, *c.aliases, *c.name.split()] if o}
     ]
     return hits[0] if len(hits) == 1 else None
+
+
+def merge_speakers(book_dir: Path, src_id: str, dst_id: str) -> int:
+    """Fold speaker src_id into dst_id everywhere. Returns affected units."""
+    from ..artifacts import (
+        AttributionFile,
+        AudioManifest,
+        CastFile,
+        CastingFile,
+        load_artifact,
+        save_artifact,
+    )
+
+    d = Path(book_dir)
+    attrib = load_artifact(AttributionFile, d)
+    cast = load_artifact(CastFile, d)
+    casting = load_artifact(CastingFile, d)
+    if attrib is None or cast is None:
+        raise FileNotFoundError(f"{d} — run `castbook analyze` first")
+
+    src = next((c for c in cast.characters if c.id == src_id), None)
+    dst = next((c for c in cast.characters if c.id == dst_id), None)
+    if src is None or dst is None:
+        raise ValueError(f"unknown speaker ids {src_id!r} → {dst_id!r}")
+
+    touched = 0
+    for u in attrib.units:
+        if u.speaker == src_id:
+            u.speaker = dst_id
+            touched += 1
+    attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous"]
+    save_artifact(attrib, d)
+
+    dst.aliases = sorted({*dst.aliases, src.name, *src.aliases} - {dst.name})
+    cast.characters = [c for c in cast.characters if c.id != src_id]
+    save_artifact(cast, d)
+
+    if casting is not None:
+        casting.map.pop(src_id, None)
+        save_artifact(casting, d)
+
+    manifest = load_artifact(AudioManifest, d)
+    if manifest is not None:
+        for u in attrib.units:
+            if u.speaker == dst_id:
+                manifest.units.pop(u.id, None)
+        save_artifact(manifest, d)
+    return touched

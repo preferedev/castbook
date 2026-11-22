@@ -126,6 +126,17 @@ def create_app(cfg: Settings) -> FastAPI:
             "units": len(attrib.units) if attrib else 0,
         }
 
+    @app.post("/api/books/{book_id}/merge")
+    def merge(book_id: str, src: str, dst: str) -> dict[str, Any]:
+        from ..analyze.reconcile import merge_speakers
+
+        book = _require_book(cfg, book_id)
+        try:
+            n = merge_speakers(book.dir, src, dst)
+        except (FileNotFoundError, ValueError) as e:
+            raise HTTPException(422, str(e)) from e
+        return {"merged": n}
+
     @app.get("/api/books/{book_id}/log")
     def book_log(book_id: str, lines: int = 100) -> dict[str, Any]:
         f = _require_book(cfg, book_id).dir / "job.log"
