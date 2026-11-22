@@ -378,6 +378,33 @@ def estimate(
 
 
 @app.command()
+def clean(
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="skip confirmation")] = False,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Remove junk book dirs: tmp leftovers and dirs with no parsed book."""
+    cfg = _cfg(config)
+    if not cfg.data_dir.is_dir():
+        typer.echo("nothing to clean")
+        return
+    junk = [
+        d
+        for d in cfg.data_dir.iterdir()
+        if d.is_dir() and d.name not in ("_reads",) and not (d / "chapters.json").exists()
+    ]
+    for d in junk:
+        typer.echo(f"  {d.name}")
+    if not junk:
+        typer.echo("clean — nothing to remove")
+        return
+    if not yes and not typer.confirm(f"remove {len(junk)} dir(s)?"):
+        raise typer.Abort()
+    for d in junk:
+        shutil.rmtree(d, ignore_errors=True)
+    typer.echo(f"removed {len(junk)}")
+
+
+@app.command()
 def verify(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
