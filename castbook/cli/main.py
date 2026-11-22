@@ -560,11 +560,14 @@ def open_book(
         (socket.AF_INET, "127.0.0.1"),
         (socket.AF_INET6, "::1"),
     ):
-        with socket.socket(family) as sock:
-            sock.settimeout(0.5)
-            if sock.connect_ex((host, port)) == 0:
-                listening = True
-                break
+        try:
+            with socket.socket(family) as sock:
+                sock.settimeout(0.5)
+                if sock.connect_ex((host, port)) == 0:
+                    listening = True
+                    break
+        except OSError:
+            continue
     if not listening:
         typer.echo(f"nothing listening on :{port} — run `castbook serve` first")
         raise typer.Exit(1)
