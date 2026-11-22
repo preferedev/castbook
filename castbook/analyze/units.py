@@ -41,9 +41,9 @@ def _inside_quote(text: str, inside: bool = False) -> bool:
     for ch in text:
         if ch == '"':
             inside = not inside
-        elif ch in "“‘":
+        elif ch in "\u201c\u2018":
             inside = True
-        elif ch in "”’":
+        elif ch in "\u201d\u2019":
             inside = False
     return inside
 

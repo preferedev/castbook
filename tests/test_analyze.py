@@ -1,5 +1,3 @@
-
-
 def test_normalize_speaker() -> None:
     from castbook.analyze.llm import _normalize_speaker
     from castbook.artifacts import Character
