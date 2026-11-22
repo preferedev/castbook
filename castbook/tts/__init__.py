@@ -80,6 +80,7 @@ def run(
     backend: Backend | None = None,
     chapters: set[int] | None = None,
     speed: float = 1.0,
+    limit: int | None = None,
 ) -> Path:
     attribution = load_artifact(AttributionFile, book.dir)
     casting = load_artifact(CastingFile, book.dir)
@@ -93,6 +94,8 @@ def run(
         manifest = AudioManifest(book_id=book.book_id, input_hash=attribution.input_hash)
 
     units = [u for u in attribution.units if chapters is None or u.chapter in chapters]
+    if limit is not None:
+        units = units[:limit]
     total = len(units)
     rendered = skipped = failed = 0
     for i, unit in enumerate(units):

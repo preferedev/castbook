@@ -113,10 +113,13 @@ def generate(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     chapters: Annotated[str | None, typer.Option("--chapters")] = None,
     speed: Annotated[float, typer.Option("--speed", min=0.5, max=2.0)] = 1.0,
+    limit: Annotated[
+        int | None, typer.Option("--limit", help="render only the first N units (no assembly)")
+    ] = None,
 ) -> None:
     """Synthesize units and assemble chapter audio (resumable)."""
     cfg = _cfg(config)
-    generate_book(_book(cfg, book), cfg, _chapter_range(chapters), speed=speed)
+    generate_book(_book(cfg, book), cfg, _chapter_range(chapters), speed=speed, limit=limit)
 
 
 @app.command()
@@ -305,3 +308,27 @@ def serve(
 
     cfg = _cfg(config)
     uvicorn.run(create_app(cfg), host="127.0.0.1", port=port, log_level="info")
+
+
+@app.command()
+def reset(
+    book: str,
+    keep_source: Annotated[
+        bool, typer.Option("--keep-source", help="keep the imported source file")
+    ] = True,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Delete a book's artifacts (chapters/attribution/casting/audio/export)."""
+    import shutil
+
+    b = _book(_cfg(config), book)
+    if not b.dir.is_dir():
+        typer.echo(f"unknown book {book!r}")
+        raise typer.Exit(1)
+    for stem in ("chapters", "attribution", "cast", "casting", "manifest"):
+        (b.dir / f"{stem}.json").unlink(missing_ok=True)
+    for d in (b.dir / "audio", b.dir / "export"):
+        shutil.rmtree(d, ignore_errors=True)
+    if not keep_source:
+        shutil.rmtree(b.dir / "source", ignore_errors=True)
+    typer.echo(f"reset {book}")

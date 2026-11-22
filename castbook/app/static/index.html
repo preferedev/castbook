@@ -57,6 +57,7 @@
     <button id="save-cast" class="ghost">Save casting</button>
     <button id="analyze">Re-analyze</button>
     <button id="generate">Generate</button>
+    <button id="preview-gen" class="ghost">Preview 50</button>
     <button id="export" class="ghost">Export</button>
   </div>
   <div class="bar" style="margin-top:.75rem"><i id="prog" style="width:0%"></i></div>
@@ -198,6 +199,7 @@ $("save-review").onclick = async () => {
 $("save-cast").onclick = saveCast;
 $("analyze").onclick = () => api(`/api/books/${current}/analyze`, {method: "POST"}).then(refreshProgress);
 $("generate").onclick = () => api(`/api/books/${current}/generate`, {method: "POST"}).then(refreshProgress);
+$("preview-gen").onclick = () => api(`/api/books/${current}/generate?limit=50`, {method: "POST"}).then(refreshProgress);
 $("export").onclick = async () => {
   const r = await api(`/api/books/${current}/export`, {method: "POST"});
   $("downloads").innerHTML = r.files.map(f =>
