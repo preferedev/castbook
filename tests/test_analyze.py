@@ -342,3 +342,35 @@ def test_heuristic_action_beat_subject_speaks() -> None:
         "basil",
         "henry",
     ]
+
+
+def test_hybrid_llm_overrides_only_unsure_units() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.analyze.hybrid import HybridAttributor
+    from castbook.analyze.units import split_units
+    from castbook.artifacts import Chapter, Character
+
+    class FakeLLM:
+        name = "fake"
+
+        def extract_cast(self, chapters: list[Chapter]) -> list[Character]:
+            return []
+
+        def attribute(self, chapter: Chapter, cast: list[Character]) -> list:
+            us = split_units(chapter)
+            for u in us:
+                if u.kind == "dialogue":
+                    u.speaker = "bob"
+            return us
+
+    cast = [Character(id="alice", name="Alice"), Character(id="bob", name="Bob")]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Nothing to say," she sighed.\n\n"All wrong," said Bob.',
+        word_count=0,
+    )
+    speakers = [
+        u.speaker for u in HybridAttributor(HeuristicAttributor(), FakeLLM()).attribute(ch, cast)
+    ]
+    assert speakers == ["bob", "bob"]

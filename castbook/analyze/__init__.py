@@ -25,7 +25,7 @@ from .reconcile import reconcile_cast, speaker_id
 def make_attributor(cfg: Settings, log: Callable[[str], None] = print) -> Attributor:
     if cfg.llm.backend == "heuristic":
         return HeuristicAttributor()
-    if cfg.llm.backend == "llamacpp":
+    if cfg.llm.backend in ("llamacpp", "hybrid"):
         from ..models import resolve_model
 
         path = resolve_model(cfg.models_dir, cfg.llm.model)
@@ -37,7 +37,12 @@ def make_attributor(cfg: Settings, log: Callable[[str], None] = print) -> Attrib
             return HeuristicAttributor()
         from .llm import LlamaCppAttributor
 
-        return LlamaCppAttributor(path, cfg.llm)
+        llm = LlamaCppAttributor(path, cfg.llm)
+        if cfg.llm.backend == "hybrid":
+            from .hybrid import HybridAttributor
+
+            return HybridAttributor(HeuristicAttributor(), llm)
+        return llm
     raise ValueError(f"unknown llm backend {cfg.llm.backend!r}")
 
 

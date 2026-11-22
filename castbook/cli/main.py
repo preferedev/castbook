@@ -85,7 +85,7 @@ def analyze(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     backend: Annotated[
-        str | None, typer.Option("--backend", help="attributor: heuristic|llamacpp")
+        str | None, typer.Option("--backend", help="attributor: heuristic|llamacpp|hybrid")
     ] = None,
 ) -> None:
     """Extract the cast and attribute speakers (cast.json + attribution.json)."""
