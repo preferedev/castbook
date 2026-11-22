@@ -73,6 +73,8 @@
     <button id="regen" class="ghost" title="re-render these chapters">↻</button>
     <button id="play-ch" class="ghost" title="play rendered chapter audio">▶ audio</button>
     <button id="preview-gen" class="ghost">Preview 50</button>
+    <select id="export-fmt" title="export format"><option value="">m4b</option><option>mp3</option><option>both</option></select>
+    <select id="export-layout" title="library layout"><option value="">flat</option><option value="abs">audiobookshelf</option></select>
     <button id="export" class="ghost">Export</button>
     <button id="align" class="ghost" title="word-level karaoke timestamps">Align</button>
     <button id="stop" class="ghost" title="cancel running job">■</button>
@@ -363,7 +365,11 @@ $("export").onclick = async () => {
   $("export").disabled = true;
   $("export").textContent = "Exporting…";
   try {
-    await api(`/api/books/${current}/export`, {method: "POST"});
+    const q = [];
+    const f = $("export-fmt").value, l = $("export-layout").value;
+    if (f) q.push(`format=${f}`);
+    if (l) q.push(`layout=${l}`);
+    await api(`/api/books/${current}/export${q.length ? "?" + q.join("&") : ""}`, {method: "POST"});
   } catch (e) {
     $("export").disabled = false;
     $("export").textContent = "Export";
