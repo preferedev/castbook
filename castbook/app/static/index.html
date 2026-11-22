@@ -136,7 +136,7 @@ async function openBook(id) {
       <td><button class="ghost" data-preview="${sp}" type="button">▶</button></td></tr>`);
   }
   $("cast-table").innerHTML = rows.join("");
-  const opts = [...speakers].sort().filter(sp => sp !== "ambiguous")
+  const opts = [...speakers].sort().filter(sp => sp !== "ambiguous" && sp !== "narrator")
     .map(sp => `<option value="${sp}">${esc(sp)}</option>`).join("");
   $("merge-src").innerHTML = opts;
   $("merge-dst").innerHTML = opts;
