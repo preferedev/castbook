@@ -27,6 +27,8 @@
   <button id="bmk" class="ghost" title="bookmark this spot">☆</button>
   <select id="bmks" style="max-width:8rem;display:none"></select>
   <span id="pos" style="font-size:.8rem;color:#aaa"></span>
+  <button id="fminus" class="ghost" style="color:#aaa" title="smaller text">A−</button>
+  <button id="fplus" class="ghost" style="color:#aaa" title="larger text">A+</button>
   <select id="spd"><option>1</option><option>1.25</option><option>1.5</option><option>2</option></select>
   <select id="chap" style="max-width:9rem"></select>
 </div>
@@ -37,6 +39,17 @@ const esc = (s) => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}
 let units = [], cur = -1, align = {}, curWord = -1;
 const CB_TOKEN = document.querySelector('meta[name="cb-token"]')?.content || "";
 const tok = p => CB_TOKEN ? p + (p.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(CB_TOKEN) : p;
+const FONT_KEY = "castbook-font";
+document.getElementById("body").style.fontSize = localStorage.getItem(FONT_KEY) || "";
+const setFont = d => {
+  const el = document.getElementById("body");
+  const cur = parseFloat(getComputedStyle(el).fontSize);
+  const next = Math.min(28, Math.max(12, cur + d));
+  el.style.fontSize = next + "px";
+  localStorage.setItem(FONT_KEY, next + "px");
+};
+$("fminus").onclick = () => setFont(-1);
+$("fplus").onclick = () => setFont(1);
 if (CB_TOKEN) document.getElementById("home-link").href = tok("/");
 const audio = new Audio();
 audio.onended = () => playAt(nextPlayable(cur));
