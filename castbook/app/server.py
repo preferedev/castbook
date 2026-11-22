@@ -78,6 +78,20 @@ def create_app(cfg: Settings) -> FastAPI:
     def index() -> str:
         return (STATIC / "index.html").read_text()
 
+    @app.get("/api/machine")
+    def machine() -> dict[str, Any]:
+        from ..probe import detect
+
+        mi = detect()
+        return {
+            "tier": mi.tier,
+            "gpu": mi.gpu,
+            "cores": mi.cores,
+            "ram_gb": mi.ram_gb,
+            "quality_capable": mi.quality_capable,
+            "verdict": mi.verdict,
+        }
+
     @app.get("/api/voices")
     def voices() -> list[dict[str, Any]]:
         return [v.model_dump() for v in LIBRARY]

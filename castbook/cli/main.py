@@ -248,6 +248,11 @@ def doctor(
     for m in models_mod.MANIFEST:
         present = (cfg.models_dir / m.filename).exists()
         typer.echo(f"{m.id:22} {'ok' if present else 'not downloaded'}")
+    from ..probe import detect
+
+    mi = detect()
+    typer.echo(f"machine:     {mi.tier} · {mi.cores} cores · {mi.ram_gb} GB RAM")
+    typer.echo(mi.verdict)
     raise typer.Exit(0 if ok else 1)
 
 

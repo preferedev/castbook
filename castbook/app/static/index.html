@@ -242,6 +242,15 @@ $("lex-save").onclick = async () => {
   const r = await api(`/api/books/${current}/lexicon`, {method: "PUT", headers: {"content-type":"application/json"}, body: JSON.stringify(body)});
   $("lex-meta").textContent = ` · saved ${r.saved} entries`;
 };
+async function loadMachine() {
+  const m = await api("/api/machine");
+  const el = document.querySelector("header .muted:last-of-type") || document.querySelector(".muted");
+  const note = document.createElement("span");
+  note.className = "muted"; note.style.marginLeft = "1rem"; note.style.fontSize = ".75rem";
+  note.textContent = m.verdict;
+  document.body.insertBefore(note, document.body.firstElementChild.nextSibling);
+}
+loadMachine();
 async function loadReview(id) {
   const r = await api(`/api/books/${id}/review`);
   const units = r.units || [];
