@@ -9,6 +9,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
@@ -372,12 +373,17 @@ def create_app(cfg: Settings) -> FastAPI:
             done = sum(1 for u in manifest.units.values() if u.status == UnitStatus.done)
             failed = sum(1 for u in manifest.units.values() if u.status == UnitStatus.failed)
         busy = any(k.endswith(book_id) and t.is_alive() for k, t in _jobs.items())
+        eta_s = None
+        if manifest and manifest.started_at > 0 and done > 0 and total > done:
+            rate = (time.time() - manifest.started_at) / done
+            eta_s = round(rate * (total - done - failed))
         log_tail = (d / "job.log").read_text()[-2000:] if (d / "job.log").exists() else ""
         return {
             "total": total,
             "done": done,
             "failed": failed,
             "busy": busy,
+            "eta_s": eta_s,
             "log": log_tail,
         }
 

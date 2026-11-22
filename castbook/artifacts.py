@@ -162,6 +162,7 @@ class AudioManifest(BaseModel):
     units: dict[str, AudioEntry] = Field(default_factory=dict)
     chapters: dict[str, ChapterAudio] = Field(default_factory=dict)
     input_hash: str = ""
+    started_at: float = 0.0
 
 
 class ModelSpec(BaseModel):

@@ -6,6 +6,7 @@ VoiceSpec) differs from the manifest entry, or its wav is missing.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -98,7 +99,6 @@ def run(
     manifest = load_artifact(AudioManifest, book.dir)
     if manifest is None or manifest.input_hash != attribution.input_hash:
         manifest = AudioManifest(book_id=book.book_id, input_hash=attribution.input_hash)
-
     units = [u for u in attribution.units if chapters is None or u.chapter in chapters]
     if limit is not None:
         if limit < 1:
@@ -138,6 +138,10 @@ def run(
             skipped += 1
         else:
             pending.append(unit)
+
+    if pending and manifest.started_at == 0.0:
+        manifest.started_at = time.time()
+        save_artifact(manifest, book.dir)
 
     if workers > 1 and pending:
         import os

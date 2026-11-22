@@ -180,7 +180,12 @@ async function refreshProgress() {
     const p = await api(`/api/books/${current}/progress`);
     const pct = p.total ? Math.round(100 * p.done / p.total) : 0;
     $("prog").style.width = pct + "%";
-    $("prog-label").textContent = `${p.done}/${p.total} units rendered` + (p.failed ? ` · ${p.failed} failed` : "");
+    let eta = "";
+    if (p.busy && p.eta_s != null) {
+      const m = Math.round(p.eta_s / 60);
+      eta = ` · ~${m < 1 ? "<1" : m} min left`;
+    }
+    $("prog-label").textContent = `${p.done}/${p.total} units rendered` + (p.failed ? ` · ${p.failed} failed` : "") + eta;
     if (p.log) { $("log").style.display = ""; $("log").textContent = p.log; }
     if (p.busy) {
       clearTimeout(pollTimer);
