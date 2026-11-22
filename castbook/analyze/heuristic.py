@@ -11,14 +11,18 @@ import re
 from collections import Counter
 
 from ..artifacts import Chapter, Character, Unit
-from .units import _apostrophe, _inside_quote, _quote_step, split_units
+from .units import _apostrophe, _inside_quote, _quote_step, quoted_spans, split_units
 
 SAID_VERBS = (
     "said|asked|replied|cried|whispered|shouted|exclaimed|answered|continued|"
     "added|murmured|muttered|observed|remarked|returned|began|repeated|declared|"
     "protested|agreed|admitted|suggested|insisted|demanded|inquired|responded|"
     "called|laughed|sighed|smiled|frowned|nodded|interrupted|promised|urged|"
-    "wondered|thought|told|spoke|went on|put in|burst out"
+    "wondered|thought|told|spoke|went on|put in|burst out|pleaded|explained|"
+    "begged|sobbed|stammered|gasped|growled|screamed|yelled|mumbled|drawled|"
+    "wailed|moaned|grumbled|snarled|sneered|blurted|snapped|roared|bellowed|"
+    "choked|hissed|rasped|whined|croaked|queried|ventured|offered|confessed|"
+    "mused|retorted|drawled|howled|stuttered"
 )
 _NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:(?:de|van|von|of|the|al|bin)\s+)?[A-Z][a-z]+){0,2}"
 _NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+"
@@ -178,10 +182,15 @@ class HeuristicAttributor:
                 last_speaker = prev_speaker = ""
             speaker = next((s for _, s in run if s), None)
             if speaker is None:
-                speaker = prev_speaker or last_speaker or "ambiguous"
+                quoted = sum(len(q) for u, _ in run for q in quoted_spans(u.text))
+                total = sum(len(u.text) for u, _ in run)
+                if total and quoted / total < 0.3 and not (prev_speaker or last_speaker):
+                    speaker = "narrator"
+                else:
+                    speaker = prev_speaker or last_speaker or "ambiguous"
             for u, _ in run:
                 u.speaker = speaker
-            if speaker != "ambiguous" and speaker != last_speaker:
+            if speaker not in ("ambiguous", "narrator") and speaker != last_speaker:
                 prev_speaker = last_speaker or prev_speaker
                 last_speaker = speaker
         return units
