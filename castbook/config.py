@@ -56,6 +56,8 @@ class LlmSettings(BaseModel):
 
 class TtsSettings(BaseModel):
     backend: str = "kokoro"  # kokoro | pocket | qwen
+    # scales the emotion→speed deltas (0 = ignore emotion, 1 = full effect)
+    emotion_strength: float = 1.0
 
 
 class ExportSettings(BaseModel):
