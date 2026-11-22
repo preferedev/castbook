@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Annotated
@@ -79,23 +80,40 @@ def import_cmd(
 ) -> None:
     """Copy books into the library and parse them into chapters."""
     cfg = _cfg(config)
+    paths, tmp_dirs = _resolve_sources(files)
+    try:
+        for path in paths:
+            book = import_book(path, cfg)
+            typer.echo(f"book id: {book.book_id}")
+    finally:
+        for d in tmp_dirs:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def _resolve_sources(sources: list[str]) -> tuple[list[Path], list[Path]]:
+    """Expand files/dirs/URLs into local ebook paths + temp dirs to clean up."""
     from .. import net
 
-    sources: list[str] = []
-    for src in files:
+    out: list[str] = []
+    for src in sources:
         p = Path(src)
         if p.is_dir():
-            found = sorted(f for f in p.iterdir() if f.suffix.lower() in net.SUPPORTED_SUFFIXES)
+            found = sorted(
+                f for f in p.iterdir() if f.is_file() and f.suffix.lower() in net.SUPPORTED_SUFFIXES
+            )
             if not found:
                 typer.echo(f"no supported books in {src}")
                 raise typer.Exit(1)
-            sources.extend(str(f) for f in found)
+            out.extend(str(f) for f in found)
         else:
-            sources.append(src)
-    for src in sources:
+            out.append(src)
+    paths: list[Path] = []
+    tmp_dirs: list[Path] = []
+    for src in out:
         path = Path(src)
         if src.lower().startswith(("http://", "https://")):
             tmp = Path(tempfile.mkdtemp())
+            tmp_dirs.append(tmp)
             try:
                 path = net.fetch_book_url(src, tmp)
             except net.FetchError as e:
@@ -107,8 +125,8 @@ def import_cmd(
         if path.suffix.lower() not in net.SUPPORTED_SUFFIXES:
             typer.echo(f"unsupported format {path.suffix or '(none)'} — {path.name}")
             raise typer.Exit(1)
-        book = import_book(path, cfg)
-        typer.echo(f"book id: {book.book_id}")
+        paths.append(path)
+    return paths, tmp_dirs
 
 
 @app.command()
@@ -348,7 +366,10 @@ def stats(
 
 @app.command("run")
 def run_cmd(
-    file: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    files: Annotated[
+        list[str],
+        typer.Argument(help="local files (.epub/.txt/.pdf/…), a directory, or http(s) ebook URLs"),
+    ],
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     speed: Annotated[float, typer.Option("--speed", min=0.5, max=2.0)] = 1.0,
     workers: Annotated[int, typer.Option("--workers", min=1, max=16)] = 1,
@@ -356,8 +377,14 @@ def run_cmd(
 ) -> None:
     """Full pipeline: import → analyze → cast → generate → export."""
     cfg = _cfg(config)
-    book = run_book(file, cfg, speed=speed, workers=workers, layout=layout)
-    typer.echo(f"done: {book.export}")
+    paths, tmp_dirs = _resolve_sources(files)
+    try:
+        for path in paths:
+            book = run_book(path, cfg, speed=speed, workers=workers, layout=layout)
+            typer.echo(f"done: {book.export}")
+    finally:
+        for d in tmp_dirs:
+            shutil.rmtree(d, ignore_errors=True)
 
 
 @app.command()
