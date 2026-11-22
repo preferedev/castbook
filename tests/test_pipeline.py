@@ -182,3 +182,31 @@ def test_media_epub(tmp_path) -> None:
     assert "OEBPS/ch001.smil" in names and "OEBPS/audio/ch001.mp3" in names
     smil = zipfile.ZipFile(out).read("OEBPS/ch001.smil").decode()
     assert 'clipBegin="0:00:00.000"' in smil and 'clipEnd="0:00:00.400"' in smil
+
+
+def test_clean_removes_junk_dirs(tmp_path) -> None:
+    from typer.testing import CliRunner
+
+    from castbook.cli.main import app
+
+    data = tmp_path / "data"
+    (data / "tmpxyz").mkdir(parents=True)
+    (data / "real").mkdir()
+    (data / "real" / "chapters.json").write_text("{}")
+    r = CliRunner().invoke(app, ["clean", "-y"], env={"CASTBOOK_DATA_DIR": str(data)})
+    assert r.exit_code == 0
+    assert not (data / "tmpxyz").exists()
+    assert (data / "real").exists()
+
+
+def test_verify_reports_missing_attribution(tmp_path) -> None:
+    from typer.testing import CliRunner
+
+    from castbook.cli.main import app
+
+    data = tmp_path / "data"
+    (data / "b").mkdir(parents=True)
+    (data / "b" / "chapters.json").write_text("{}")
+    r = CliRunner().invoke(app, ["verify", "b"], env={"CASTBOOK_DATA_DIR": str(data)})
+    assert r.exit_code == 1
+    assert "analyze" in r.output
