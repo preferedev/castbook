@@ -48,7 +48,7 @@ class QwenBackend(Backend):
         else:
             device = "cpu"
         self._model = Qwen3TTSModel.from_pretrained(model_id, device_map=device)
-        self._language = _LANG_NAMES.get(language, "English")
+        self._language = _LANG_NAMES.get(language.split("-")[0].split("_")[0].lower(), "English")
 
     def capabilities(self) -> Capabilities:
         return Capabilities(

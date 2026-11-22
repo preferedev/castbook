@@ -32,6 +32,7 @@ from .kokoro import KokoroBackend
 
 
 def make_backend(cfg: Settings, language: str = "en") -> Backend:
+    language = language.split("-")[0].split("_")[0].lower() or "en"
     if cfg.tts.backend == "qwen":
         from .qwen import QwenBackend
 
@@ -137,7 +138,7 @@ def run(
         base = casting.map.get(unit.speaker) or casting.map["narrator"]
         voice = _unit_voice(base, unit.emotion, speed)
         text = _apply_lexicon(unit.text, lexicon)
-        unit_hash = text_hash(text + voice.model_dump_json())
+        unit_hash = text_hash(text + voice.model_dump_json() + language)
         wav = book.unit_wav(unit.id)
         duration = be.synthesize(text, voice, wav)
         return unit.id, duration, wav.name, unit_hash, unit.text[:60]
@@ -147,7 +148,7 @@ def run(
         base = casting.map.get(unit.speaker) or casting.map["narrator"]
         voice = _unit_voice(base, unit.emotion, speed)
         text = _apply_lexicon(unit.text, lexicon)
-        unit_hash = text_hash(text + voice.model_dump_json())
+        unit_hash = text_hash(text + voice.model_dump_json() + language)
         existing = manifest.units.get(unit.id)
         if (
             existing

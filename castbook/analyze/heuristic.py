@@ -490,22 +490,30 @@ def slugify(name: str) -> str:
 
 
 def _dedupe(characters: list[Character]) -> list[Character]:
-    """Merge same-last-token names (Elizabeth / Elizabeth Bennet) and slug collisions."""
+    """Merge names where one contains the other (Elizabeth / Elizabeth Bennet)
+    and slug collisions. Same-surname distinct people (Mr John Smith / Mrs Jane
+    Smith) are kept separate."""
     out: list[Character] = []
-    by_last: dict[str, Character] = {}
     for c in characters:
-        last = c.name.split()[-1].lower()
-        existing = by_last.get(last)
-        if existing and existing.id != c.id:
-            if c.name not in existing.aliases and c.name != existing.name:
-                existing.aliases.append(c.name)
-            continue
         dup = next((x for x in out if x.id == c.id), None)
         if dup:
             if c.name not in dup.aliases and c.name != dup.name:
                 dup.aliases.append(c.name)
             continue
-        by_last[last] = c
+        last = c.name.split()[-1].lower()
+        merge = next(
+            (
+                x
+                for x in out
+                if x.name.split()[-1].lower() == last
+                and (x.name.lower() in c.name.lower() or c.name.lower() in x.name.lower())
+            ),
+            None,
+        )
+        if merge:
+            if c.name not in merge.aliases and c.name != merge.name:
+                merge.aliases.append(c.name)
+            continue
         out.append(c)
     return out
 

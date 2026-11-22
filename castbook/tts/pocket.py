@@ -32,6 +32,7 @@ class PocketBackend(Backend):
     def __init__(self, language: str = "english") -> None:
         from pocket_tts import TTSModel
 
+        language = language.split("-")[0].split("_")[0].lower()
         self._model = TTSModel.load_model(_LANG_NAMES.get(language, language))
         self._states: dict[str, object] = {}
 
