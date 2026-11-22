@@ -296,6 +296,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             "unit_counts": (dict(Counter(u.speaker for u in attrib.units)) if attrib else {}),
         }
 
+    @app.get("/api/books/{book_id}/estimate")
+    def estimate(book_id: str) -> dict[str, Any]:
+        from ..tts import estimate_render
+
+        book = _require_book(cfg, book_id)
+        try:
+            return estimate_render(book, cfg)
+        except FileNotFoundError as e:
+            raise HTTPException(400, str(e)) from e
+
     @app.get("/api/books/{book_id}/cover")
     def cover(book_id: str) -> FileResponse:
         book = _require_book(cfg, book_id)
