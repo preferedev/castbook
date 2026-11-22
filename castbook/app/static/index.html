@@ -280,7 +280,8 @@ async function openBook(id) {
     const a = prompt("author", meta.author); if (a) body.author = a;
     const l = prompt("language (e.g. en, fr, de) — changing this re-renders audio", meta.language); if (l) body.language = l;
     if (!Object.keys(body).length) return;
-    const r = await api(`/api/books/${id}/meta`, {method: "PUT", body: JSON.stringify(body)});
+    const r = await api(`/api/books/${id}/meta`, {method: "PUT",
+      headers: {"content-type": "application/json"}, body: JSON.stringify(body)});
     if (r.audio_invalidated) alert(`${r.audio_invalidated} rendered units invalidated — re-generate to apply`);
     openBook(id); loadBooks();
   };
