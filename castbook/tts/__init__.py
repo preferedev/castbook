@@ -93,7 +93,7 @@ def run(
     if attribution is None or casting is None:
         raise FileNotFoundError(f"{book.dir} — run `castbook analyze` and `castbook cast` first")
 
-    backend = backend or make_backend(cfg)
+    injected_backend = backend is not None
     lexicon = _load_lexicon(book, cfg)
     manifest = load_artifact(AudioManifest, book.dir)
     if manifest is None or manifest.input_hash != attribution.input_hash:
@@ -106,18 +106,20 @@ def run(
         units = units[:limit]
     if workers < 1:
         raise ValueError(f"workers must be >= 1, got {workers}")
-    if backend is not None:
+    if injected_backend:
         workers = 1  # injected backend instances are not thread-shared
+    if workers <= 1 and backend is None:
+        backend = make_backend(cfg)
     total = len(units)
     rendered = skipped = failed = done_i = 0
 
-    def render(unit: Unit) -> tuple[str, float, str, str, str]:
+    def render(unit: Unit, be: Backend) -> tuple[str, float, str, str, str]:
         base = casting.map.get(unit.speaker) or casting.map["narrator"]
         voice = _unit_voice(base, unit.emotion, speed)
         text = _apply_lexicon(unit.text, lexicon)
         unit_hash = text_hash(text + voice.model_dump_json())
         wav = book.unit_wav(unit.id)
-        duration = backend.synthesize(text, voice, wav)
+        duration = be.synthesize(text, voice, wav)
         return unit.id, duration, wav.name, unit_hash, unit.text[:60]
 
     pending = []
@@ -139,10 +141,18 @@ def run(
 
     if workers > 1 and pending:
         import os
+        import threading
         from concurrent.futures import ThreadPoolExecutor
 
+        tls = threading.local()
+
+        def render_t(unit: Unit) -> tuple[str, float, str, str, str]:
+            if not hasattr(tls, "backend"):
+                tls.backend = make_backend(cfg)
+            return render(unit, tls.backend)
+
         pool = ThreadPoolExecutor(max_workers=min(workers, os.cpu_count() or 1))
-        futures = [pool.submit(render, u) for u in pending]
+        futures = [pool.submit(render_t, u) for u in pending]
         try:
             for f in futures:
                 done_i += 1
@@ -176,7 +186,7 @@ def run(
         for unit in pending:
             done_i += 1
             try:
-                uid, dur, name, uh, _ = render(unit)
+                uid, dur, name, uh, _ = render(unit, backend)  # type: ignore[arg-type]
                 manifest.units[uid] = AudioEntry(
                     path=name,
                     duration_s=round(dur, 3),

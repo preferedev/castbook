@@ -24,7 +24,7 @@ def _whisper() -> Any:
     global _model
     if _model is None:
         try:
-            from faster_whisper import WhisperModel  # type: ignore[import-untyped]
+            from faster_whisper import WhisperModel  # type: ignore
         except ImportError as e:
             raise RuntimeError(
                 "faster-whisper not installed — install with `castbook[align]`"

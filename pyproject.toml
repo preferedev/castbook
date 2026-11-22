@@ -34,6 +34,7 @@ align = [
     "faster-whisper>=1.0",
 ]
 dev = [
+    "tomli>=2.0; python_version>='3.11'",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.5",
