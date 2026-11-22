@@ -596,6 +596,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         if url:
             try:
                 with net.open_url(url, timeout=30) as resp:
+                    net.assert_public_peer(resp)
                     raw = resp.read(MAX_READ_CHARS + 1)
             except net.FetchError as e:
                 raise _http(e) from e
@@ -613,21 +614,37 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         speed = float(spec.get("speed") or 1.0)
         speed = speed if 0 < speed <= 2 else 1.0
         read_id = secrets.token_hex(6)
-        d = cfg.data_dir / "_reads" / read_id
+        reads_root = cfg.data_dir / "_reads"
+        reads_root.mkdir(parents=True, exist_ok=True)
+        stale = sorted(reads_root.iterdir(), key=lambda p: p.stat().st_mtime)
+        for old in stale[:-31]:  # keep the newest 32 reads
+            shutil.rmtree(old, ignore_errors=True)
+        d = reads_root / read_id
         d.mkdir(parents=True)
-        status = {"done": 0, "total": len(chunks)}
-        (d / "status.json").write_text(json.dumps(status))
+        status: dict[str, Any] = {"done": 0, "total": len(chunks)}
+
+        def save_status() -> None:
+            tmp = d / "status.json.tmp"
+            tmp.write_text(json.dumps(status))
+            tmp.replace(d / "status.json")
+
+        save_status()
 
         def work() -> None:
-            backend = _preview_backend(cfg)
-            vspec = VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed)
-            cancel = _cancels.get(f"read:{read_id}")
-            for i, chunk in enumerate(chunks):
-                if cancel is not None and cancel.is_set():
-                    break
-                backend.synthesize(chunk, vspec, d / f"{i:04}.wav")
-                status["done"] = i + 1
-                (d / "status.json").write_text(json.dumps(status))
+            try:
+                backend = _preview_backend(cfg)
+                vspec = VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed)
+                cancel = _cancels.get(f"read:{read_id}")
+                for i, chunk in enumerate(chunks):
+                    if cancel is not None and cancel.is_set():
+                        break
+                    backend.synthesize(chunk, vspec, d / f"{i:04}.wav")
+                    status["done"] = i + 1
+                    save_status()
+            except Exception as e:
+                status["error"] = str(e)
+                save_status()
+                raise
 
         _spawn(f"read:{read_id}", work, _log_to(d / "read.log"))
         return {"id": read_id, "total": len(chunks)}
@@ -637,7 +654,10 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         f = _read_dir(cfg, read_id) / "status.json"
         if not f.exists():
             raise HTTPException(404, "no such read")
-        return json.loads(f.read_text())  # type: ignore[no-any-return]
+        try:
+            return json.loads(f.read_text())  # type: ignore[no-any-return]
+        except json.JSONDecodeError:
+            raise HTTPException(503, "status updating") from None
 
     @app.get("/api/read/{read_id}/audio/{i}")
     def read_audio(read_id: str, i: int) -> FileResponse:
