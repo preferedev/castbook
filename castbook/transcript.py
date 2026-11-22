@@ -43,8 +43,11 @@ def write_transcript(
     for u in attribution.units:
         by_chapter.setdefault(u.chapter, []).append(u)
 
-    out_dir.mkdir(parents=True, exist_ok=True)
+    single = out_dir.suffix.lower() in (".srt", ".vtt", ".txt")
+    out_dir.parent.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
+    merged: list[tuple[float, float, str, str]] = []
+    offset = 0.0
     for ch_index, units in sorted(by_chapter.items()):
         ch_audio = manifest.chapters.get(str(ch_index))
         if ch_audio is not None and ch_audio.status != ChapterStatus.done:
@@ -67,6 +70,11 @@ def write_transcript(
             prev = u
         if not cues:
             continue
+        if single:
+            merged.extend((a + offset, b + offset, sp, tx) for a, b, sp, tx in cues)
+            if ch_audio is not None:
+                offset += ch_audio.duration_s
+            continue
         if fmt == "vtt":
             body = "WEBVTT\n\n" + "\n\n".join(
                 f"{_stamp(a, '.')} --> {_stamp(b, '.')}\n<v {sp}>{tx}</v>" for a, b, sp, tx in cues
@@ -83,4 +91,19 @@ def write_transcript(
             path = out_dir / f"ch{ch_index:03d}.srt"
         path.write_text(body + "\n")
         written.append(path)
+    if single:
+        cues = merged
+        if fmt == "vtt":
+            body = "WEBVTT\n\n" + "\n\n".join(
+                f"{_stamp(a, '.')} --> {_stamp(b, '.')}\n<v {sp}>{tx}</v>" for a, b, sp, tx in cues
+            )
+        elif fmt == "txt":
+            body = "\n".join(f"[{sp}] {tx}" for _, _, sp, tx in cues)
+        else:
+            body = "\n\n".join(
+                f"{i}\n{_stamp(a)} --> {_stamp(b)}\n[{sp}] {tx}"
+                for i, (a, b, sp, tx) in enumerate(cues, 1)
+            )
+        out_dir.write_text(body + "\n")
+        written.append(out_dir)
     return written
