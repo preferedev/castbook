@@ -11,7 +11,7 @@ import re
 from collections import Counter
 
 from ..artifacts import Chapter, Character, Unit
-from .units import _apostrophe, _inside_quote, split_units
+from .units import _apostrophe, _inside_quote, _quote_step, split_units
 
 SAID_VERBS = (
     "said|asked|replied|cried|whispered|shouted|exclaimed|answered|continued|"
@@ -24,7 +24,7 @@ _NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:(?:de|van|von|of|the|al|bin)\s+)?[A-Z][a-z]+
 _NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+"
 NAME = rf"(?-i:((?:the\s+)?(?:{_NAME_TITLED}|{_NAME_PLAIN})))"
 
-TAG_AFTER = re.compile(rf"[”\"']\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
+TAG_AFTER = re.compile(rf"[”\"'\u2019]\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
 _QUOTE_CHAR = re.compile(r"[\"\u201c\u201d\u2018\u2019']")
 FIRST_PERSON = re.compile(
     rf"[”\"']\s*,?\s*(?:I\s+(?:{SAID_VERBS})|(?:{SAID_VERBS})\s+I)\b",
@@ -262,18 +262,13 @@ def _gender_of(raw: str) -> str:
 def _tag_zone(text: str, inside: bool = False) -> str:
     """Text outside quoted speech — where speaker tags live. Quote marks stay
     as regex anchors; everything said inside a quote is dropped."""
+    stack: list[str] = ["d"] if inside else []
     out: list[str] = []
     for i, ch in enumerate(text):
-        if ch == '"':
-            inside = not inside
+        if ch in '"\u201c\u201d\u2018' or (ch == "\u2019" and not _apostrophe(text, i)):
+            _quote_step(stack, ch, text, i)
             out.append(ch)
-        elif ch in "\u201c\u2018":
-            inside = True
-            out.append(ch)
-        elif ch in "\u201d\u2019" and not _apostrophe(text, i):
-            inside = False
-            out.append(ch)
-        elif not inside:
+        elif not stack:
             out.append(ch)
     return "".join(out)
 
