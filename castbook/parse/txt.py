@@ -16,7 +16,9 @@ MAX_WORDS = 4000
 HEADING = re.compile(
     r"^(?:"
     r"#{1,6}\s+\S"  # markdown heading
-    r"|(?:chapter|part|book|prologue|epilogue|act|scene|section)\b[^\n]{0,60}"  # worded
+    r"|(?:(?:chapter|part|book|act|scene|section)"  # worded heading
+    r"\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten)\b[^\n]{0,55}"
+    r"|(?:prologue|epilogue)(?:\s*:?[^\n]{0,55})?$)"
     r"|[IVXLC]{1,10}\.?\s*$"  # bare roman numeral
     r"|(?-i:[A-Z][A-Z '\u2019\-]{4,60}$)"  # short ALL-CAPS line (case-sensitive)
     r")",
