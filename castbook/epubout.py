@@ -41,10 +41,11 @@ def _smil_time(s: float) -> str:
     return f"{h}:{m:02d}:{s_:02d}.{ms:03d}"
 
 
-def build_media_epub(book: BookPaths, out: Path) -> Path:
+def build_media_epub(book: BookPaths, out: Path, only: set[int] | None = None) -> Path:
     """Zip an EPUB3 with smil overlays over the rendered chapter audio.
 
-    Chapters without rendered audio ship text-only. Returns `out`.
+    Chapters without rendered audio ship text-only. `only` limits the
+    included chapters (subset exports). Returns `out`.
     """
     ch = load_artifact(ChaptersFile, book.dir)
     attrib = load_artifact(AttributionFile, book.dir)
@@ -68,6 +69,8 @@ def build_media_epub(book: BookPaths, out: Path) -> Path:
         durations: list[tuple[str, float]] = []
         total = 0.0
         for c in ch.chapters:
+            if only is not None and c.index not in only:
+                continue
             cid = f"ch{c.index:03d}"
             wav = book.audio / f"{cid}.wav"
             units = [

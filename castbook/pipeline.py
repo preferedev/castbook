@@ -183,7 +183,7 @@ def run_book(
 
         ch = load_artifact(ChaptersFile, book.dir)
         title = (ch.meta.title if ch else book.book_id) or book.book_id
-        out = build_media_epub(book, book.export / f"{title}-read-along.epub")
+        out = build_media_epub(book, book.export / f"{title}-read-along.epub", only=chapters)
         log(f"[export] {out.name}")
     return book
 
