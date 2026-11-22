@@ -3,7 +3,7 @@
 Turn any ebook into a full-cast audiobook — every character gets a consistent
 voice, a narrator reads the rest. Free, open-source, local-first.
 
-EPUB, PDF, TXT and MOBI/AZW3 in, chaptered M4B out. Python CLI plus a minimal local web UI.
+EPUB, PDF, TXT, MOBI/AZW3, HTML and DOCX in, chaptered M4B out. Python CLI plus a minimal local web UI.
 
 ## Hear it
 
@@ -45,7 +45,7 @@ un-rendered units are synthesized.
 
 | command | what it does |
 |---|---|
-| `castbook import <file\|dir\|url> […]` | import ebooks (EPUB/PDF/TXT/MD/MOBI/AZW3) — files, a whole directory, or http(s) URLs → `chapters.json` |
+| `castbook import <file\|dir\|url> […]` | import ebooks (EPUB/PDF/TXT/MD/MOBI/AZW3/HTML/DOCX) — files, a whole directory, or http(s) URLs → `chapters.json` |
 | `castbook analyze <book>` | attribute every line (`--backend heuristic\|llamacpp\|hybrid` — hybrid = heuristic + LLM second look) |
 | `castbook clone <book> <sp> <clip>` | clone a voice from a wav/mp3/flac clip onto a speaker (pocket only) |
 | `castbook cast <book>` | auto-assign voices; `--map name=voice` (mix voices as `a:0.7+b:0.3`), `--speed name=rate` |
