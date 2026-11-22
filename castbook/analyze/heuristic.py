@@ -224,13 +224,21 @@ class HeuristicAttributor:
                 if not left and not tagged and total and quoted / total < 0.3:
                     resolved[i] = "narrator"
                     continue
-                if len(parties) != 2:
+                cands = [p for p in parties if p not in _addressed(run, names)]
+                if len(cands) == 1:
+                    resolved[i] = cands[0]
+                    continue
+                if len(cands) != 2:
                     continue
                 if first_person and _pronoun_tag(run):
-                    resolved[i] = next((p for p in parties if p != names["I"]), None)
+                    resolved[i] = next((p for p in cands if p != names["I"]), None)
                     continue
-                if left:
-                    resolved[i] = parties[1] if left == parties[0] else parties[0]
+                anchor = left if left in cands else next(
+                    (resolved[j] for j in seg[pos + 1 :] if resolved[j] in cands),
+                    None,
+                )
+                if anchor:
+                    resolved[i] = cands[1] if anchor == cands[0] else cands[0]
                     for u, _ in run:
                         u.guess = True
             if len(parties) == 2:
@@ -432,6 +440,26 @@ def _trailing_says(text: str, names: dict[str, str]) -> str | None:
     return _lookup(m.group(1), names) if m else None
 
 
+_QUOTED = re.compile("[\u201c\"']([^\u201d\"']+)[\u201d\"']")
+
+
+def _addressed(run: list[tuple[Unit, str | None]], names: dict[str, str]) -> set[str]:
+    out: set[str] = set()
+    for u, _ in run:
+        for m in _QUOTED.finditer(u.text):
+            span = m.group(1)
+            for raw, cid in names.items():
+                if len(raw) <= 3:
+                    continue
+                pat = re.escape(raw).replace(r"\ ", r"\s+")
+                if re.search(
+                    rf"(?:^|[,.!?;\u2014\u2013]\s*)(?:my\s+(?:dear|dearest|love)\s+)?{pat}\s*(?=[,.!?;\u2014\u2013]|$)",
+                    span,
+                ):
+                    out.add(cid)
+    return out
+
+
 _SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
 
 
@@ -454,19 +482,33 @@ def _beat_speaker(zone: str, names: dict[str, str]) -> str | None:
     tail = zone.strip().rstrip(",:;\u2014\u2013-").strip()
     if not tail:
         return None
-    sents = _SENT_SPLIT.split(tail)
+    sents = [s for s in _SENT_SPLIT.split(tail) if re.search(r"[^\W\d_]", s)]
+    if not sents:
+        return None
     last = sents[-1]
-    if re.match(r"(?:He|She|They)\b", last):
+    if re.match(r"(?:He|She|They)\b", last.lstrip("“”\"', ")):
         if not re.search(rf"\b{SAID_VERBS}\b", last):
             return None
         for prev in reversed(sents[:-1]):
-            hit = _subject_name(prev, names)
+            hit = _subject_name(prev, names) or _any_name(prev, names)
             if hit:
                 return hit
-            if not re.match(r"(?:He|She|They)\b", prev):
+            if not re.match(r"(?:He|She|They)\b", prev.lstrip("“”\"', ")):
                 return None
         return None
     return _subject_name(last, names)
+
+
+def _any_name(sent: str, names: dict[str, str]) -> str | None:
+    best: tuple[int, str] | None = None
+    for raw, cid in names.items():
+        if len(raw) <= 3 or raw in ("I", "he", "she", "they"):
+            continue
+        pat = re.escape(raw).replace(r"\ ", r"\s+")
+        m = re.search(rf"\b{pat}\b", sent, re.IGNORECASE)
+        if m and (best is None or m.start() > best[0]):
+            best = (m.start(), cid)
+    return best[1] if best else None
 
 
 _PRONOUN_TAG = re.compile(
