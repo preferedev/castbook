@@ -525,7 +525,7 @@ def _addressed(run: list[tuple[Unit, str | None]], names: dict[str, str]) -> set
                 if re.search(
                     rf"(?:^|[,.!?;\u2014\u2013]\s*)(?:my\s+(?:dear|dearest|love)\s+)?{pat}\s*(?=[,.!?;\u2014\u2013]|$)",
                     span,
-                ):
+                ) or re.search(rf"\b{pat}\s+\w*\s*(?:{SAID_VERBS})\b", span):
                     out.add(cid)
     return out
 
@@ -558,10 +558,10 @@ def _beat_speaker(zone: str, names: dict[str, str]) -> str | None:
     last = sents[-1]
     head = last.lstrip("“”\"', ")
     pronoun_subject = re.match(r"(?:he|she|they)\b", head, re.IGNORECASE) or re.search(
-        rf"\b{SAID_VERBS}\s+(?:he|she|they)\b", last, re.IGNORECASE
+        rf"\b(?:{SAID_VERBS})\s+(?:he|she|they)\b", last, re.IGNORECASE
     )
     if pronoun_subject:
-        if not re.search(rf"\b{SAID_VERBS}\b", last):
+        if not re.search(rf"\b(?:{SAID_VERBS})\b", last):
             return None
         for prev in reversed(sents[:-1]):
             hit = _subject_name(prev, names) or _any_name(prev, names)

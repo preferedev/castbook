@@ -1,9 +1,9 @@
 # Castbook attribution eval
-_2026-11-22T17:01:57+00:00Z — heuristic_
+_2026-11-22T17:06:58+00:00Z — heuristic_
 
 | book | units | labeled | correct | accuracy | ambiguous |
 |---|---|---|---|---|---|
-| alice-in-wonderland | 146 | 21 | 18 | 86% | 0 |
+| alice-in-wonderland | 146 | 21 | 20 | 95% | 0 |
 | dorian-gray | 21 | 16 | 13 | 81% | 0 |
 | dr-jekyll-and-mr-hyde | 28 | 20 | 19 | 95% | 0 |
 | great-expectations | 46 | 34 | 32 | 94% | 2 |
@@ -17,8 +17,6 @@ _2026-11-22T17:01:57+00:00Z — heuristic_
 ## Misses
 
 - **alice-in-wonderland** `ch006-u0005` expected `ambiguous` got `alice` — 'The table was a large one, but the three were all crowded together at one corner'
-- **alice-in-wonderland** `ch006-u0017` expected `hatter` got `alice` — 'The Hatter opened his eyes very wide on hearing this; but all he said was, “Why '
-- **alice-in-wonderland** `ch006-u0031` expected `alice` got `dormouse` — 'Alice considered a little, and then said “The fourth.”'
 - **dorian-gray** `ch000-u0003` expected `basil-hallward` got `lord-henry-wotton` — '“That entirely depends on how you sit to-day, Dorian.”'
 - **dorian-gray** `ch000-u0006` expected `basil-hallward` got `lord-henry-wotton` — '“This is Lord Henry Wotton, Dorian, an old Oxford friend of mine. I\nhave just be'
 - **dorian-gray** `ch000-u0011` expected `lord-henry-wotton` got `dorian-gray` — '“Oh, I will make your peace with my aunt. She is quite devoted to you.\nAnd I don'
