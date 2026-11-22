@@ -15,6 +15,7 @@ from ..artifacts import (
     AudioManifest,
     CastingFile,
     ChaptersFile,
+    ChapterStatus,
     UnitStatus,
     load_artifact,
     save_artifact,
@@ -369,6 +370,65 @@ def estimate(
         f" · ~{e['est_audio_min']:.0f} min audio"
         f" · ~{e['est_render_min']:.0f} min render on {e['backend']}"
     )
+
+
+@app.command()
+def verify(
+    book: str,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Health-check a book: coverage, failed units, chapter gaps, stale export."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    attrib = load_artifact(AttributionFile, b.dir)
+    manifest = load_artifact(AudioManifest, b.dir)
+    problems: list[str] = []
+    if attrib is None:
+        problems.append("no attribution — run analyze")
+    elif manifest is None:
+        problems.append("not rendered — run generate")
+    else:
+        failed = [
+            u.id
+            for u in attrib.units
+            if manifest.units.get(u.id) is not None
+            and manifest.units[u.id].status == UnitStatus.failed
+        ]
+        missing = [
+            u.id
+            for u in attrib.units
+            if manifest.units.get(u.id) is None or manifest.units[u.id].status != UnitStatus.done
+        ]
+        if missing:
+            problems.append(f"{len(missing)} units unrendered")
+        if failed:
+            problems.append(f"{len(failed)} units failed (rerun generate to retry)")
+        expected = {str(u.chapter) for u in attrib.units}
+        gaps = sorted(
+            c
+            for c in expected
+            if manifest.chapters.get(c) is None
+            or manifest.chapters[c].status != ChapterStatus.done
+            or not (b.audio / manifest.chapters[c].path).exists()
+        )
+        if gaps:
+            problems.append(f"missing chapter wavs: {','.join(sorted(gaps, key=int)[:10])}")
+        export_dir = b.dir / "export"
+        if not export_dir.is_dir() or not any(export_dir.iterdir()):
+            problems.append("no exports — run export")
+        else:
+            mpath = b.dir / "manifest.json"
+            if not mpath.exists():
+                mpath = next(b.dir.glob("*manifest*.json"))
+            newest = max(f.stat().st_mtime for f in export_dir.iterdir() if f.is_file())
+            if mpath.stat().st_mtime > newest:
+                problems.append("audio changed after last export — re-export")
+    for msg in problems:
+        typer.echo(f"✗ {msg}")
+    if not problems:
+        typer.echo("✓ book is healthy: fully rendered and exported")
+    else:
+        raise typer.Exit(1)
 
 
 @app.command()
