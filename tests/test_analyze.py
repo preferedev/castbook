@@ -267,3 +267,48 @@ def test_heuristic_wrapped_alias_still_resolves() -> None:
         word_count=0,
     )
     assert HeuristicAttributor().attribute(ch, cast)[0].speaker == "ahab"
+
+
+def test_heuristic_two_party_scene_fills_alternating_turns() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="jane-eyre", name="Jane Eyre", aliases=["Jane", "I"]),
+        Character(id="rochester", name="Rochester", aliases=["Mr. Rochester"]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Where do you see the necessity?" he asked suddenly.\n\n'
+        '"Where? You, sir, have placed it before me."\n\n'
+        '"In what shape?"\n\n'
+        '"In the shape of Miss Ingram, your bride," I retorted.',
+        word_count=0,
+    )
+    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == [
+        "rochester",
+        "jane-eyre",
+        "rochester",
+        "jane-eyre",
+    ]
+
+
+def test_heuristic_pronoun_tag_means_the_non_i_party() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="pip", name="Pip", aliases=["I"]),
+        Character(id="magwitch", name="Abel Magwitch", aliases=["Magwitch"]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"There, sir!" I timidly explained.\n\n"Oh!" said he, coming back.',
+        word_count=0,
+    )
+    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == [
+        "pip",
+        "magwitch",
+    ]
