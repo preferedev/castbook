@@ -119,3 +119,37 @@ def test_heuristic_speaker_history_resets_at_narration() -> None:
         "narrator",
         "ambiguous",
     ]
+
+
+def test_heuristic_nested_single_quotes_keep_outer_tag() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="alice", name="Alice", aliases=[]),
+        Character(id="bob", name="Bob", aliases=[]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"He said \u2018hello\u2019 to me," said Bob.',
+        word_count=0,
+    )
+    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == ["bob"]
+
+
+def test_heuristic_double_quote_inside_single_speech() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="alice", name="Alice", aliases=[]),
+        Character(id="bob", name="Bob", aliases=[]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='\u2018Alice quietly said, "hi" to me,\u2019 said Bob.',
+        word_count=0,
+    )
+    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == ["bob"]
