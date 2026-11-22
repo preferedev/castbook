@@ -1,11 +1,12 @@
 # Castbook attribution eval
-_2026-11-22T16:25:13+00:00Z — heuristic_
+_2026-11-22T16:33:29+00:00Z — heuristic_
 
 | book | units | labeled | correct | accuracy | ambiguous |
 |---|---|---|---|---|---|
 | alice-in-wonderland | 107 | 21 | 18 | 86% | 1 |
 | dr-jekyll-and-mr-hyde | 20 | 20 | 19 | 95% | 0 |
 | great-expectations | 35 | 35 | 25 | 71% | 7 |
+| moby-dick | 29 | 20 | 14 | 70% | 3 |
 | pride-and-prejudice | 29 | 20 | 13 | 65% | 6 |
 | sherlock-holmes | 29 | 29 | 19 | 66% | 3 |
 | treasure-island | 25 | 25 | 23 | 92% | 0 |
@@ -26,6 +27,12 @@ _2026-11-22T16:25:13+00:00Z — heuristic_
 - **great-expectations** `ch001-u0032` expected `magwitch` got `ambiguous` — '“And you know what wittles is?”'
 - **great-expectations** `ch001-u0033` expected `pip` got `ambiguous` — '“Yes, sir.”'
 - **great-expectations** `ch001-u0035` expected `magwitch` got `ambiguous` — '“You get me a file.” He tilted me again. “And you get me wittles.” He'
+- **moby-dick** `ch036-u0009` expected `ahab` got `ambiguous` — '“What do ye do when ye see a whale, men?”'
+- **moby-dick** `ch036-u0010` expected `crew` got `narrator` — '“Sing out for him!” was the impulsive rejoinder from a score of clubbed\nvoices.'
+- **moby-dick** `ch036-u0013` expected `crew` got `ahab` — '“Lower away, and after him!”'
+- **moby-dick** `ch036-u0015` expected `crew` got `ahab` — '“A dead whale or a stove boat!”'
+- **moby-dick** `ch036-u0018` expected `ahab` got `ambiguous` — '“All ye mast-headers have before now heard me give orders about a white\nwhale. L'
+- **moby-dick** `ch036-u0020` expected `ahab` got `ambiguous` — 'Receiving the top-maul from Starbuck, he advanced towards the main-mast\nwith the'
 - **pride-and-prejudice** `ch001-u0003` expected `bennet` got `ambiguous` — '“I hope Mr. Bingley will like it, Lizzy.”'
 - **pride-and-prejudice** `ch001-u0009` expected `bennet` got `narrator` — '“Don’t keep coughing so, Kitty, for heaven’s sake! Have a little compassion on m'
 - **pride-and-prejudice** `ch001-u0010` expected `bennet` got `ambiguous` — '“Kitty has no discretion in her coughs,” said her father; “she times them ill.”'
