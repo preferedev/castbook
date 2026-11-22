@@ -94,11 +94,9 @@ def abs_layout(book: BookPaths, meta: object, outputs: list[Path], out_root: Pat
         if out.is_file():
             shutil.copy2(out, dest / f"{title}{out.suffix}")
         else:
-            sub = dest / out.name
-            sub.mkdir(exist_ok=True)
-            for f in out.iterdir():
-                if f.is_file() and f.name != "playlist.m3u":
-                    shutil.copy2(f, sub / f.name)
+            for f in sorted(out.iterdir()):
+                if f.is_file() and f.suffix.lower() in {".mp3", ".m4a"}:
+                    shutil.copy2(f, dest / f.name)
     cover_path = getattr(meta, "cover_path", None)
     if cover_path:
         cover = book.dir / cover_path
