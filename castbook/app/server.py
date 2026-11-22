@@ -102,7 +102,6 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     app = FastAPI(title="Castbook")
 
     if token:
-        from fastapi import Request
         from fastapi.responses import JSONResponse
 
         @app.middleware("http")
