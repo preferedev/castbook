@@ -305,6 +305,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     def upload(
         file: Annotated[UploadFile | None, File()] = None,
         url: Annotated[str | None, Form()] = None,
+        lang: Annotated[str | None, Form()] = None,
     ) -> dict[str, Any]:
         if (file is None) == (not url):
             raise HTTPException(400, "pass exactly one of file or url")
@@ -318,7 +319,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 raise HTTPException(400, "empty file")
             try:
                 with _import_lock:
-                    book = import_book(tmp_path, cfg)
+                    book = import_book(tmp_path, cfg, lang=lang)
             except ValueError as e:
                 raise HTTPException(422, str(e)) from e
         finally:

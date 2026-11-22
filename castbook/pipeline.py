@@ -19,7 +19,9 @@ from .config import Settings
 from .workdir import BookPaths, book_id_from
 
 
-def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) -> BookPaths:
+def import_book(
+    src: Path, cfg: Settings, log: Callable[[str], None] = print, lang: str | None = None
+) -> BookPaths:
     book_id = book_id_from(src)
     src_hash = file_hash(src)
     existing = load_artifact(ChaptersFile, cfg.data_dir / book_id)
@@ -44,6 +46,8 @@ def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) ->
     book = BookPaths(cfg.data_dir, book_id).ensure()
     src = book.import_source(src)
     meta, chapters = parse.parse(src, cover_dir=book.dir)
+    if lang:
+        meta.language = lang.strip().lower() or meta.language
     save_artifact(
         ChaptersFile(
             book_id=book.book_id,

@@ -87,13 +87,16 @@ def import_cmd(
     chain: Annotated[
         bool, typer.Option("--chain", help="also run analyze + cast after each import")
     ] = False,
+    lang: Annotated[
+        str | None, typer.Option("--lang", help="override detected language (e.g. fr, de)")
+    ] = None,
 ) -> None:
     """Copy books into the library and parse them into chapters."""
     cfg = _cfg(config)
     paths, tmp_dirs = _resolve_sources(files)
     try:
         for path in paths:
-            book = import_book(path, cfg)
+            book = import_book(path, cfg, lang=lang)
             typer.echo(f"book id: {book.book_id}")
             if chain:
                 analyze_book(book, cfg)
