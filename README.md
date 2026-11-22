@@ -48,7 +48,7 @@ un-rendered units are synthesized.
 | `castbook import <file\|dir\|url> […]` | import ebooks (EPUB/PDF/TXT/MD/MOBI/AZW3/HTML/DOCX) — files, a whole directory, or http(s) URLs → `chapters.json` |
 | `castbook analyze <book>` | attribute every line (`--backend heuristic\|llamacpp\|hybrid` — hybrid = heuristic + LLM second look) |
 | `castbook clone <book> <sp> <clip>` | clone a voice from a wav/mp3/flac clip onto a speaker (pocket only) |
-| `castbook cast <book>` | auto-assign voices; `--map name=voice` (mix voices as `a:0.7+b:0.3`), `--speed name=rate` |
+| `castbook cast <book>` | auto-assign voices; `--map name=voice` (mix voices as `a:0.7+b:0.3`), `--speed name=rate`, `--flat` single-voice mode |
 | `castbook generate <book>` | synthesize audio (resumable; `--chapters 1-3,7`, `--limit 50` preview, `--workers 4` parallel, `--align` word timestamps) |
 | `castbook export <book>` | mux chaptered M4B (+ `--format mp3`/`both`, `--epub` read-along EPUB3) |
 | `castbook review <book>` | list ambiguous units; `--set unit=speaker` to fix |
@@ -60,12 +60,19 @@ un-rendered units are synthesized.
 | `castbook models list\|pull` | model management |
 | `castbook serve -p 8484` | local web UI (`--host 0.0.0.0` shares on LAN behind a printed token) |
 | `castbook transcript <book>` | per-chapter SRT/VTT/TXT with speaker labels (`--fmt`, `-o`, `--speaker name` for one character) |
+| `castbook estimate <book>` | rough render-time estimate for the configured backend |
+| `castbook cover <book> <img>` | set custom cover art (any ffmpeg-decodable image → normalized PNG) |
+| `castbook voicepack export\|import` | shareable JSON casting presets across books |
+| `castbook stats <book>` | book metrics + per-speaker units/words/~minutes table |
 | `castbook search <book> <text>` | who said it: every matching unit with chapter, speaker, excerpt |
 | `castbook rename <book> <sp> <name>` | rename a character (old name kept as an alias) |
 | `castbook chapters <book>` | chapter indexes, titles, word counts |
 | `castbook verify <book>` | health check: coverage, failed units, chapter gaps, stale export |
 | `castbook import <files> --lang fr` | override detected language (misdetected epubs) |
 | `castbook export <book> --split 8` | split the M4B into parts of at most N hours |
+
+Pass `--quality fast\|balanced\|studio` to `castbook run` to pick an
+LLM+TTS backend pair without editing config.toml.
 
 ## Docker
 
@@ -78,7 +85,7 @@ docker run -v $PWD/data:/data castbook doctor
 
 `castbook serve` then open `http://localhost:8484`: pick the TTS backend in the header (kokoro/pocket/qwen — switching drops stale castings so you recast), pull models from the Models panel, import files (multi-select, drag-and-drop, or an http(s) ebook URL — private-network URLs are refused), audition voices
 with the ▶ button, review and
-override voice casting (including per-speaker speed, `voiceA:0.7+voiceB:0.3` mixes, and merging duplicate speakers), generate (or "Preview 50" for a quick sample), play any rendered chapter with ▶ audio, re-render just a range with ↻, and export in the background — download the M4B when it lands.
+override voice casting (including per-speaker speed, `voiceA:0.7+voiceB:0.3` mixes, and merging duplicate speakers), generate (or "Preview 50" for a quick sample), play any rendered chapter with ▶ audio, re-render just a range with ↻, and export in the background — download the M4B when it lands. The "1 voice" checkbox renders everything in the narrator's voice without losing attribution, the cover button uploads custom cover art, "Run library" pushes every book through the pipeline, and voice packs (⤓/⤒) move a casting between books.
 The reader view highlights the spoken word when `castbook align` has run, remembers
 your position, and supports space/←/→/↑/↓ shortcuts.
 Each book also gets a podcast feed (`/api/books/<id>/feed.xml` — subscribe in any
