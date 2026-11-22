@@ -116,7 +116,9 @@ def _resolve_sources(sources: list[str]) -> tuple[list[Path], list[Path]]:
         p = Path(src)
         if p.is_dir():
             found = sorted(
-                f for f in p.iterdir() if f.is_file() and f.suffix.lower() in net.SUPPORTED_SUFFIXES
+                f
+                for f in p.rglob("*")
+                if f.is_file() and f.suffix.lower() in net.SUPPORTED_SUFFIXES
             )
             if not found:
                 typer.echo(f"no supported books in {src}")

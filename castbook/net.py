@@ -11,7 +11,19 @@ from pathlib import Path
 from typing import Any
 
 MAX_UPLOAD = 200 * 1024 * 1024
-SUPPORTED_SUFFIXES = (".epub", ".txt", ".md", ".pdf", ".mobi", ".azw", ".azw3")
+SUPPORTED_SUFFIXES = (
+    ".epub",
+    ".txt",
+    ".md",
+    ".pdf",
+    ".mobi",
+    ".azw",
+    ".azw3",
+    ".html",
+    ".htm",
+    ".docx",
+    ".fb2",
+)
 
 
 class FetchError(Exception):
