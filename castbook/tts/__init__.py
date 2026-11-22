@@ -113,6 +113,23 @@ def run(
     if attribution is None or casting is None:
         raise FileNotFoundError(f"{book.dir} — run `castbook analyze` and `castbook cast` first")
 
+    if backend is None:
+        stale = [k for k, v in casting.map.items() if v.backend != cfg.tts.backend]
+        if stale:
+            from ..cast.library import defaults_for
+
+            narrator_voice, ambiguous_voice = defaults_for(cfg.tts.backend)
+            for k in stale:
+                if k == "narrator":
+                    casting.map[k] = VoiceSpec(backend=cfg.tts.backend, voice=narrator_voice)
+                elif k == "ambiguous":
+                    casting.map[k] = VoiceSpec(backend=cfg.tts.backend, voice=ambiguous_voice)
+                else:
+                    del casting.map[k]
+            log(f"[tts] dropped {len(stale)} voice(s) from another backend: {', '.join(stale)}")
+            if not dry_run:
+                save_artifact(casting, book.dir)
+
     injected_backend = backend is not None
     lexicon = _load_lexicon(book, cfg)
     manifest = load_artifact(AudioManifest, book.dir)
@@ -256,3 +273,47 @@ def run(
 
     save_artifact(manifest, book.dir)
     return book.dir / "manifest.json"
+
+
+# rough render rate measured on CPU: audio-seconds produced per wall-second
+_EST_RATE = {"pocket": 6.0, "kokoro": 1.0, "qwen": 0.3}
+# typical narration pace in characters per second of audio
+_CPS = 15.0
+
+
+def estimate_render(book: BookPaths, cfg: Settings) -> dict[str, float | int | str]:
+    """Pending units + a rough render-time estimate for the configured backend."""
+    attribution = load_artifact(AttributionFile, book.dir)
+    casting = load_artifact(CastingFile, book.dir)
+    if attribution is None or casting is None:
+        raise FileNotFoundError(f"{book.dir} — run `castbook analyze` and `castbook cast` first")
+    lexicon = _load_lexicon(book, cfg)
+    manifest = load_artifact(AudioManifest, book.dir)
+    if manifest is None or manifest.input_hash != attribution.input_hash:
+        manifest = AudioManifest(book_id=book.book_id, input_hash=attribution.input_hash)
+    chapters_file = load_artifact(ChaptersFile, book.dir)
+    language = chapters_file.meta.language if chapters_file else "en"
+    pending: list[Unit] = []
+    for unit in attribution.units:
+        base = casting.map.get(unit.speaker) or casting.map["narrator"]
+        voice = _unit_voice(base, unit.emotion, 1.0)
+        text = _apply_lexicon(unit.text, lexicon)
+        unit_hash = text_hash(text + voice.model_dump_json() + language)
+        existing = manifest.units.get(unit.id)
+        if not (
+            existing
+            and existing.unit_hash == unit_hash
+            and existing.status == UnitStatus.done
+            and book.unit_wav(unit.id).exists()
+        ):
+            pending.append(unit)
+    chars = sum(len(u.text) for u in pending)
+    audio_secs = chars / _CPS
+    rate = _EST_RATE.get(cfg.tts.backend, 1.0)
+    return {
+        "pending": len(pending),
+        "total": len(attribution.units),
+        "est_audio_min": audio_secs / 60,
+        "est_render_min": audio_secs / rate / 60,
+        "backend": cfg.tts.backend,
+    }

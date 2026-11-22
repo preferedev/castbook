@@ -97,6 +97,7 @@ class CastFile(BaseModel):
     book_id: str
     characters: list[Character]
     input_hash: str
+    attributor: str | None = None  # engine that extracted the cast; None = pre-field artifact
 
 
 class Unit(BaseModel):

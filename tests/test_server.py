@@ -325,3 +325,13 @@ def test_read_rejects_nonpublic_url(client_setup) -> None:  # type: ignore[no-un
     client, _ = client_setup
     r = client.post("/api/read", json={"url": "http://169.254.169.254/latest"})
     assert r.status_code == 400
+
+
+def test_run_quality_param(client_setup, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    client, tmp_path = client_setup
+    monkeypatch.setattr("castbook.app.server.generate_book", lambda *a, **k: None)
+    monkeypatch.setattr("castbook.app.server.export_book", lambda *a, **k: [])
+    book_id = _import_txt(client, tmp_path)
+    assert client.post(f"/api/books/{book_id}/run?quality=bogus").status_code == 422
+    r = client.post(f"/api/books/{book_id}/run?quality=fast")
+    assert r.status_code == 200

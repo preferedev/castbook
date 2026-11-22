@@ -54,21 +54,45 @@ def run(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> P
     attributor = make_attributor(cfg, log)
     input_hash = chapters_file.input_hash
 
+    prior = load_artifact(AttributionFile, book.dir)
+    same_engine_prior = (
+        prior is not None and prior.input_hash == input_hash and prior.attributor == attributor.name
+    )
+
     prior_cast = load_artifact(CastFile, book.dir)
-    if prior_cast is not None and prior_cast.input_hash == input_hash:
+    cast_matches = (
+        prior_cast is not None
+        and prior_cast.input_hash == input_hash
+        and (
+            prior_cast.attributor == attributor.name
+            # pre-field artifacts: reuse when the attribution they fed was this engine's
+            or (prior_cast.attributor is None and same_engine_prior)
+        )
+    )
+    if cast_matches:
+        assert prior_cast is not None
         cast = prior_cast.characters
+        if prior_cast.attributor is None:
+            prior_cast.attributor = attributor.name
+            save_artifact(prior_cast, book.dir)
         log(f"[analyze] reusing cast: {len(cast)} characters")
     else:
         log(f"[analyze] extracting cast with {attributor.name}")
         cast = reconcile_cast(attributor.extract_cast(chapters_file.chapters))
         save_artifact(
-            CastFile(book_id=book.book_id, characters=cast, input_hash=input_hash), book.dir
+            CastFile(
+                book_id=book.book_id,
+                characters=cast,
+                input_hash=input_hash,
+                attributor=attributor.name,
+            ),
+            book.dir,
         )
         log(f"[analyze] {len(cast)} characters")
 
-    prior = load_artifact(AttributionFile, book.dir)
     done_chapters: dict[int, list[Unit]] = {}
-    if prior is not None and prior.input_hash == input_hash:
+    if same_engine_prior:
+        assert prior is not None
         for u in prior.units:
             done_chapters.setdefault(u.chapter, []).append(u)
         if done_chapters:

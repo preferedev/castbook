@@ -506,21 +506,31 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/run")
-    def run(book_id: str) -> dict[str, Any]:
+    def run(book_id: str, quality: str | None = None) -> dict[str, Any]:
         """Full pipeline in one job: analyze → cast → generate → export."""
         book = _require_book(cfg, book_id)
         log = _log_to(book.dir / "job.log")
+        job_cfg = cfg
+        if quality is not None:
+            from ..config import QUALITY_PRESETS
+
+            preset = QUALITY_PRESETS.get(quality)
+            if preset is None:
+                raise HTTPException(422, f"unknown quality: {quality}")
+            job_cfg = cfg.model_copy(deep=True)
+            job_cfg.llm.backend, job_cfg.tts.backend = preset
+            log(f"[quality] {quality}: llm={preset[0]} tts={preset[1]}")
 
         def work() -> None:
             cancel = _cancels[f"job:{book_id}"]
-            analyze_book(book, cfg, log)
-            cast_book(book, cfg, log=log)
+            analyze_book(book, job_cfg, log)
+            cast_book(book, job_cfg, log=log)
             if cancel.is_set():
                 return
-            generate_book(book, cfg, log=log, cancel=cancel)
+            generate_book(book, job_cfg, log=log, cancel=cancel)
             if not cancel.is_set():
                 log("[export] started")
-                outs = export_book(book, cfg, log=log)
+                outs = export_book(book, job_cfg, log=log)
                 log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
         _spawn(f"job:{book_id}", work, log)
