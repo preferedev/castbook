@@ -364,7 +364,13 @@ def serve(
     from ..app.server import create_app
 
     cfg = _cfg(config)
-    uvicorn.run(create_app(cfg), host=host, port=port, log_level="info")
+    token = None
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        import secrets
+
+        token = secrets.token_urlsafe(16)
+        typer.echo(f"LAN mode — share as ?token= or header x-castbook-token:\n  {token}")
+    uvicorn.run(create_app(cfg, token=token), host=host, port=port, log_level="info")
 
 
 @app.command()
