@@ -122,6 +122,7 @@ class VoiceSpec(BaseModel):
     voice: str
     seed: int = 0
     speed: float = 1.0
+    emotion: str = "neutral"  # backends with style control (qwen) may read this
 
 
 class CastingFile(BaseModel):
