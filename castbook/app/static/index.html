@@ -167,10 +167,11 @@ async function openBook(id) {
   for (const sp of [...speakers].sort()) {
     const cur = d.casting[sp]?.voice || "";
     const char = d.characters.find(c => c.id === sp);
+    const n = d.unit_counts?.[sp] ?? 0;
     const role = char ? `${char.role} · ${char.gender} · ${char.vibe || ""}` : "";
     rows.push(`<tr>
       <td>${esc(char?.name || sp)}${sp === "narrator" || sp === "ambiguous" ? " <span class=muted>(reserved)</span>" : ""}</td>
-      <td class="muted">${esc(role)}</td>
+      <td class="muted">${esc(role)}${n ? ` · ${n} units` : ""}</td>
       <td>${voices.length ? `<select data-speaker="${sp}">${voices.map(v =>
         `<option value="${v.id}" ${v.id === cur ? "selected" : ""}>${v.id} — ${esc(v.description)}</option>`
       ).join("")}</select>` : `<input data-speaker="${sp}" data-voice-text value="${esc(cur)}" placeholder="voice description" style="width:16rem">`}

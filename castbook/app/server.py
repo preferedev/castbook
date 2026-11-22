@@ -11,6 +11,7 @@ import shutil
 import tempfile
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
@@ -201,6 +202,7 @@ def create_app(cfg: Settings) -> FastAPI:
             "casting": {k: v.model_dump() for k, v in casting.map.items()} if casting else {},
             "needs_review": attrib.needs_review if attrib else [],
             "units": len(attrib.units) if attrib else 0,
+            "unit_counts": (dict(Counter(u.speaker for u in attrib.units)) if attrib else {}),
         }
 
     @app.get("/api/books/{book_id}/lexicon")
