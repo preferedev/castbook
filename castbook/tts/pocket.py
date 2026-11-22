@@ -17,12 +17,22 @@ from .backend import Backend, Capabilities
 
 MAX_CHARS = 2000
 
+_LANG_NAMES = {
+    "en": "english",
+    "fr": "french",
+    "de": "german",
+    "pt": "portuguese",
+    "it": "italian",
+    "es": "spanish",
+    "nl": "dutch",
+}
+
 
 class PocketBackend(Backend):
     def __init__(self, language: str = "english") -> None:
         from pocket_tts import TTSModel
 
-        self._model = TTSModel.load_model(language)
+        self._model = TTSModel.load_model(_LANG_NAMES.get(language, language))
         self._states: dict[str, object] = {}
 
     def capabilities(self) -> Capabilities:
