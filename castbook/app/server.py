@@ -482,6 +482,27 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         _spawn(f"job:{book_id}", work, log)
         return {"ok": True}
 
+    @app.post("/api/books/{book_id}/run")
+    def run(book_id: str) -> dict[str, Any]:
+        """Full pipeline in one job: analyze → cast → generate → export."""
+        book = _require_book(cfg, book_id)
+        log = _log_to(book.dir / "job.log")
+
+        def work() -> None:
+            cancel = _cancels[f"job:{book_id}"]
+            analyze_book(book, cfg, log)
+            cast_book(book, cfg, log=log)
+            if cancel.is_set():
+                return
+            generate_book(book, cfg, log=log, cancel=cancel)
+            if not cancel.is_set():
+                log("[export] started")
+                outs = export_book(book, cfg, log=log)
+                log(f"[export] wrote {', '.join(p.name for p in outs)}")
+
+        _spawn(f"job:{book_id}", work, log)
+        return {"ok": True}
+
     @app.post("/api/books/{book_id}/regenerate")
     def regenerate(book_id: str, chapters: str) -> dict[str, Any]:
         book = _require_book(cfg, book_id)

@@ -67,7 +67,12 @@ def _chapter_range(spec: str | None) -> set[int] | None:
 
 
 def _book(cfg: Settings, book: str) -> BookPaths:
-    return BookPaths(cfg.data_dir, book)
+    root = cfg.data_dir.resolve()
+    b = BookPaths(cfg.data_dir, book)
+    if b.dir.resolve() == root or root not in b.dir.resolve().parents:
+        typer.echo(f"bad book id {book!r}")
+        raise typer.Exit(1)
+    return b
 
 
 @app.command("import")
