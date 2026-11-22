@@ -206,6 +206,7 @@ def create_app(cfg: Settings) -> FastAPI:
         book_id: str,
         limit: Annotated[int | None, Query(ge=1)] = None,
         chapters: str | None = None,
+        workers: Annotated[int, Query(ge=1, le=16)] = 1,
     ) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         sel: set[int] | None = None
@@ -216,15 +217,17 @@ def create_app(cfg: Settings) -> FastAPI:
                     part = part.strip()
                     if "-" in part:
                         a, b = (int(x) for x in part.split("-", 1))
-                        sel.update(range(a, b + 1))
+                        sel.update(range(min(a, b), max(a, b) + 1))
                     elif part:
                         sel.add(int(part))
+                if len(sel) > 2000:
+                    raise ValueError("range too wide")
             except ValueError as e:
                 raise HTTPException(422, f"bad chapters {chapters!r}") from e
         log = _log_to(book.dir / "job.log")
         _spawn(
             f"generate:{book_id}",
-            lambda: generate_book(book, cfg, log=log, chapters=sel, limit=limit),
+            lambda: generate_book(book, cfg, log=log, chapters=sel, limit=limit, workers=workers),
             log,
         )
         return {"ok": True}

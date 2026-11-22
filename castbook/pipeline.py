@@ -58,8 +58,9 @@ def generate_book(
     log: Callable[[str], None] = print,
     speed: float = 1.0,
     limit: int | None = None,
+    workers: int = 1,
 ) -> Path:
-    out = tts.run(book, cfg, log, chapters=chapters, speed=speed, limit=limit)
+    out = tts.run(book, cfg, log, chapters=chapters, speed=speed, limit=limit, workers=workers)
     if limit is None:
         audio.assemble_chapters(book, cfg, log)
     return out

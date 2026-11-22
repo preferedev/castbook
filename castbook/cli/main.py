@@ -134,10 +134,18 @@ def generate(
         int | None,
         typer.Option("--limit", min=1, help="render only the first N units (no assembly)"),
     ] = None,
+    workers: Annotated[int, typer.Option("--workers", min=1, max=16)] = 1,
 ) -> None:
     """Synthesize units and assemble chapter audio (resumable)."""
     cfg = _cfg(config)
-    generate_book(_book(cfg, book), cfg, _chapter_range(chapters), speed=speed, limit=limit)
+    generate_book(
+        _book(cfg, book),
+        cfg,
+        _chapter_range(chapters),
+        speed=speed,
+        limit=limit,
+        workers=workers,
+    )
 
 
 @app.command()

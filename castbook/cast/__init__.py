@@ -28,7 +28,7 @@ def run(
         if speaker in mapping:
             mapping[speaker].voice = voice_id
     for speaker, speed in (speeds or {}).items():
-        if speaker in mapping:
+        if speaker in mapping and 0 < speed <= 2:
             mapping[speaker].speed = speed
 
     save_memory(

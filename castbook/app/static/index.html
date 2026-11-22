@@ -158,7 +158,7 @@ async function saveCast() {
   const overrides = {};
   document.querySelectorAll("#cast-table select").forEach(s => {
     const spd = +document.querySelector(`input.spd[data-sp="${s.dataset.speaker}"]`).value;
-    overrides[s.dataset.speaker] = spd === 1 ? s.value : {voice: s.value, speed: spd};
+    overrides[s.dataset.speaker] = spd > 0 && spd !== 1 ? {voice: s.value, speed: spd} : s.value;
   });
   await api(`/api/books/${current}/cast`, {
     method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(overrides)});
