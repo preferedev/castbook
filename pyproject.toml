@@ -80,6 +80,9 @@ module = [
     "soundfile.*",
     "numpy.*",
     "bs4.*",
+    "pocket_tts.*",
+    "qwen_tts.*",
+    "torch.*",
 ]
 ignore_missing_imports = true
 

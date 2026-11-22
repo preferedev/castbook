@@ -27,7 +27,7 @@ class QwenBackend(Backend):
 
     def __init__(self, model_id: str = DEFAULT_MODEL) -> None:
         import torch
-        from qwen_tts import Qwen3TTSModel  # type: ignore[import-not-found]
+        from qwen_tts import Qwen3TTSModel
 
         if torch.cuda.is_available():
             device = "cuda"
