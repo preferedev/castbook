@@ -9,8 +9,9 @@ EPUB, PDF, TXT and MOBI/AZW3 in, chaptered M4B out. Python CLI plus a minimal lo
 
 Same *Pride and Prejudice* passage — once as a flat single voice, once cast:
 
-- [Flat single-voice](demo/flat.mp3)
-- [Full cast](demo/cast.mp3) — Bingley, Darcy, Elizabeth and narrator get distinct voices
+- [Flat single-voice](demo/flat-15s.mp3) (22s) / [full passage](demo/flat.mp3)
+- [Full cast](demo/cast-15s.mp3) (22s) / [full passage](demo/cast.mp3) — Bingley,
+  Elizabeth, Kitty, Mr. & Mrs. Bennet and the narrator get distinct voices
 
 ![Library](demo/library.png)
 ![Cast table — per-speaker voices, mixes, speeds and auditions](demo/cast.png)

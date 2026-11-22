@@ -16,6 +16,7 @@ from ..artifacts import (
     AudioEntry,
     AudioManifest,
     CastingFile,
+    ChaptersFile,
     Unit,
     UnitStatus,
     VoiceSpec,
@@ -30,15 +31,16 @@ from .backend import Backend
 from .kokoro import KokoroBackend
 
 
-def make_backend(cfg: Settings) -> Backend:
+def make_backend(cfg: Settings, language: str = "en") -> Backend:
+    language = language.split("-")[0].split("_")[0].lower() or "en"
     if cfg.tts.backend == "qwen":
         from .qwen import QwenBackend
 
-        return QwenBackend()
+        return QwenBackend(language=language)
     if cfg.tts.backend == "pocket":
         from .pocket import PocketBackend
 
-        return PocketBackend()
+        return PocketBackend(language=language)
     if cfg.tts.backend != "kokoro":
         raise ValueError(f"unknown tts backend {cfg.tts.backend!r}")
     model = resolve_model(cfg.models_dir, "kokoro-v1")
@@ -125,8 +127,10 @@ def run(
         raise ValueError(f"workers must be >= 1, got {workers}")
     if injected_backend:
         workers = 1  # injected backend instances are not thread-shared
+    chapters_file = load_artifact(ChaptersFile, book.dir)
+    language = chapters_file.meta.language if chapters_file else "en"
     if not dry_run and workers <= 1 and backend is None:
-        backend = make_backend(cfg)
+        backend = make_backend(cfg, language)
     total = len(units)
     rendered = skipped = failed = done_i = 0
 
@@ -134,7 +138,7 @@ def run(
         base = casting.map.get(unit.speaker) or casting.map["narrator"]
         voice = _unit_voice(base, unit.emotion, speed)
         text = _apply_lexicon(unit.text, lexicon)
-        unit_hash = text_hash(text + voice.model_dump_json())
+        unit_hash = text_hash(text + voice.model_dump_json() + language)
         wav = book.unit_wav(unit.id)
         duration = be.synthesize(text, voice, wav)
         return unit.id, duration, wav.name, unit_hash, unit.text[:60]
@@ -144,7 +148,7 @@ def run(
         base = casting.map.get(unit.speaker) or casting.map["narrator"]
         voice = _unit_voice(base, unit.emotion, speed)
         text = _apply_lexicon(unit.text, lexicon)
-        unit_hash = text_hash(text + voice.model_dump_json())
+        unit_hash = text_hash(text + voice.model_dump_json() + language)
         existing = manifest.units.get(unit.id)
         if (
             existing
@@ -172,14 +176,14 @@ def run(
         import queue
 
         ready: queue.Queue[Backend] = queue.Queue()
-        ready.put(make_backend(cfg))  # fail fast + hand off to first worker
+        ready.put(make_backend(cfg, language))  # fail fast + hand off to first worker
 
         def render_t(unit: Unit) -> tuple[str, float, str, str, str]:
             try:
                 be = ready.get_nowait()
             except queue.Empty:
                 if not hasattr(tls, "backend"):
-                    tls.backend = make_backend(cfg)
+                    tls.backend = make_backend(cfg, language)
                 be = tls.backend
             return render(unit, be)
 

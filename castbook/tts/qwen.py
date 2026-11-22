@@ -20,12 +20,24 @@ from .pocket import _atempo, _duration_s, _split
 
 DEFAULT_MODEL = "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
 LANGUAGE_NAMES = ["zh", "en", "ja", "ko", "de", "fr", "ru", "pt", "es", "it"]
+_LANG_NAMES = {
+    "en": "English",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "de": "German",
+    "fr": "French",
+    "ru": "Russian",
+    "pt": "Portuguese",
+    "es": "Spanish",
+    "it": "Italian",
+}
 
 
 class QwenBackend(Backend):
     name = "qwen3-tts-voicedesign"
 
-    def __init__(self, model_id: str = DEFAULT_MODEL) -> None:
+    def __init__(self, model_id: str = DEFAULT_MODEL, language: str = "en") -> None:
         import torch
         from qwen_tts import Qwen3TTSModel
 
@@ -36,6 +48,7 @@ class QwenBackend(Backend):
         else:
             device = "cpu"
         self._model = Qwen3TTSModel.from_pretrained(model_id, device_map=device)
+        self._language = _LANG_NAMES.get(language.split("-")[0].split("_")[0].lower(), "English")
 
     def capabilities(self) -> Capabilities:
         return Capabilities(
@@ -57,7 +70,7 @@ class QwenBackend(Backend):
         for piece in _split(text):
             wavs, sr = self._model.generate_voice_design(
                 text=[piece],
-                language=["English"],
+                language=[self._language],
                 instruct=[instruct],
                 non_streaming_mode=True,
             )

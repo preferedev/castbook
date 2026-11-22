@@ -27,13 +27,25 @@ SAID_VERBS = (
     "assented|reiterated|"
     "dit|demanda|demande|r\u00e9pondit|r\u00e9pond|reprit|reprend|ajouta|ajoute|"
     "murmura|cria|\u00e9cria|exclama|interrompit|continua|souffla|questionna|"
-    "r\u00e9pliqua|r\u00e9pliqu\u00e9|sagte|fragte|antwortete|rief|fl\u00fcsterte"
+    "r\u00e9pliqua|r\u00e9pliqu\u00e9|sagte|fragte|antwortete|rief|fl\u00fcsterte|"
+    "sprach|schrie|dachte|erz\u00e4hlte|jammerte|versprach|verlangte|lachte|"
+    "weinte|seufzte|fuhr\\s+fort|begann|spricht"
 )
-_NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:(?:de|van|von|of|the|al|bin)\s+)?[A-Z][a-z]+){0,2}"
-_NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+"
+_WORD = r"[A-Z\u00c0-\u00de][a-z\u00df-\u017f]+"
+_NAME_PLAIN = (
+    _WORD + r"(?:\s+(?:(?:de|van|von|of|the|al|bin|du|la|le|di|del)\s+)?" + _WORD + r"){0,2}"
+)
+_NAME_TITLED = (
+    r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain|Mme?\.?|Mlle\.?|Herr|"
+    r"Frau|Fr\u00e4ulein)\s+" + _WORD + r"(?:\s+" + _WORD + r"){0,2}"
+)
 NAME = rf"(?-i:((?:the\s+)?(?:{_NAME_TITLED}|{_NAME_PLAIN})))"
 
-TAG_AFTER = re.compile(rf"[”\"'\u2019\u00bb\u201c]\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)
+_ART = r"(?:der|die|das|den|dem|des|eine?n?|ein|le|la|les|l'|du|de la|un|une|the|a|an)"
+TAG_AFTER = re.compile(
+    rf"[”\"'\u2019\u00bb\u201c]\s*,?\s*({SAID_VERBS})\s+{_ART}?\s*{NAME}",
+    re.IGNORECASE,
+)
 _QUOTE_CHAR = re.compile(r"[\"\u201c\u201d\u2018\u2019'\u00ab\u00bb\u201e]")
 FIRST_PERSON = re.compile(
     rf"[”\"'\u00bb]\s*,?\s*(?:I\s+(?:\w+\s+)?(?:{SAID_VERBS})|(?:{SAID_VERBS})\s+I)\b",
@@ -184,12 +196,15 @@ class HeuristicAttributor:
             if in_quote and runs:
                 runs[-1].append((u, hit))
             else:
-                if hit is None and pending is not None:
-                    hit = pending
+                if pending is not None:
+                    if hit is None or _first_speech_untagged(u.text):
+                        hit = pending
+                elif _first_speech_untagged(u.text):
+                    hit = None
                 runs.append([(u, hit)])
                 run_after_narration.append(narr_break)
             narr_break = False
-            pending = None
+            pending = _trailing_says(u.text, names)
             in_quote = _quote_stack(u.text, in_quote)
         resolved: list[str | None] = [next((s for _, s in run if s), None) for run in runs]
 
@@ -351,11 +366,17 @@ class HeuristicAttributor:
         zone = _tag_zone(text, in_quote)
         if not _QUOTE_CHAR.search(zone):
             return None
+        lead = _TRAILING_SAYS.search(zone)
+        lead_at = lead.start() if lead else len(zone) + 1
         for m in TAG_AFTER.finditer(zone):
+            if m.start() >= lead_at:
+                break
             hit = _lookup(m.group(2), names)
             if hit:
                 return hit
         for m in NAME_SAYS.finditer(zone):
+            if m.start() >= lead_at:
+                break
             hit = _lookup(m.group(1), names)
             if hit:
                 return hit
@@ -484,22 +505,30 @@ def slugify(name: str) -> str:
 
 
 def _dedupe(characters: list[Character]) -> list[Character]:
-    """Merge same-last-token names (Elizabeth / Elizabeth Bennet) and slug collisions."""
+    """Merge names where one contains the other (Elizabeth / Elizabeth Bennet)
+    and slug collisions. Same-surname distinct people (Mr John Smith / Mrs Jane
+    Smith) are kept separate."""
     out: list[Character] = []
-    by_last: dict[str, Character] = {}
     for c in characters:
-        last = c.name.split()[-1].lower()
-        existing = by_last.get(last)
-        if existing and existing.id != c.id:
-            if c.name not in existing.aliases and c.name != existing.name:
-                existing.aliases.append(c.name)
-            continue
         dup = next((x for x in out if x.id == c.id), None)
         if dup:
             if c.name not in dup.aliases and c.name != dup.name:
                 dup.aliases.append(c.name)
             continue
-        by_last[last] = c
+        last = c.name.split()[-1].lower()
+        merge = next(
+            (
+                x
+                for x in out
+                if x.name.split()[-1].lower() == last
+                and (x.name.lower() in c.name.lower() or c.name.lower() in x.name.lower())
+            ),
+            None,
+        )
+        if merge:
+            if c.name not in merge.aliases and c.name != merge.name:
+                merge.aliases.append(c.name)
+            continue
         out.append(c)
     return out
 
@@ -517,15 +546,42 @@ def _name_index(cast: list[Character]) -> dict[str, str]:
     return index
 
 
+_TAIL_WORD = (
+    r"(?:der|die|das|den|dem|des|the|a|an|his|her|their|"
+    r"eine?n?|ein|un|une|le|la|les|du|de la|des)"
+)
+_TAIL_PREP = r"(?:zu|zum|zur|zu dem|to|bei|mit|\u00e0|au|aux|de|a)"
+_TAIL_ADDR = rf"(?:\s*{_TAIL_PREP}\s+(?:{_TAIL_WORD}\s+)?\w+(?:\s+\w+){{0,3}})?"
 _TRAILING_SAYS = re.compile(
-    rf"({NAME}|he|she|I)\s+(?:{SAID_VERBS})\s*[:\u2014\u2013,-]?\s*$",
+    rf"({NAME}|he|she|I)\s+(?:\w+\s+){{0,4}}(?:{SAID_VERBS}){_TAIL_ADDR}\s*[:\u2014\u2013,-]?\s*$"
+    rf"|(?:{SAID_VERBS})\s+(?:\w+\s+){{0,2}}({NAME}){_TAIL_ADDR}\s*[:\u2014\u2013,-]?\s*$",
     re.IGNORECASE,
 )
 
 
 def _trailing_says(text: str, names: dict[str, str]) -> str | None:
     m = _TRAILING_SAYS.search(text.strip())
-    return _lookup(m.group(1), names) if m else None
+    if not m:
+        return None
+    if m.group(1) is not None and re.search(
+        r"\b(?:lie[ssß]|brachte|schickte|rief|holte|f\u00fchrte|nahm|stellte|befahl|"
+        r"sent|brought|called|fetched|ordered)\b",
+        text.strip()[m.start(1) : m.end()],
+        re.IGNORECASE,
+    ):
+        # 'ließ die Müllerstochter ... und sprach' — the name is the object
+        return None
+    if m.group(3) is not None:
+        prev = text.strip()[: m.start()].rstrip()
+        if prev and prev[-1] in '"\u201d\u00bb\u201c':
+            # verb-name clause right after a quote-close: a tag when the quote's
+            # sentence is unfinished (comma/no final punct inside), a lead-in
+            # when the quote ended `.`/`!`/`?` — e.g. `spinnen.“ Sprach das Männchen`
+            before_close = prev[:-1].rstrip()
+            if not before_close or before_close[-1] not in ".!?":
+                return None
+    hit = next((g for g in m.groups() if g), None)
+    return _lookup(hit, names) if hit else None
 
 
 _QUOTED = re.compile("[\u201c\"'\u00ab\u201e]([^\u201d\"'\u00bb\u201c]+)[\u201d\"'\u00bb\u201c]")
@@ -690,3 +746,29 @@ def _emotion_of(text: str) -> Emotion:
     if _SHOUT_TEXT.search(text):
         return "shouted"
     return "neutral"
+
+
+_QUOTE_OPEN = set('"\u201c\u00ab\u201e\u2018')
+
+
+def _first_speech_untagged(text: str) -> bool:
+    """True when a unit starts with a quote whose close is directly followed by
+    another quote, leaving the first speech without its own tag — e.g.
+    `„question?“ „answer“ sagte das Mädchen`."""
+    s = text.lstrip()
+    if not s or s[0] not in _QUOTE_OPEN:
+        return False
+    stack: list[str] = []
+    close_end = None
+    for i, ch in enumerate(s):
+        depth = len(stack)
+        _quote_step(stack, ch, s, i)
+        if depth and not stack:
+            close_end = i + 1
+            break
+    if close_end is None:
+        return False
+    for j in range(close_end, len(s)):
+        if s[j] in _QUOTE_OPEN:
+            return not re.search(SAID_VERBS, s[close_end:j], re.IGNORECASE)
+    return False
