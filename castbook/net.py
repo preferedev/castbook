@@ -64,9 +64,9 @@ def assert_public_peer(resp: Any, url: str) -> None:
     between the assert_public_host check and connect() (TOCTOU). Skipped
     when a configured proxy carries the request: the peer is the proxy."""
     parsed = urllib.parse.urlparse(url)
-    proxies = urllib.request.getproxies()
-    if (proxies.get(parsed.scheme) or proxies.get("all")) and not urllib.request.proxy_bypass(
-        parsed.hostname or ""
+    # mirror urllib's ProxyHandler exactly: scheme key only, bypass on netloc
+    if urllib.request.getproxies().get(parsed.scheme) and not urllib.request.proxy_bypass(
+        parsed.netloc
     ):
         return
     sock = getattr(getattr(resp.fp, "raw", None), "_sock", None)
