@@ -28,7 +28,7 @@ def parse(path: Path, cover_dir: Path | None = None) -> tuple[BookMeta, list[Cha
     if info is not None:
         t = info.find(f"{ns}book-title")
         if t is not None and (t.text or "").strip():
-            title = t.text.strip()
+            title = (t.text or "").strip()
         a = info.find(f"{ns}author")
         if a is not None:
             parts = [a.findtext(f"{ns}first-name") or "", a.findtext(f"{ns}last-name") or ""]
