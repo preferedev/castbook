@@ -410,6 +410,8 @@ async function refreshProgress() {
       eta = ` · ~${m < 1 ? "<1" : m} min left`;
     }
     $("prog-label").textContent = `${p.done}/${p.total} units rendered` + (p.failed ? ` · ${p.failed} failed` : "") + eta;
+    if (p.failed && p.failed_units)
+      $("prog-label").textContent += ` — ${p.failed_units.slice(0, 5).join(", ")}${p.failed > 5 ? "…" : ""}`;
     if (p.audio_chapters && p.audio_chapters.length) {
       $("ch-play").innerHTML = "listen so far: " + p.audio_chapters.map(n =>
         `<a href="#" data-ch="${n}" style="margin-right:.4rem">▶ ch${n}</a>`).join("");

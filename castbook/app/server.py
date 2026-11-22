@@ -1124,9 +1124,11 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         attrib = load_artifact(AttributionFile, d)
         total = len(attrib.units) if attrib else 0
         done = failed = 0
+        failed_units: list[str] = []
         if manifest:
             done = sum(1 for u in manifest.units.values() if u.status == UnitStatus.done)
-            failed = sum(1 for u in manifest.units.values() if u.status == UnitStatus.failed)
+            failed_units = [k for k, u in manifest.units.items() if u.status == UnitStatus.failed]
+            failed = len(failed_units)
         busy = any(k.endswith(book_id) and t.is_alive() for k, t in _jobs.items())
         eta_s = None
         if manifest and manifest.started_at > 0 and total > done + failed:
@@ -1147,6 +1149,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             "total": total,
             "done": done,
             "failed": failed,
+            "failed_units": failed_units[:20],
             "busy": busy,
             "eta_s": eta_s,
             "log": log_tail,
