@@ -11,7 +11,7 @@ if sys.version_info >= (3, 11):
 else:
     import tomli as tomllib
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 DEFAULT_CONFIG = """\
 # Castbook configuration
@@ -60,6 +60,7 @@ class Settings(BaseModel):
     llm: LlmSettings = Field(default_factory=LlmSettings)
     tts: TtsSettings = Field(default_factory=TtsSettings)
     export: ExportSettings = Field(default_factory=ExportSettings)
+    _config_path: Path | None = PrivateAttr(default=None)
 
     @classmethod
     def load(cls, path: Path | None = None) -> Settings:
@@ -70,16 +71,22 @@ class Settings(BaseModel):
         if d := os.environ.get("CASTBOOK_MODELS_DIR"):
             overrides["models_dir"] = d
         if path.exists():
-            return cls.model_validate({**tomllib.loads(path.read_text()), **overrides})
-        return cls.model_validate(overrides)
+            cfg = cls.model_validate({**tomllib.loads(path.read_text()), **overrides})
+        else:
+            cfg = cls.model_validate(overrides)
+        cfg._config_path = path
+        return cfg
 
     def save_default(self, path: Path) -> Path:
         path.write_text(DEFAULT_CONFIG)
         return path
 
     def save(self, path: Path | None = None) -> Path:
-        path = path or Path(os.environ.get("CASTBOOK_CONFIG", "config.toml"))
-        lines = [f'data_dir = "{self.data_dir}"', f'models_dir = "{self.models_dir}"']
+        path = path or self._config_path or Path(os.environ.get("CASTBOOK_CONFIG", "config.toml"))
+        lines = [
+            f"data_dir = {_toml_val(str(self.data_dir))}",
+            f"models_dir = {_toml_val(str(self.models_dir))}",
+        ]
         for section in ("llm", "tts", "export"):
             lines.append(f"\n[{section}]")
             for k, v in getattr(self, section).model_dump().items():
@@ -95,4 +102,5 @@ def _toml_val(v: object) -> str:
         return "true" if v else "false"
     if isinstance(v, (int, float)):
         return str(v)
-    return f'"{v}"'
+    esc = str(v).replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{esc}"'
