@@ -211,21 +211,22 @@ def voices(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """List the voice library; --play writes a sample WAV for a voice id."""
-    from ..cast.library import LIBRARY
+    from ..cast.library import LIBRARY, POCKET_LIBRARY
 
     cfg = _cfg(config)
+    lib = {"kokoro": LIBRARY, "pocket": POCKET_LIBRARY}.get(cfg.tts.backend, [])
     if play:
         from ..artifacts import VoiceSpec
         from ..tts import make_backend
 
-        if play not in {v.id for v in LIBRARY}:
-            raise typer.BadParameter(f"unknown voice {play!r}")
+        if play not in {v.id for v in lib}:
+            raise typer.BadParameter(f"unknown voice {play!r} for backend {cfg.tts.backend}")
         out = cfg.data_dir / "previews" / f"{play}.wav"
         out.parent.mkdir(parents=True, exist_ok=True)
-        make_backend(cfg).synthesize(text, VoiceSpec(backend="kokoro", voice=play), out)
+        make_backend(cfg).synthesize(text, VoiceSpec(backend=cfg.tts.backend, voice=play), out)
         typer.echo(str(out))
         return
-    for v in LIBRARY:
+    for v in lib:
         typer.echo(f"{v.id:16} {v.gender or '?':3} {v.description}")
 
 
