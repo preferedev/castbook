@@ -178,6 +178,7 @@ def build_media_epub(book: BookPaths, out: Path, only: set[int] | None = None) -
             + "".join(
                 f'<li><a href="ch{c.index:03d}.xhtml">{escape(c.title)}</a></li>'
                 for c in ch.chapters
+                if only is None or c.index in only
             )
             + "</ol></nav></body></html>"
         )
