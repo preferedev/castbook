@@ -36,7 +36,7 @@
 
 <section>
   <div class="row">
-    <input type="file" id="file" accept=".epub,.txt,.md,.pdf" hidden>
+    <input type="file" id="file" accept=".epub,.txt,.md,.pdf" hidden multiple>
     <button id="import">Import</button>
     <button id="pick" class="ghost">Choose file…</button>
     <span class="muted" id="import-status"></span>
@@ -173,6 +173,17 @@ $("pick").onclick = () => $("file").click();
 }));
 
 $("import").onclick = async () => {
+  for (const f of $("file").files) {
+    const form = new FormData();
+    form.append("file", f);
+    $("import-status").textContent = `importing ${f.name}…`;
+    try { await api("/api/import", {method: "POST", body: form}); }
+    catch (e) { $("import-status").textContent = e.message; return; }
+  }
+  $("import-status").textContent = "imported";
+  $("file").value = "";
+  loadBooks();
+  return;
   const f = $("file").files[0];
   if (!f) return;
   $("import-status").textContent = "parsing…";

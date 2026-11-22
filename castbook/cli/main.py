@@ -69,13 +69,14 @@ def _book(cfg: Settings, book: str) -> BookPaths:
 
 @app.command("import")
 def import_cmd(
-    file: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    files: Annotated[list[Path], typer.Argument(exists=True, dir_okay=False)],
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
-    """Copy a book into the library and parse it into chapters."""
+    """Copy books into the library and parse them into chapters."""
     cfg = _cfg(config)
-    book = import_book(file, cfg)
-    typer.echo(f"book id: {book.book_id}")
+    for file in files:
+        book = import_book(file, cfg)
+        typer.echo(f"book id: {book.book_id}")
 
 
 @app.command()
