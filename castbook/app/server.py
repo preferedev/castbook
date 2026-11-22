@@ -497,6 +497,12 @@ def create_app(cfg: Settings) -> FastAPI:
                 rate = (time.time() - manifest.started_at) / rendered_this_run
                 eta_s = round(rate * (total - done - failed))
         log_tail = (d / "job.log").read_text()[-2000:] if (d / "job.log").exists() else ""
+        audio_dir = d / "audio"
+        chapters_ready = (
+            sorted(int(p.stem[2:]) for p in audio_dir.glob("ch*.wav") if p.stem[2:].isdigit())
+            if audio_dir.is_dir()
+            else []
+        )
         return {
             "total": total,
             "done": done,
@@ -504,6 +510,7 @@ def create_app(cfg: Settings) -> FastAPI:
             "busy": busy,
             "eta_s": eta_s,
             "log": log_tail,
+            "audio_chapters": chapters_ready,
         }
 
     @app.post("/api/books/{book_id}/cancel")

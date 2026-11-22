@@ -79,6 +79,7 @@
   </div>
   <div class="bar" style="margin-top:.75rem"><i id="prog" style="width:0%"></i></div>
   <div class="muted" id="prog-label" style="margin:.25rem 0"></div>
+  <div id="ch-play" class="muted" style="font-size:.8rem"></div>
   <details id="log-details" style="margin-top:.5rem">
     <summary class="muted">Job log</summary>
     <pre id="job-log" class="muted" style="font-size:.75rem;max-height:12rem;overflow:auto"></pre>
@@ -223,6 +224,14 @@ async function refreshProgress() {
       eta = ` · ~${m < 1 ? "<1" : m} min left`;
     }
     $("prog-label").textContent = `${p.done}/${p.total} units rendered` + (p.failed ? ` · ${p.failed} failed` : "") + eta;
+    if (p.audio_chapters && p.audio_chapters.length) {
+      $("ch-play").innerHTML = "listen so far: " + p.audio_chapters.map(n =>
+        `<a href="#" data-ch="${n}" style="margin-right:.4rem">▶ ch${n}</a>`).join("");
+      $("ch-play").querySelectorAll("a").forEach(a => a.onclick = e => {
+        e.preventDefault();
+        new Audio(`/api/books/${current}/chapters/${a.dataset.ch}/audio`).play();
+      });
+    }
     if (p.log) { $("log").style.display = ""; $("log").textContent = p.log; }
     if (p.busy) {
       clearTimeout(pollTimer);
