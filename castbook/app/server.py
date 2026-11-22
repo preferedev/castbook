@@ -136,6 +136,32 @@ def create_app(cfg: Settings) -> FastAPI:
             "units": len(attrib.units) if attrib else 0,
         }
 
+    @app.get("/api/books/{book_id}/lexicon")
+    def get_lexicon(book_id: str) -> dict[str, Any]:
+        import json
+
+        book = _require_book(cfg, book_id)
+        book_lex: dict[str, str] = {}
+        f = book.dir / "lexicon.json"
+        if f.exists():
+            book_lex = json.loads(f.read_text())
+        glob: dict[str, str] = {}
+        g = cfg.data_dir / "lexicon.json"
+        if g.exists():
+            glob = json.loads(g.read_text())
+        return {"book": book_lex, "global": glob}
+
+    @app.put("/api/books/{book_id}/lexicon")
+    def put_lexicon(book_id: str, body: dict[str, str]) -> dict[str, Any]:
+        import json
+
+        book = _require_book(cfg, book_id)
+        for k, v in body.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise HTTPException(422, "lexicon entries must be word→replacement strings")
+        (book.dir / "lexicon.json").write_text(json.dumps(body, indent=2, ensure_ascii=False))
+        return {"saved": len(body)}
+
     @app.get("/api/books/{book_id}/align")
     def alignment(book_id: str) -> Any:
         import json
