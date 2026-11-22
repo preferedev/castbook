@@ -232,6 +232,42 @@ def create_app(cfg: Settings) -> FastAPI:
         )
         return {"ok": True}
 
+    @app.post("/api/books/{book_id}/regenerate")
+    def regenerate(book_id: str, chapters: str) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        sel: set[int] = set()
+        try:
+            for part in chapters.split(","):
+                part = part.strip()
+                if "-" in part:
+                    a, b = (int(x) for x in part.split("-", 1))
+                    sel.update(range(min(a, b), max(a, b) + 1))
+                elif part:
+                    sel.add(int(part))
+        except ValueError:
+            raise HTTPException(422, f"bad chapters {chapters!r}") from None
+        if not sel or len(sel) > 2000:
+            raise HTTPException(422, f"bad chapters {chapters!r}")
+        attribution = load_artifact(AttributionFile, book.dir)
+        manifest = load_artifact(AudioManifest, book.dir)
+        if attribution is None or manifest is None:
+            raise HTTPException(409, "nothing to regenerate")
+        unit_ids = {u.id for u in attribution.units if u.chapter in sel}
+        removed = 0
+        for uid in unit_ids:
+            if manifest.units.pop(uid, None) is not None:
+                removed += 1
+        for cid in [str(c) for c in sel]:
+            manifest.chapters.pop(cid, None)
+        save_artifact(manifest, book.dir)
+        log = _log_to(book.dir / "job.log")
+        _spawn(
+            f"generate:{book_id}",
+            lambda: generate_book(book, cfg, log=log, chapters=sel),
+            log,
+        )
+        return {"ok": True, "popped": removed}
+
     @app.post("/api/preview")
     def preview(spec: dict[str, Any]) -> FileResponse:
         voice = str(spec.get("voice", "af_sarah"))

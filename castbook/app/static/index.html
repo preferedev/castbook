@@ -64,6 +64,7 @@
     <button id="analyze">Re-analyze</button>
     <input id="gen-chapters" placeholder="ch 1-3,7" style="width:5.5rem" title="chapter range">
     <button id="generate">Generate</button>
+    <button id="regen" class="ghost" title="re-render these chapters">↻</button>
     <button id="preview-gen" class="ghost">Preview 50</button>
     <button id="export" class="ghost">Export</button>
   </div>
@@ -245,6 +246,11 @@ $("analyze").onclick = () => api(`/api/books/${current}/analyze`, {method: "POST
 $("generate").onclick = () => {
   const ch = $("gen-chapters").value.trim();
   api(`/api/books/${current}/generate${ch ? `?chapters=${encodeURIComponent(ch)}` : ""}`, {method: "POST"}).then(refreshProgress);
+};
+$("regen").onclick = () => {
+  const ch = $("gen-chapters").value.trim();
+  if (!ch) return;
+  api(`/api/books/${current}/regenerate?chapters=${encodeURIComponent(ch)}`, {method: "POST"}).then(refreshProgress);
 };
 $("preview-gen").onclick = () => api(`/api/books/${current}/generate?limit=50`, {method: "POST"}).then(refreshProgress);
 $("merge-btn").onclick = async () => {
