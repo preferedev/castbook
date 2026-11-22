@@ -56,6 +56,11 @@
   </table>
   <div class="row" style="margin-top:.75rem">
     <button id="save-cast" class="ghost">Save casting</button>
+    <span class="muted">merge</span>
+    <select id="merge-src"></select>
+    <span class="muted">into</span>
+    <select id="merge-dst"></select>
+    <button id="merge-btn" class="ghost">Merge</button>
     <button id="analyze">Re-analyze</button>
     <button id="generate">Generate</button>
     <button id="preview-gen" class="ghost">Preview 50</button>
@@ -129,6 +134,10 @@ async function openBook(id) {
       <td><button class="ghost" data-preview="${sp}" type="button">▶</button></td></tr>`);
   }
   $("cast-table").innerHTML = rows.join("");
+  const opts = [...speakers].sort().filter(sp => sp !== "ambiguous")
+    .map(sp => `<option value="${sp}">${esc(sp)}</option>`).join("");
+  $("merge-src").innerHTML = opts;
+  $("merge-dst").innerHTML = opts;
   document.querySelectorAll("[data-preview]").forEach(b => b.onclick = async () => {
     const sel = b.closest("tr").querySelector("select");
     b.textContent = "…";
@@ -224,6 +233,14 @@ $("save-cast").onclick = saveCast;
 $("analyze").onclick = () => api(`/api/books/${current}/analyze`, {method: "POST"}).then(refreshProgress);
 $("generate").onclick = () => api(`/api/books/${current}/generate`, {method: "POST"}).then(refreshProgress);
 $("preview-gen").onclick = () => api(`/api/books/${current}/generate?limit=50`, {method: "POST"}).then(refreshProgress);
+$("merge-btn").onclick = async () => {
+  const src = $("merge-src").value, dst = $("merge-dst").value;
+  if (!src || !dst || src === dst) { $("cast-meta").textContent = "pick two different speakers"; return; }
+  const r = await api(`/api/books/${current}/merge?src=${encodeURIComponent(src)}&dst=${encodeURIComponent(dst)}`, {method: "POST"});
+  $("cast-meta").textContent = `merged ${src} → ${dst} (${r.touched} units)`;
+  openBook(current);
+};
+
 $("export").onclick = async () => {
   $("export").disabled = true;
   $("export").textContent = "Exporting…";
