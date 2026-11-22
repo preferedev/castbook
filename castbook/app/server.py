@@ -74,12 +74,30 @@ def _spawn(key: str, target: Callable[[], object], log: Callable[[str], None]) -
         t.start()
 
 
-def create_app(cfg: Settings) -> FastAPI:
+def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     app = FastAPI(title="Castbook")
+
+    if token:
+        from fastapi import Request
+        from fastapi.responses import JSONResponse
+
+        @app.middleware("http")
+        async def _auth(request: Request, call_next):  # type: ignore[no-untyped-def]
+            if request.url.path.startswith("/api/"):
+                given = request.headers.get("x-castbook-token") or request.query_params.get("token")
+                if given != token:
+                    return JSONResponse({"detail": "missing token"}, status_code=401)
+            return await call_next(request)
+
+    def _page(name: str) -> str:
+        html = (STATIC / name).read_text()
+        if token:
+            html = html.replace("</head>", f'<meta name="cb-token" content="{token}"></head>')
+        return html
 
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
-        return (STATIC / "index.html").read_text()
+        return _page("index.html")
 
     @app.get("/api/machine")
     def machine() -> dict[str, Any]:
@@ -107,11 +125,16 @@ def create_app(cfg: Settings) -> FastAPI:
             if backend not in ("kokoro", "pocket", "qwen"):
                 raise HTTPException(422, f"unknown tts backend: {backend}")
             cfg.tts.backend = backend
+            recast = _drop_mismatched_casting(cfg)
+            global _backend
+            with _backend_lock:
+                _backend = None
+        else:
+            recast = []
         cfg.save()
-        global _backend
-        with _backend_lock:
-            _backend = None
-        return cfg.model_dump(mode="json")
+        out = cfg.model_dump(mode="json")
+        out["recast"] = recast
+        return out
 
     @app.get("/api/voices")
     def voices() -> list[dict[str, Any]]:
@@ -474,10 +497,9 @@ def create_app(cfg: Settings) -> FastAPI:
 
     @app.get("/reader/{book_id}", response_class=HTMLResponse)
     def reader(book_id: str) -> HTMLResponse:
-        page = STATIC / "reader.html"
         import json as _json
 
-        return HTMLResponse(page.read_text().replace('"__BOOK_ID__"', _json.dumps(book_id)))
+        return HTMLResponse(_page("reader.html").replace('"__BOOK_ID__"', _json.dumps(book_id)))
 
     @app.get("/api/books/{book_id}/progress")
     def progress(book_id: str) -> dict[str, Any]:
@@ -608,3 +630,21 @@ def _status(d: Path, ch: ChaptersFile) -> dict[str, Any]:
         if (d / "export").exists()
         else [],
     }
+
+
+def _drop_mismatched_casting(cfg: Settings) -> list[str]:
+    """Backend switch invalidates saved voice specs from the previous backend."""
+    recast: list[str] = []
+    if not cfg.data_dir.is_dir():
+        return recast
+    for d in sorted(cfg.data_dir.iterdir()):
+        casting = load_artifact(CastingFile, d)
+        if not casting:
+            continue
+        stale = [k for k, v in casting.map.items() if v.backend != cfg.tts.backend]
+        if stale:
+            for k in stale:
+                del casting.map[k]
+            save_artifact(casting, d)
+            recast.append(d.name)
+    return recast
