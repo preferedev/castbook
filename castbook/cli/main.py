@@ -1070,6 +1070,15 @@ def clone(
     if not clip.exists():
         typer.echo(f"no such file: {clip}")
         raise typer.Exit(1)
+    import subprocess
+
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", str(clip)],
+        capture_output=True,
+    )
+    if probe.returncode != 0 or b"duration=" not in probe.stdout:
+        typer.echo(f"{clip.name}: not a readable audio file")
+        raise typer.Exit(1)
     cfg = _cfg(config)
     if cfg.tts.backend != "pocket":
         typer.echo('cloning needs the pocket backend — set tts.backend = "pocket"')
