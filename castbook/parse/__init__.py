@@ -12,6 +12,8 @@ PARSERS = {
     ".epub": epub.parse,
     ".txt": txt.parse,
     ".md": txt.parse,
+    ".html": txt.parse,
+    ".htm": txt.parse,
     ".pdf": pdf.parse,
     ".mobi": mobi.parse,
     ".azw": mobi.parse,
