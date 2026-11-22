@@ -31,6 +31,10 @@ from .kokoro import KokoroBackend
 
 
 def make_backend(cfg: Settings) -> Backend:
+    if cfg.tts.backend == "pocket":
+        from .pocket import PocketBackend
+
+        return PocketBackend()
     if cfg.tts.backend != "kokoro":
         raise ValueError(f"unknown tts backend {cfg.tts.backend!r}")
     model = resolve_model(cfg.models_dir, "kokoro-v1")

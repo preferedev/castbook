@@ -47,7 +47,7 @@ class LlmSettings(BaseModel):
 
 
 class TtsSettings(BaseModel):
-    backend: str = "kokoro"
+    backend: str = "kokoro"  # kokoro | pocket
 
 
 class ExportSettings(BaseModel):

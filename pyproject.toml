@@ -33,6 +33,11 @@ dependencies = [
 align = [
     "faster-whisper>=1.0",
 ]
+pocket = [
+    # pip install torch --index-url https://download.pytorch.org/whl/cpu first for a CPU build
+    "torch>=2.2",
+    "pocket-tts>=4.0",
+]
 dev = [
     "tomli>=2.0; python_version>='3.11'",
     "pytest>=8.0",
