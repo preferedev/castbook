@@ -583,9 +583,14 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             raise HTTPException(404, "run analyze first")
         return {
             "units": [
-                {"id": u.id, "chapter": u.chapter, "text": u.text[:300]}
+                {
+                    "id": u.id,
+                    "chapter": u.chapter,
+                    "text": u.text[:300],
+                    "guess": u.guess and u.speaker != "ambiguous",
+                }
                 for u in attrib.units
-                if u.speaker == "ambiguous"
+                if u.speaker == "ambiguous" or u.guess
             ]
         }
 
@@ -599,8 +604,9 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         for u in attrib.units:
             if u.id in fixes:
                 u.speaker = fixes[u.id]
+                u.guess = False
                 fixed += 1
-        attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous"]
+        attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous" or u.guess]
         save_artifact(attrib, book.dir)
         manifest = load_artifact(AudioManifest, book.dir)
         if manifest is not None:
