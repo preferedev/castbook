@@ -175,3 +175,45 @@ def test_heuristic_no_protagonist_in_third_person() -> None:
     ch = Chapter(index=0, title="t", text=text, word_count=0)
     cast = HeuristicAttributor().extract_cast([ch])
     assert all(c.name != "Protagonist" for c in cast)
+
+
+def test_heuristic_narration_dominant_quote_is_narrator() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [Character(id="alice", name="Alice", aliases=[])]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='She walked to the stone and read aloud the words carved there, '
+        '"REST IN PEACE," before turning slowly toward the empty fields beyond.',
+        word_count=0,
+    )
+    assert HeuristicAttributor().attribute(ch, cast)[0].speaker == "narrator"
+
+
+def test_heuristic_narrator_does_not_enter_turn_history() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="alice", name="Alice", aliases=[]),
+        Character(id="bob", name="Bob", aliases=[]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Hi," said Alice.\n\n'
+        "The afternoon wore on.\n\n"
+        'She stared at the stone that read "RIP" beneath her breath for a while.\n\n'
+        '"Okay then."',
+        word_count=0,
+    )
+    # the inscription unit is narrator and must not seed turn-taking history;
+    # the trailing untagged line stays honestly ambiguous
+    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == [
+        "alice",
+        "narrator",
+        "narrator",
+        "ambiguous",
+    ]
