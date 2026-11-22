@@ -163,12 +163,18 @@ def _exact_speaker(name: str, cast: list[Character]) -> str | None:
 
 
 def _surname_speaker(name: str, cast: list[Character]) -> str | None:
+    tokens = name.split()
+    first_tok = tokens[0].rstrip(".") if tokens else ""
+    fallback = None
     for c in cast:
         for o in {c.name, *c.aliases}:
-            surname = str(o).split()[-1].lower()
-            if name.endswith(" " + surname):
+            parts = str(o).lower().split()
+            if not parts or not name.endswith(" " + parts[-1].rstrip(".")):
+                continue
+            if parts[0].rstrip(".") == first_tok:
                 return c.name.lower()
-    return None
+            fallback = fallback or c.name.lower()
+    return fallback
 
 
 def _normalize_speaker(name: str, cast: list[Character]) -> str:
