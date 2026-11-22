@@ -35,7 +35,7 @@ jobs:
           [ "${{ runner.os }}" = "Windows" ] && SEP=";"
           uv run pyinstaller --onefile --name castbook \
             --add-data "castbook/app/static${SEP}castbook/app/static" \
-            -m castbook
+            castbook/__main__.py
           dist/castbook${{ matrix.ext }} --version
       - name: package
         shell: bash
