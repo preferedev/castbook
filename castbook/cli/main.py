@@ -552,6 +552,13 @@ def open_book(
     url = f"http://localhost:{port}/reader/{b.book_id}"
     if chapter is not None:
         url += f"?ch={chapter}"
+    import socket
+
+    with socket.socket() as sock:
+        sock.settimeout(0.5)
+        if sock.connect_ex(("127.0.0.1", port)) != 0:
+            typer.echo(f"nothing listening on :{port} — run `castbook serve` first")
+            raise typer.Exit(1)
     typer.echo(url)
     webbrowser.open(url)
 
