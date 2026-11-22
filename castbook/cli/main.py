@@ -215,11 +215,18 @@ def export(
     book: str,
     format: Annotated[str, typer.Option("--format", "-f")] = "m4b",
     layout: Annotated[str | None, typer.Option("--layout", help="abs for Audiobookshelf")] = None,
+    chapters: Annotated[str | None, typer.Option("--chapters", help="subset, e.g. 1-3,7")] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Mux finished chapters to M4B or MP3."""
     cfg = _cfg(config)
-    export_book(_book(cfg, book), cfg, format=format, layout=layout)
+    export_book(
+        _book(cfg, book),
+        cfg,
+        format=format,
+        layout=layout,
+        only=_chapter_range(chapters),
+    )
 
 
 @app.command()
@@ -476,7 +483,8 @@ def serve(
         import threading
         import webbrowser
 
-        url = f"http://{host}:{port}" + (f"?token={token}" if token else "")
+        shown = f"[{host}]" if ":" in host else host
+        url = f"http://{shown}:{port}" + (f"?token={token}" if token else "")
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     uvicorn.run(create_app(cfg, token=token), host=host, port=port, log_level="info")
 
