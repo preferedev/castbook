@@ -159,6 +159,7 @@
     <div id="review-hints" class="muted" style="font-size:.8rem;margin-bottom:.5rem"></div>
     <table><tbody id="review-table"></tbody></table>
     <button id="save-review" class="ghost">Save speakers</button>
+    <label class="muted" style="font-size:.8rem" title="apply each fix to every unit with identical text"><input type="checkbox" id="review-cascade"> cascade</label>
     <span class="muted" id="review-status"></span>
   </details>
 </section>
@@ -610,7 +611,7 @@ $("save-review").onclick = async () => {
   document.querySelectorAll("#review-table select[data-emotion-unit]").forEach(s => { emos[s.dataset.emotionUnit] = s.value; });
   let msg = [];
   if (Object.keys(fixes).length) {
-    const r = await api(`/api/books/${current}/speakers`, {
+    const r = await api(`/api/books/${current}/speakers${$("review-cascade").checked ? "?cascade=1" : ""}`, {
       method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(fixes)});
     msg.push(`fixed ${r.fixed} speakers`);
   }

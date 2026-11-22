@@ -1005,11 +1005,25 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         }
 
     @app.post("/api/books/{book_id}/speakers")
-    def set_speakers(book_id: str, fixes: dict[str, str]) -> dict[str, Any]:
+    def set_speakers(book_id: str, fixes: dict[str, str], cascade: bool = False) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         attrib = load_artifact(AttributionFile, book.dir)
         if attrib is None:
             raise HTTPException(404, "run analyze first")
+        if cascade:
+            text_of = {u.id: u.text for u in attrib.units}
+            by_text: dict[str, str] = {}
+            for uid, sp in fixes.items():
+                if uid in text_of:
+                    by_text.setdefault(text_of[uid], sp)
+            for u in attrib.units:
+                if (
+                    u.id not in fixes
+                    and u.text in by_text
+                    and u.speaker != by_text[u.text]
+                    and (u.speaker == "ambiguous" or u.guess)
+                ):
+                    fixes[u.id] = by_text[u.text]
         fixed = 0
         for u in attrib.units:
             if u.id in fixes:
