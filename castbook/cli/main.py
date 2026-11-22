@@ -419,6 +419,9 @@ def lexicon(
             typer.echo("pass a book id or --global")
             raise typer.Exit(1)
         lex_path = _book(cfg, book).dir / "lexicon.json"
+        if not lex_path.parent.is_dir():
+            typer.echo(f"{book}: not imported")
+            raise typer.Exit(1)
     entries: dict[str, str] = json.loads(lex_path.read_text()) if lex_path.exists() else {}
     for item in set_ or []:
         word, sep, pron = item.partition("=")
