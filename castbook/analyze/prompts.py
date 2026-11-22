@@ -30,7 +30,10 @@ For each numbered passage, decide who should speak it:
   name if the speaker is real but missing from the list). Narration that embeds
   a quote after "X said/cried/asked" belongs to X, not the narrator.
 - Names and endearments inside the quote ("Lizzy", "my dear") name the
-  addressee, not the speaker.
+  addressee, not the speaker. A speaker introducing a third party by name
+  ("This is Lord Henry Wotton") is still the one talking.
+- In a run of bare quotes with no tags, speakers usually alternate: a reply
+  belongs to the other participant, not the previous passage's speaker.
 - If it is narration, answer "narrator".
 - If you cannot tell, answer "ambiguous".
 Optionally add an emotion from: neutral, angry, sad, joyful, fearful,
