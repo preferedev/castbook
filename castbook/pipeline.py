@@ -45,9 +45,10 @@ def cast_book(
     book: BookPaths,
     cfg: Settings,
     overrides: dict[str, str] | None = None,
+    speeds: dict[str, float] | None = None,
     log: Callable[[str], None] = print,
 ) -> Path:
-    return cast.run(book, cfg, overrides, log)
+    return cast.run(book, cfg, overrides, speeds, log)
 
 
 def generate_book(

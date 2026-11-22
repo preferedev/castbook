@@ -16,6 +16,7 @@ def run(
     book: BookPaths,
     cfg: Settings,
     overrides: dict[str, str] | None = None,
+    speeds: dict[str, float] | None = None,
     log: Callable[[str], None] = print,
 ) -> Path:
     cast_file = load_artifact(CastFile, book.dir)
@@ -26,6 +27,9 @@ def run(
     for speaker, voice_id in (overrides or {}).items():
         if speaker in mapping:
             mapping[speaker].voice = voice_id
+    for speaker, speed in (speeds or {}).items():
+        if speaker in mapping:
+            mapping[speaker].speed = speed
 
     save_memory(
         cfg.data_dir,

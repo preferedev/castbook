@@ -101,6 +101,10 @@ def cast(
     map: Annotated[
         list[str] | None, typer.Option("--map", help="speaker=voice_id overrides")
     ] = None,
+    speed: Annotated[
+        list[str] | None,
+        typer.Option("--speed", help="speaker=rate overrides, e.g. narrator=0.9"),
+    ] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Auto-assign voices to characters (casting.json)."""
@@ -111,7 +115,13 @@ def cast(
             raise typer.BadParameter("--map takes speaker=voice_id")
         k, v = pair.split("=", 1)
         overrides[k.strip()] = v.strip()
-    cast_book(_book(cfg, book), cfg, overrides)
+    speeds = {}
+    for pair in speed or []:
+        if "=" not in pair:
+            raise typer.BadParameter("--speed takes speaker=rate")
+        k, v = pair.split("=", 1)
+        speeds[k.strip()] = float(v)
+    cast_book(_book(cfg, book), cfg, overrides, speeds)
 
 
 @app.command()
