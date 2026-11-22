@@ -49,8 +49,17 @@ def test_valid_voice_accepts_existing_clip(tmp_path) -> None:
 
     clip = tmp_path / "me.wav"
     clip.write_bytes(b"RIFF")
-    assert _valid_voice(str(clip), set())
-    assert not _valid_voice(str(tmp_path / "missing.wav"), set())
+    assert _valid_voice(str(clip), set(), "pocket")
+    assert not _valid_voice(str(clip), set(), "kokoro")
+    assert not _valid_voice(str(tmp_path / "missing.wav"), set(), "pocket")
+
+
+def test_mixes_rejected_for_pocket() -> None:
+    from castbook.cast.match import _valid_voice
+
+    pocket = {"paul", "george"}
+    assert _valid_voice("af_sky:0.6+bf_emma:0.4", {"af_sky", "bf_emma"}, "kokoro")
+    assert not _valid_voice("paul:0.6+george:0.4", pocket, "pocket")
 
 
 def test_pocket_split_bounds() -> None:
