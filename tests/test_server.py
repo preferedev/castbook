@@ -135,3 +135,35 @@ def test_config_backend_switch(tmp_path: Path, monkeypatch) -> None:  # type: ig
     r = client.put("/api/config", json={"tts": {"backend": "pocket"}})
     assert r.status_code == 200 and r.json()["tts"]["backend"] == "pocket"
     assert 'backend = "pocket"' in cfg_file.read_text()
+
+
+def test_token_gate(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    cfg = Settings(data_dir=tmp_path / "books", models_dir=tmp_path / "models")
+    client = TestClient(create_app(cfg, token="sekret"))
+    assert client.get("/api/books").status_code == 401
+    assert client.get("/api/books", headers={"x-castbook-token": "sekret"}).status_code == 200
+    assert client.get("/api/books?token=sekret").status_code == 200
+    assert "cb-token" in client.get("/").text
+
+
+def test_backend_switch_drops_stale_casting(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from castbook.artifacts import CastingFile, save_artifact, load_artifact
+
+    monkeypatch.setenv("CASTBOOK_CONFIG", str(tmp_path / "config.toml"))
+    client = _client(tmp_path, monkeypatch)
+    d = tmp_path / "books" / "b1"
+    d.mkdir(parents=True)
+    save_artifact(
+        CastingFile(
+            book_id="b1",
+            input_hash="x",
+            map={
+                "a": VoiceSpec(backend="kokoro", voice="af_heart"),
+                "b": VoiceSpec(backend="pocket", voice="paul"),
+            },
+        ),
+        d,
+    )
+    r = client.put("/api/config", json={"tts": {"backend": "pocket"}}).json()
+    assert r["recast"] == ["b1"]
+    assert list(load_artifact(CastingFile, d).map) == ["b"]

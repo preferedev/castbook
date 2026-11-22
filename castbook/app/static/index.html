@@ -73,7 +73,7 @@
     <button id="regen" class="ghost" title="re-render these chapters">↻</button>
     <button id="play-ch" class="ghost" title="play rendered chapter audio">▶ audio</button>
     <button id="preview-gen" class="ghost">Preview 50</button>
-    <select id="export-fmt" title="export format"><option value="">m4b</option><option>mp3</option><option>both</option></select>
+    <select id="export-fmt" title="export format"><option value="m4b">m4b</option><option>mp3</option><option>both</option></select>
     <select id="export-layout" title="library layout"><option value="">flat</option><option value="abs">audiobookshelf</option></select>
     <button id="export" class="ghost">Export</button>
     <button id="align" class="ghost" title="word-level karaoke timestamps">Align</button>
@@ -107,8 +107,12 @@
 const $ = (id) => document.getElementById(id);
 let current = null, voices = [], pollTimer = null;
 
+const CB_TOKEN = document.querySelector('meta[name="cb-token"]')?.content || "";
+const tok = p => CB_TOKEN ? p + (p.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(CB_TOKEN) : p;
 async function api(path, opts) {
-  const r = await fetch(path, opts);
+  opts = Object.assign({}, opts);
+  if (CB_TOKEN) opts.headers = Object.assign({"x-castbook-token": CB_TOKEN}, opts.headers);
+  const r = await fetch(tok(path), opts);
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
   return r.json();
 }
@@ -150,7 +154,7 @@ async function loadBooks() {
         <button class="ghost" onclick="openBook('${b.book_id}')">Open</button>
         <button class="ghost" onclick="deleteBook('${b.book_id}')">Delete</button>
         <a class="ghost" href="/reader/${b.book_id}">Read</a>
-        ${b.exports.map(f => `<a href="/api/books/${b.book_id}/download/${f}">${esc(f)}</a>`).join("")}
+        ${b.exports.map(f => `<a href="${tok(`/api/books/${b.book_id}/download/${f}`)}">${esc(f)}</a>`).join("")}
       </div>
     </section>`).join("");
 }
@@ -189,7 +193,7 @@ async function openBook(id) {
     const mix = b.closest("tr").querySelector("input.mix").value.trim();
     const spd = +b.closest("tr").querySelector("input.spd").value;
     b.textContent = "…";
-    const r = await fetch("/api/preview", {method:"POST",
+    const r = await fetch(tok("/api/preview"), {method:"POST",
       headers:{"content-type":"application/json"},
       body: JSON.stringify({voice: mix || sel.value, speed: spd > 0 ? spd : 1,
         text: `A line spoken by ${b.dataset.preview}.`})});
@@ -232,7 +236,7 @@ async function refreshProgress() {
         `<a href="#" data-ch="${n}" style="margin-right:.4rem">▶ ch${n}</a>`).join("");
       $("ch-play").querySelectorAll("a").forEach(a => a.onclick = e => {
         e.preventDefault();
-        new Audio(`/api/books/${current}/chapters/${a.dataset.ch}/audio`).play();
+        new Audio(tok(`/api/books/${current}/chapters/${a.dataset.ch}/audio`)).play();
       });
     }
     if (p.log) { $("log").style.display = ""; $("log").textContent = p.log; }
@@ -300,7 +304,8 @@ async function loadMachine() {
   }
   sel.onchange = async () => {
     sel.disabled = true;
-    await api("/api/config", {method: "PUT", headers: {"content-type":"application/json"}, body: JSON.stringify({tts: {backend: sel.value}})});
+    const rc = await api("/api/config", {method: "PUT", headers: {"content-type":"application/json"}, body: JSON.stringify({tts: {backend: sel.value}})});
+    if (rc.recast && rc.recast.length) alert(`voice specs dropped (old backend) — recast: ${rc.recast.join(", ")}`);
     sel.disabled = false;
     await loadVoices();
     if (current) openBook(current);
@@ -349,7 +354,7 @@ $("regen").onclick = () => {
 $("play-ch").onclick = () => {
   const m = $("gen-chapters").value.trim().match(/\d+/);
   const ch = m ? +m[0] : 0;
-  new Audio(`/api/books/${current}/chapters/${ch}/audio`).play();
+  new Audio(tok(`/api/books/${current}/chapters/${ch}/audio`)).play();
 };
 $("align").onclick = () => api(`/api/books/${current}/align`, {method: "POST"}).then(refreshProgress);
 $("stop").onclick = () => api(`/api/books/${current}/cancel`, {method: "POST"}).then(refreshProgress);
@@ -382,7 +387,7 @@ $("export").onclick = async () => {
       const books = await api(`/api/books`);
       const b = books.find(x => x.book_id === current);
       if (b) $("downloads").innerHTML = b.exports.map(f =>
-        `<a href="/api/books/${current}/download/${f}">${esc(f)}</a>`).join("");
+        `<a href="${tok(`/api/books/${current}/download/${f}`)}">${esc(f)}</a>`).join("");
       const p = await api(`/api/books/${current}/progress`);
       if (!p.busy) {
         clearInterval(timer);
