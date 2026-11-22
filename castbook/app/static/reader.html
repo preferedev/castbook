@@ -41,13 +41,15 @@ $("spd").onchange = e => audio.playbackRate = +e.target.value;
 async function boot() {
   $("title").textContent = BOOK;
   const d = await (await fetch(tok(`/api/books/${BOOK}/units`))).json();
+  const hue = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return `hsl(${h},45%,42%)`; };
   units = d.units;
   align = await (await fetch(tok(`/api/books/${BOOK}/align`))).json();
   let lastCh = -1;
   $("body").innerHTML = units.map((u, i) => {
     const ch = u.chapter !== lastCh ? `<h2>Chapter ${u.chapter + 1}</h2>` : "";
     lastCh = u.chapter;
-    const who = u.speaker !== "narrator" ? `<span class="who">${esc(u.speaker)}</span>` : "";
+    const who = u.speaker !== "narrator"
+      ? `<span class="who" style="color:${hue(u.speaker)}">${esc(u.speaker)}</span>` : "";
     return `${ch}<span class="u" id="u${i}" data-i="${i}" ${u.has_audio ? "data-audio" : ""}>` +
       `${who}${esc(u.text)}</span>`;
   }).join("");
