@@ -290,6 +290,7 @@ async function openBook(id) {
   const rows = [];
   const speakers = new Set(Object.keys(d.casting));
   for (const c of d.characters) speakers.add(c.id);
+  for (const sp of Object.keys(d.unit_counts || {})) speakers.add(sp);
   for (const sp of [...speakers].sort()) {
     const cur = d.casting[sp]?.voice || "";
     const char = d.characters.find(c => c.id === sp);
