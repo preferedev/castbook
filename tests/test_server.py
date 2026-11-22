@@ -278,3 +278,25 @@ def test_gutenberg_endpoint(client_setup) -> None:  # type: ignore[no-untyped-de
         assert r.json()["next"] is False
     finally:
         mp.undo()
+
+
+def test_download_nested_and_traversal(client_setup) -> None:  # type: ignore[no-untyped-def]
+    client, tmp_path = client_setup
+    book_id = _import_txt(client, tmp_path)
+    book_dir = tmp_path / "books" / book_id
+    sub = book_dir / "export" / "Some Title-1-2"
+    sub.mkdir(parents=True)
+    (sub / "01 - One.mp3").write_bytes(b"mp3")
+    (book_dir / "export" / "book.m4b").write_bytes(b"m4b")
+
+    r = client.get("/api/books")
+    assert r.status_code == 200
+    exports = next(b for b in r.json() if b["book_id"] == book_id)["exports"]
+    assert "Some Title-1-2/01 - One.mp3" in exports and "book.m4b" in exports
+
+    from urllib.parse import quote
+
+    r = client.get(f"/api/books/{book_id}/download/{quote('Some Title-1-2/01 - One.mp3')}")
+    assert r.status_code == 200 and r.content == b"mp3"
+    r = client.get(f"/api/books/{book_id}/download/..%2F..%2Fsecret.txt")
+    assert r.status_code == 404
