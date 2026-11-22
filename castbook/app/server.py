@@ -621,7 +621,12 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/run")
-    def run(book_id: str, quality: str | None = None) -> dict[str, Any]:
+    def run(
+        book_id: str,
+        quality: str | None = None,
+        epub: bool = False,
+        split: float | None = None,
+    ) -> dict[str, Any]:
         """Full pipeline in one job: analyze → cast → generate → export."""
         book = _require_book(cfg, book_id)
         log = _log_to(book.dir / "job.log")
@@ -645,7 +650,13 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             generate_book(book, job_cfg, log=log, cancel=cancel)
             if not cancel.is_set():
                 log("[export] started")
-                outs = export_book(book, job_cfg, log=log)
+                outs = export_book(book, job_cfg, log=log, split_hours=split)
+                if epub:
+                    from ..epubout import build_media_epub
+
+                    ch = load_artifact(ChaptersFile, book.dir)
+                    title = (ch.meta.title if ch else book_id) or book_id
+                    outs.append(build_media_epub(book, book.export / f"{title}-read-along.epub"))
                 log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
         _spawn(f"job:{book_id}", work, log)
