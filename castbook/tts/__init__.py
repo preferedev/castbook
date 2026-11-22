@@ -88,6 +88,7 @@ def run(
     speed: float = 1.0,
     limit: int | None = None,
     workers: int = 1,
+    dry_run: bool = False,
 ) -> Path:
     attribution = load_artifact(AttributionFile, book.dir)
     casting = load_artifact(CastingFile, book.dir)
@@ -108,7 +109,7 @@ def run(
         raise ValueError(f"workers must be >= 1, got {workers}")
     if injected_backend:
         workers = 1  # injected backend instances are not thread-shared
-    if workers <= 1 and backend is None:
+    if not dry_run and workers <= 1 and backend is None:
         backend = make_backend(cfg)
     total = len(units)
     rendered = skipped = failed = done_i = 0
@@ -139,6 +140,9 @@ def run(
         else:
             pending.append(unit)
 
+    if dry_run:
+        log(f"[tts] {total} units: {len(pending)} pending, {skipped} cached")
+        return book.dir / "manifest.json"
     if pending and manifest.started_at == 0.0:
         manifest.started_at = time.time()
         save_artifact(manifest, book.dir)

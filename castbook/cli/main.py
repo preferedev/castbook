@@ -135,6 +135,7 @@ def generate(
         typer.Option("--limit", min=1, help="render only the first N units (no assembly)"),
     ] = None,
     workers: Annotated[int, typer.Option("--workers", min=1, max=16)] = 1,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Synthesize units and assemble chapter audio (resumable)."""
     cfg = _cfg(config)
@@ -145,6 +146,7 @@ def generate(
         speed=speed,
         limit=limit,
         workers=workers,
+        dry_run=dry_run,
     )
 
 
