@@ -733,6 +733,22 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             ]
         }
 
+    @app.put("/api/books/{book_id}/chapters/{chapter}")
+    def rename_chapter(book_id: str, chapter: int, title: str = "") -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        ch = load_artifact(ChaptersFile, book.dir)
+        if ch is None:
+            raise HTTPException(404, "not imported")
+        c = next((c for c in ch.chapters if c.index == chapter), None)
+        if c is None:
+            raise HTTPException(404, "no such chapter")
+        title = title.strip()
+        if not title or len(title) > 200:
+            raise HTTPException(422, "title empty or >200 chars")
+        c.title = title
+        save_artifact(ch, book.dir)
+        return {"ok": True, "index": chapter, "title": title}
+
     @app.get("/api/books/{book_id}/feed.xml")
     def feed(book_id: str, request: Request) -> Response:
         from ..rss import build_feed

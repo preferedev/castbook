@@ -298,9 +298,16 @@ async function openBook(id) {
   $("merge-dst").innerHTML = opts;
   api(`/api/books/${id}/chapters`).then(r => {
     $("ch-list").innerHTML = r.chapters.map(c =>
-      `<div>${c.index} · ${esc(c.title)} <span class="muted">${c.words}w</span>` +
+      `<div>${c.index} · <span data-ch-title="${c.index}" title="click to rename">${esc(c.title)}</span>` +
+      ` <span class="muted">${c.words}w</span>` +
       (c.rendered ? ` <a href="${tok(`/api/books/${id}/chapters/${c.index}/audio`)}" target="_blank">▶</a>` : "") +
       `</div>`).join("");
+    document.querySelectorAll("[data-ch-title]").forEach(el => el.onclick = async () => {
+      const title = prompt("chapter title", el.textContent);
+      if (!title || title.trim() === el.textContent) return;
+      await api(`/api/books/${id}/chapters/${el.dataset.chTitle}?title=` + encodeURIComponent(title.trim()), {method: "PUT"});
+      el.textContent = title.trim();
+    });
   }).catch(() => {});
   document.querySelectorAll("[data-rename]").forEach(inp => inp.onchange = async () => {
     const name = inp.value.trim();
