@@ -33,6 +33,10 @@ class PocketBackend(Backend):
         )
 
     def _voice_state(self, name: str) -> object:
+        import re
+
+        if not (re.fullmatch(r"[a-z][a-z0-9_]*", name) or Path(name).is_file()):
+            raise ValueError(f"unknown pocket voice {name!r} (catalog name or local audio file)")
         if name not in self._states:
             self._states[name] = self._model.get_state_for_audio_prompt(name)
         return self._states[name]
@@ -51,7 +55,9 @@ class PocketBackend(Backend):
         tmp = out_wav.with_name(out_wav.stem + ".tmp.wav")
         sf.write(str(tmp), data, sr)
         if voice.speed != 1.0:
-            _atempo(tmp, voice.speed, out_wav)
+            stretched = out_wav.with_name(out_wav.stem + ".stretched.wav")
+            _atempo(tmp, voice.speed, stretched)
+            stretched.replace(out_wav)
             tmp.unlink(missing_ok=True)
         else:
             tmp.replace(out_wav)
