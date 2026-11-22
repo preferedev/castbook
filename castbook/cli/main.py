@@ -552,3 +552,20 @@ def reset(
     if not keep_source:
         shutil.rmtree(b.dir / "source", ignore_errors=True)
     typer.echo(f"reset {book}")
+
+
+@app.command()
+def rm(
+    book: str,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="skip confirmation")] = False,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Delete a book entirely (source, artifacts, audio, exports)."""
+    b = _book(_cfg(config), book)
+    if not b.dir.is_dir():
+        typer.echo(f"unknown book {book!r}")
+        raise typer.Exit(1)
+    if not yes and not typer.confirm(f"delete {b.dir} entirely?"):
+        raise typer.Abort
+    shutil.rmtree(b.dir)
+    typer.echo(f"deleted {book}")
