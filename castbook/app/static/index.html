@@ -195,7 +195,8 @@ async function openBook(id) {
       ).join("")}</select>` : `<input data-speaker="${sp}" data-voice-text value="${esc(cur)}" placeholder="voice description" style="width:16rem">`}
         <input class="spd" data-sp="${sp}" type="number" min="0.5" max="2" step="0.05" value="${d.casting[sp]?.speed ?? 1}" style="width:4rem" title="speed">
         <input class="mix" data-sp="${sp}" placeholder="mix a:0.7+b:0.3" style="width:9rem" title="custom voice spec" value="${/\+/.test(d.casting[sp]?.voice || '') ? esc(d.casting[sp].voice) : ''}"></td>
-      <td><button class="ghost" data-preview="${sp}" type="button">▶</button></td></tr>`);
+      <td><button class="ghost" data-preview="${sp}" type="button">▶</button>
+        <button class="ghost" data-clone="${sp}" type="button" title="clone a voice from an audio clip">clone</button></td></tr>`);
   }
   $("cast-table").innerHTML = rows.join("");
   const opts = [...speakers].sort().filter(sp => sp !== "ambiguous" && sp !== "narrator")
@@ -214,6 +215,21 @@ async function openBook(id) {
     const blob = await r.blob();
     new Audio(URL.createObjectURL(blob)).play();
     b.textContent = "▶";
+  });
+  document.querySelectorAll("[data-clone]").forEach(b => b.onclick = () => {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = ".wav,.mp3,.flac";
+    inp.onchange = async () => {
+      if (!inp.files.length) return;
+      if (!confirm(`Clone ${inp.files[0].name}'s voice onto "${b.dataset.clone}"? Only clone voices you may use.`)) return;
+      const fd = new FormData();
+      fd.append("file", inp.files[0]);
+      const r = await fetch(tok(`/api/books/${current}/clone?speaker=${b.dataset.clone}`),
+        {method: "POST", body: fd});
+      if (!r.ok) { alert("clone failed: " + (await r.json()).detail); return; }
+      openBook(current);
+    };
+    inp.click();
   });
   loadReview(id);
   loadLexicon(id);

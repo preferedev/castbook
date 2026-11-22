@@ -425,6 +425,39 @@ def merge(
 
 
 @app.command()
+def clone(
+    book: str,
+    speaker: Annotated[str, typer.Argument(help="speaker id to give the cloned voice")],
+    clip: Annotated[Path, typer.Argument(help="voice clip (wav/mp3/flac) to clone from")],
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Clone a voice from an audio clip onto a speaker (pocket backend).
+
+    Only clone voices you have the right to use — see the consent notice in
+    the README. The clip is copied into the book so paths stay stable.
+    """
+    import shutil
+
+    if clip.suffix.lower() not in {".wav", ".mp3", ".flac"}:
+        typer.echo("clip must be .wav, .mp3 or .flac")
+        raise typer.Exit(1)
+    if not clip.exists():
+        typer.echo(f"no such file: {clip}")
+        raise typer.Exit(1)
+    cfg = _cfg(config)
+    if cfg.tts.backend != "pocket":
+        typer.echo('cloning needs the pocket backend — set tts.backend = "pocket"')
+        raise typer.Exit(1)
+    b = _book(cfg, book)
+    dest_dir = b.dir / "voices"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{speaker}{clip.suffix.lower()}"
+    shutil.copy2(clip, dest)
+    cast_book(b, cfg, overrides={speaker: str(dest)})
+    typer.echo(f"cloned {clip.name} → {speaker} ({dest})")
+
+
+@app.command()
 def reset(
     book: str,
     keep_source: Annotated[
