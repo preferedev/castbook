@@ -1,5 +1,5 @@
 # Castbook attribution eval
-_2026-11-22T17:09:43+00:00Z — heuristic_
+_2026-11-22T17:15:03+00:00Z — heuristic_
 
 | book | units | labeled | correct | accuracy | ambiguous |
 |---|---|---|---|---|---|
@@ -9,7 +9,7 @@ _2026-11-22T17:09:43+00:00Z — heuristic_
 | great-expectations | 46 | 34 | 32 | 94% | 2 |
 | huckleberry-finn | 27 | 20 | 18 | 90% | 0 |
 | jane-eyre | 26 | 20 | 18 | 90% | 0 |
-| moby-dick | 36 | 20 | 16 | 80% | 2 |
+| moby-dick | 36 | 20 | 19 | 95% | 2 |
 | pride-and-prejudice | 34 | 20 | 15 | 75% | 1 |
 | sherlock-holmes | 36 | 29 | 26 | 90% | 0 |
 | treasure-island | 35 | 25 | 22 | 88% | 0 |
@@ -27,9 +27,6 @@ _2026-11-22T17:09:43+00:00Z — heuristic_
 - **huckleberry-finn** `ch008-u0019` expected `jim` got `huckleberry-finn` — '“No! W’y, what has you lived on? But you got a gun. Oh, yes, you got a\ngun. Dat’'
 - **jane-eyre** `ch023-u0020` expected `jane-eyre` got `rochester` — '“I am no bird; and no net ensnares me; I am a free human being with an\nindepende'
 - **jane-eyre** `ch023-u0024` expected `jane-eyre` got `rochester` — '“You play a farce, which I merely laugh at.”'
-- **moby-dick** `ch036-u0012` expected `crew` got `ahab` — '“Sing out for him!” was the impulsive rejoinder from a score of clubbed\nvoices.'
-- **moby-dick** `ch036-u0015` expected `crew` got `ahab` — '“Lower away, and after him!”'
-- **moby-dick** `ch036-u0017` expected `crew` got `ahab` — '“A dead whale or a stove boat!”'
 - **moby-dick** `ch036-u0020` expected `ahab` got `ambiguous` — '“All ye mast-headers have before now heard me give orders about a white\nwhale. L'
 - **pride-and-prejudice** `ch001-u0006` expected `bennet` got `elizabeth` — '“I do not believe Mrs. Long will do any such thing. She has two nieces of her ow'
 - **pride-and-prejudice** `ch001-u0014` expected `kitty` got `bennet` — '“When is your next ball to be, Lizzy?”'

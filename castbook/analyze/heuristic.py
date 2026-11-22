@@ -368,7 +368,19 @@ class HeuristicAttributor:
                 return cid
             if re.search(rf"\b{pat}\s+\w*\s*({SAID_VERBS})", residual, re.IGNORECASE):
                 return cid
-        return _beat_speaker(zone, names)
+        hit = _beat_speaker(zone, names)
+        if hit:
+            return hit
+        if re.search(
+            r"\b(?:score of \w+\s+voices|clubbed\s+voices|chorus|all hands|the voices)\b",
+            zone,
+            re.IGNORECASE,
+        ):
+            for collective in ("crew", "the crew", "chorus", "crowd", "seamen", "mariners", "men"):
+                hit = _lookup(collective, names) or _lookup(collective.title(), names)
+                if hit:
+                    return hit
+        return None
 
 
 TITLE_GENDER = {
@@ -533,6 +545,14 @@ def _addressed(run: list[tuple[Unit, str | None]], names: dict[str, str]) -> set
                     span,
                 ) or re.search(rf"\b{pat}\s+\w*\s*(?:{SAID_VERBS})\b", span):
                     out.add(cid)
+        for collective in ("crew", "crowd", "chorus", "seamen", "mariners"):
+            cid: str | None = _lookup(collective, names) or _lookup(collective.title(), names)
+            if cid and re.search(
+                r"(?:^|[,.!?;—–]\s*)(?:my\s+)?(?:men|lads|mates|hearties|boys|friends)\s*(?=[,.!?;—–]|$)",
+                span,
+                re.IGNORECASE,
+            ):
+                out.add(cid)
     return out
 
 
