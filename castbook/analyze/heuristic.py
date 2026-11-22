@@ -12,7 +12,7 @@ from collections import Counter
 from typing import cast as tcast
 
 from ..artifacts import Chapter, Character, Emotion, Unit
-from .units import _apostrophe, _inside_quote, _quote_step, split_units
+from .units import _apostrophe, _quote_stack, _quote_step, split_units
 
 SAID_VERBS = (
     "said|asked|replied|cried|whispered|shouted|exclaimed|answered|continued|"
@@ -39,7 +39,7 @@ FIRST_PERSON = re.compile(
     rf"[”\"'\u00bb]\s*,?\s*(?:I\s+(?:\w+\s+)?(?:{SAID_VERBS})|(?:{SAID_VERBS})\s+I)\b",
     re.IGNORECASE,
 )
-NAME_SAYS = re.compile(rf"{NAME}\s+({SAID_VERBS})", re.IGNORECASE)
+NAME_SAYS = re.compile(rf"{NAME}\s+({SAID_VERBS})\b", re.IGNORECASE)
 _FP_TAGS = re.compile(
     rf"[”\"'\u2019\u00bb]\s*,?\s*I\s+(?:{SAID_VERBS})|\b(?:{SAID_VERBS})\s+I\b",
     re.IGNORECASE,
@@ -160,14 +160,14 @@ class HeuristicAttributor:
         names = _name_index(cast)
         runs: list[list[tuple[Unit, str | None]]] = []
         run_after_narration: list[bool] = []
-        in_quote = False
+        in_quote: list[str] = []
         cur_para = -1
         narr_break = True
         pending: str | None = None
         for u in units:
             if u.kind != "dialogue":
                 u.speaker = "narrator"
-                in_quote = False
+                in_quote = []
                 narr_break = True
                 pending = _trailing_says(u.text, names)
                 if pending is None and "I" in names:
@@ -178,7 +178,7 @@ class HeuristicAttributor:
                         pending = others[0]
                 continue
             if u.paragraph != cur_para:
-                in_quote = False
+                in_quote = []
                 cur_para = u.paragraph
             hit = self._speaker_for(u.text, names, in_quote)
             if in_quote and runs:
@@ -190,7 +190,7 @@ class HeuristicAttributor:
                 run_after_narration.append(narr_break)
             narr_break = False
             pending = None
-            in_quote = _inside_quote(u.text, in_quote)
+            in_quote = _quote_stack(u.text, in_quote)
         resolved: list[str | None] = [next((s for _, s in run if s), None) for run in runs]
 
         segs: list[list[int]] = [[]]
@@ -345,7 +345,9 @@ class HeuristicAttributor:
                     u.emotion = _emotion_of(u.text)
         return units
 
-    def _speaker_for(self, text: str, names: dict[str, str], in_quote: bool = False) -> str | None:
+    def _speaker_for(
+        self, text: str, names: dict[str, str], in_quote: list[str] | None = None
+    ) -> str | None:
         zone = _tag_zone(text, in_quote)
         if not _QUOTE_CHAR.search(zone):
             return None
@@ -446,10 +448,10 @@ def _gender_of(raw: str) -> str:
     return FIRST_NAME_GENDER.get(first, "unknown")
 
 
-def _tag_zone(text: str, inside: bool = False) -> str:
+def _tag_zone(text: str, inside: list[str] | None = None) -> str:
     """Text outside quoted speech — where speaker tags live. Quote marks stay
     as regex anchors; everything said inside a quote is dropped."""
-    stack: list[str] = ["d"] if inside else []
+    stack: list[str] = list(inside) if inside else []
     out: list[str] = []
     for i, ch in enumerate(text):
         if ch in '"\u201c\u201d\u2018\u00ab\u00bb\u201e' or (
