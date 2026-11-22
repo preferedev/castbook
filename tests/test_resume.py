@@ -147,3 +147,12 @@ def test_cancel_stops_before_pending_units(tmp_path) -> None:
     assert backend.calls == []
     manifest = load_artifact(AudioManifest, book.dir)
     assert manifest is not None and len(manifest.units) == 0
+
+
+def test_estimate_render_counts_pending(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from castbook.tts import estimate_render
+
+    book = _book(tmp_path)
+    e = estimate_render(book, Settings())
+    assert e["pending"] == 3 and e["total"] == 3
+    assert e["est_audio_min"] > 0 and e["est_render_min"] > 0
