@@ -356,3 +356,27 @@ def test_custom_cover(client_setup) -> None:  # type: ignore[no-untyped-def]
     assert got.content[:8] == b"\x89PNG\r\n\x1a\n"
     r = client.post(f"/api/books/{book_id}/cover", files={"file": ("t.png", png[:24])})
     assert r.status_code == 422
+
+
+def test_run_all_books(client_setup, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    client, tmp_path = client_setup
+    calls: list[str] = []
+    for fn in ("analyze_book", "cast_book", "generate_book", "export_book"):
+        monkeypatch.setattr(
+            f"castbook.app.server.{fn}",
+            lambda book, *a, _fn=fn, **k: calls.append(f"{_fn}:{book.book_id}"),
+        )
+    assert client.post("/api/run-all").status_code == 404  # empty library
+    book_id = _import_txt(client, tmp_path)
+    r = client.post("/api/run-all?quality=bogus")
+    assert r.status_code == 422
+    r = client.post("/api/run-all")
+    assert r.status_code == 200
+    assert r.json()["books"] == [book_id]
+    import time
+
+    for _ in range(50):
+        if len(calls) >= 4:
+            break
+        time.sleep(0.05)
+    assert f"export_book:{book_id}" in calls
