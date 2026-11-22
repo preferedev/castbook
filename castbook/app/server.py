@@ -6,6 +6,7 @@ artifacts, so the UI survives a server restart.
 
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 import threading
@@ -159,9 +160,10 @@ def create_app(cfg: Settings) -> FastAPI:
         for k, v in body.items():
             if not isinstance(k, str) or not isinstance(v, str):
                 raise HTTPException(422, "lexicon entries must be word→replacement strings")
-        tmp = book.dir / "lexicon.json.tmp"
-        tmp.write_text(json.dumps(body, indent=2, ensure_ascii=False))
-        tmp.replace(book.dir / "lexicon.json")
+        fd, tmppath = tempfile.mkstemp(dir=book.dir, suffix=".tmp", prefix="lexicon-")
+        with os.fdopen(fd, "w") as fh:
+            fh.write(json.dumps(body, indent=2, ensure_ascii=False))
+        Path(tmppath).replace(book.dir / "lexicon.json")
         return {"saved": len(body)}
 
     @app.get("/api/books/{book_id}/align")
