@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 
@@ -83,9 +85,6 @@ def assemble_chapters(book: BookPaths, cfg: Settings, log: Callable[[str], None]
 
 def abs_layout(book: BookPaths, meta: object, outputs: list[Path], out_root: Path) -> Path:
     """Audiobookshelf layout: <root>/<Author>/<Title>/<Title>.m4b + cover + metadata."""
-    import json
-    import shutil
-
     author = _safe_dir(getattr(meta, "author", "") or "Unknown Author")
     title = _safe_dir(getattr(meta, "title", book.book_id))
     dest = out_root / author / title
@@ -156,5 +155,12 @@ def export(
         log(f"[export] mp3 chapters → {out.name}/")
     if layout == "abs":
         dest = abs_layout(book, chapters.meta, outputs, book.export / "abs")
-        log(f"[export] audiobookshelf → {dest}")
+        zip_path = shutil.make_archive(
+            str(book.export / f"{_safe_dir(getattr(chapters.meta, 'title', 'book'))}-abs"),
+            "zip",
+            dest.parent,
+        )
+        out_zip = Path(zip_path)
+        outputs.append(out_zip)
+        log(f"[export] audiobookshelf → {dest} ({out_zip.name})")
     return outputs
