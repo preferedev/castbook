@@ -25,7 +25,7 @@ castbook models pull kokoro-v1 kokoro-voices-v1   # ~350 MB, required for the ko
 # faster alternative on CPU (cloning + streaming), optional:
 pip install -e '.[pocket]'   # torch CPU wheel first: pip install torch --index-url https://download.pytorch.org/whl/cpu
 # then set backend = "pocket" under [tts] in config.toml — the model auto-downloads from HF.
-# clone a voice: castbook cast <book> --map "<speaker>=/path/to/clip.wav" (requires HF terms
+# clone a voice: castbook clone <book> <speaker> /path/to/clip.wav (requires HF terms
 # accepted for kyutai/pocket-tts); catalog voices need no auth.
 
 # quality tier (GPU only — check 'castbook doctor' for your tier):
@@ -45,7 +45,8 @@ un-rendered units are synthesized.
 | command | what it does |
 |---|---|
 | `castbook import <file> [<file>…]` | import one or more ebooks (EPUB/PDF/TXT/MD/MOBI/AZW3) → `chapters.json` |
-| `castbook analyze <book>` | attribute every line (`--backend heuristic\|llamacpp` to override config) |
+| `castbook analyze <book>` | attribute every line (`--backend heuristic\|llamacpp\|hybrid` — hybrid = heuristic + LLM second look) |
+| `castbook clone <book> <sp> <clip>` | clone a voice from a wav/mp3/flac clip onto a speaker (pocket only) |
 | `castbook cast <book>` | auto-assign voices; `--map name=voice` (mix voices as `a:0.7+b:0.3`), `--speed name=rate` |
 | `castbook generate <book>` | synthesize audio (resumable; `--chapters 1-3,7`, `--limit 50` preview, `--workers 4` parallel, `--align` word timestamps) |
 | `castbook export <book>` | mux chaptered M4B (+ `--format mp3`/`both`) |
