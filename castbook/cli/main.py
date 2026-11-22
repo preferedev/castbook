@@ -132,8 +132,7 @@ def export(
 ) -> None:
     """Mux finished chapters to M4B or MP3."""
     cfg = _cfg(config)
-    cfg.export.format = format
-    export_book(_book(cfg, book), cfg)
+    export_book(_book(cfg, book), cfg, format=format)
 
 
 @app.command()

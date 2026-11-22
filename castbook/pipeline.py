@@ -64,8 +64,13 @@ def generate_book(
     return out
 
 
-def export_book(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> list[Path]:
-    return audio.export(book, cfg, log)
+def export_book(
+    book: BookPaths,
+    cfg: Settings,
+    log: Callable[[str], None] = print,
+    format: str | None = None,
+) -> list[Path]:
+    return audio.export(book, cfg, log, format=format)
 
 
 def run_book(

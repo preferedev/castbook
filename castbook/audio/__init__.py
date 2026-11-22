@@ -81,7 +81,12 @@ def assemble_chapters(book: BookPaths, cfg: Settings, log: Callable[[str], None]
     return book.dir / "manifest.json"
 
 
-def export(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> list[Path]:
+def export(
+    book: BookPaths,
+    cfg: Settings,
+    log: Callable[[str], None] = print,
+    format: str | None = None,
+) -> list[Path]:
     manifest = load_artifact(AudioManifest, book.dir)
     chapters = load_artifact(ChaptersFile, book.dir)
     if manifest is None or chapters is None:
@@ -99,7 +104,7 @@ def export(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -
 
     book.export.mkdir(parents=True, exist_ok=True)
     outputs: list[Path] = []
-    fmt = cfg.export.format
+    fmt = format or cfg.export.format
     if fmt in ("m4b", "both"):
         out = mux_m4b(wavs, titles, chapters.meta, book.m4b(chapters.meta.title), book.dir)
         outputs.append(out)

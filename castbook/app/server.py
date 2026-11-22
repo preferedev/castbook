@@ -290,11 +290,9 @@ def create_app(cfg: Settings) -> FastAPI:
     @app.post("/api/books/{book_id}/export")
     def export(book_id: str, format: str | None = None) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
-        if format is not None:
-            if format not in ("m4b", "mp3", "both"):
-                raise HTTPException(422, f"bad format {format!r}")
-            cfg.export.format = format
-        outs = export_book(book, cfg)
+        if format is not None and format not in ("m4b", "mp3", "both"):
+            raise HTTPException(422, f"bad format {format!r}")
+        outs = export_book(book, cfg, format=format)
         files = [p.name if p.is_file() else f"{p.name}/" for p in outs]
         return {"files": files}
 
