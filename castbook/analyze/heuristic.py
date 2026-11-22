@@ -246,7 +246,17 @@ class HeuristicAttributor:
                     (resolved[j] for j in reversed(seg[:pos]) if resolved[j] in parties),
                     None,
                 )
-                if not left and not tagged and total and quoted / total < 0.3:
+                if (
+                    not left
+                    and not tagged
+                    and total
+                    and quoted / total < 0.3
+                    and not any(
+                        re.search(r"[.!?]\s*['\u2019\"\u201d\u00bb\u201c]?\s*$", sp)
+                        and len(sp.split()) >= 4
+                        for sp in _QUOTED.findall(" ".join(u.text for u, _ in run))
+                    )
+                ):
                     resolved[i] = "narrator"
                     continue
                 spans = [
@@ -538,6 +548,15 @@ def _name_index(cast: list[Character]) -> dict[str, str]:
     for c in cast:
         for n in [c.name, *c.aliases]:
             index[n] = c.id
+            stripped = re.sub(
+                r"^(?:l'|d'|j'|qu'|de la |du |des |le |la |les |un |une |"
+                r"der |die |das |dem |den |ein |eine )",
+                "",
+                n,
+                flags=re.IGNORECASE,
+            )
+            if stripped != n:
+                index[stripped] = c.id
             parts = n.split()
             if len(parts) > 1:
                 for part in (parts[0], parts[-1]):
@@ -553,8 +572,8 @@ _TAIL_WORD = (
 _TAIL_PREP = r"(?:zu|zum|zur|zu dem|to|bei|mit|\u00e0|au|aux|de|a)"
 _TAIL_ADDR = rf"(?:\s*{_TAIL_PREP}\s+(?:{_TAIL_WORD}\s+)?\w+(?:\s+\w+){{0,3}})?"
 _TRAILING_SAYS = re.compile(
-    rf"({NAME}|he|she|I)\s+(?:\w+\s+){{0,4}}(?:{SAID_VERBS}){_TAIL_ADDR}\s*[:\u2014\u2013,-]?\s*$"
-    rf"|(?:{SAID_VERBS})\s+(?:\w+\s+){{0,2}}({NAME}){_TAIL_ADDR}\s*[:\u2014\u2013,-]?\s*$",
+    rf"({NAME}|he|she|I)\s+(?:\w+\s+){{0,4}}(?:{SAID_VERBS}){_TAIL_ADDR}(?:\s*[:\u2014\u2013,-]){{0,2}}\s*$"
+    rf"|(?:{SAID_VERBS})\s+(?:\w+\s+){{0,2}}({NAME}){_TAIL_ADDR}(?:\s*[:\u2014\u2013,-]){{0,2}}\s*$",
     re.IGNORECASE,
 )
 
