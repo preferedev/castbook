@@ -327,6 +327,27 @@ def voices(
 
 
 @app.command()
+def estimate(
+    book: str,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Estimate render time for the configured backend (rough, CPU-measured)."""
+    from ..tts import estimate_render
+
+    cfg = _cfg(config)
+    try:
+        e = estimate_render(_book(cfg, book), cfg)
+    except FileNotFoundError as err:
+        typer.echo(str(err))
+        raise typer.Exit(1) from err
+    typer.echo(
+        f"{e['pending']}/{e['total']} units pending"
+        f" · ~{e['est_audio_min']:.0f} min audio"
+        f" · ~{e['est_render_min']:.0f} min render on {e['backend']}"
+    )
+
+
+@app.command()
 def doctor(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
