@@ -171,10 +171,10 @@ def suggest_merges(characters: list[Character]) -> list[tuple[str, str]]:
                 out.append((a_id, b_id))
                 continue
             subset = any(
-                k.split() and all(t in bk.split() for bk in b_keys for t in k.split())
+                any(k.split() and set(k.split()) <= set(bk.split()) for bk in b_keys)
                 for k in a_keys
             ) or any(
-                k.split() and all(t in ak.split() for ak in a_keys for t in k.split())
+                any(k.split() and set(k.split()) <= set(ak.split()) for ak in a_keys)
                 for k in b_keys
             )
             if subset:
