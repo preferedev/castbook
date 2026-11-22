@@ -723,18 +723,30 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
 
     @app.post("/api/books/{book_id}/export")
     def export(
-        book_id: str, format: str | None = None, layout: str | None = None
+        book_id: str,
+        format: str | None = None,
+        layout: str | None = None,
+        chapters: str | None = None,
     ) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         if format is not None and format not in ("m4b", "mp3", "both"):
             raise HTTPException(422, f"bad format {format!r}")
         if layout is not None and layout not in ("abs",):
             raise HTTPException(422, f"bad layout {layout!r}")
+        only: set[int] | None = None
+        if chapters:
+            try:
+                only = set()
+                for part in chapters.split(","):
+                    lo, _, hi = part.strip().partition("-")
+                    only.update(range(int(lo), int(hi) + 1) if hi else [int(lo)])
+            except ValueError:
+                raise HTTPException(422, f"bad chapters {chapters!r}") from None
         log = _log_to(book.dir / "job.log")
         log(f"[export] started ({format or cfg.export.format})")
 
         def work() -> None:
-            outs = export_book(book, cfg, format=format, layout=layout, log=log)
+            outs = export_book(book, cfg, format=format, layout=layout, only=only, log=log)
             log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
         _spawn(f"job:{book_id}", work, log)
