@@ -22,7 +22,8 @@ SAID_VERBS = (
     "begged|sobbed|stammered|gasped|growled|screamed|yelled|mumbled|drawled|"
     "wailed|moaned|grumbled|snarled|sneered|blurted|snapped|roared|bellowed|"
     "choked|hissed|rasped|whined|croaked|queried|ventured|offered|confessed|"
-    "mused|retorted|drawled|howled|stuttered"
+    "mused|retorted|drawled|howled|stuttered|resumed|rejoined|ejaculated|"
+    "assented|reiterated"
 )
 _NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:(?:de|van|von|of|the|al|bin)\s+)?[A-Z][a-z]+){0,2}"
 _NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+"
@@ -218,7 +219,7 @@ class HeuristicAttributor:
         for raw, cid in names.items():
             if len(raw) <= 3:
                 continue
-            pat = re.escape(raw)
+            pat = re.escape(raw).replace(r"\ ", r"\s+")
             if re.search(
                 rf"\b({SAID_VERBS})\s+(?!to\b|with\b|for\b|of\b)(?:his|her|their|the)?\s*{pat}",
                 residual,
@@ -348,9 +349,33 @@ def _name_index(cast: list[Character]) -> dict[str, str]:
             index[n] = c.id
             parts = n.split()
             if len(parts) > 1:
-                index[parts[0]] = c.id
-                index[parts[-1]] = c.id
+                for part in (parts[0], parts[-1]):
+                    if part.lower() not in _NAME_PART_STOP:
+                        index[part] = c.id
     return index
+
+
+_NAME_PART_STOP = {
+    "the",
+    "a",
+    "an",
+    "his",
+    "her",
+    "their",
+    "mr.",
+    "mr",
+    "mrs.",
+    "mrs",
+    "miss",
+    "dr.",
+    "dr",
+    "sir",
+    "lady",
+    "lord",
+    "captain",
+    "madam",
+    "old",
+}
 
 
 def _lookup(raw: str, names: dict[str, str]) -> str | None:
