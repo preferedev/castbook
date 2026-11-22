@@ -296,6 +296,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         cast_f = load_artifact(CastFile, d)
         casting = load_artifact(CastingFile, d)
         attrib = load_artifact(AttributionFile, d)
+        ch = load_artifact(ChaptersFile, d)
         stats: dict[str, dict[str, float | int]] = {}
         for u in attrib.units if attrib else []:
             s = stats.setdefault(u.speaker, {"units": 0, "words": 0, "minutes": 0.0})
@@ -306,6 +307,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             s["minutes"] = round(s["minutes"], 1)
         return {
             "book_id": book_id,
+            "meta": ch.meta.model_dump() if ch else {},
             "characters": [c.model_dump() for c in cast_f.characters] if cast_f else [],
             "casting": {k: v.model_dump() for k, v in casting.map.items()} if casting else {},
             "needs_review": attrib.needs_review if attrib else [],
@@ -732,6 +734,32 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 for c in ch.chapters
             ]
         }
+
+    @app.put("/api/books/{book_id}/meta")
+    def update_meta(book_id: str, body: dict[str, Any]) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        ch = load_artifact(ChaptersFile, book.dir)
+        if ch is None:
+            raise HTTPException(404, "not imported")
+        m = ch.meta
+        changed_audio = False
+        for f in ("title", "author", "language"):
+            if f in body and isinstance(body[f], str) and body[f].strip():
+                v = body[f].strip()
+                if len(v) > 200:
+                    raise HTTPException(422, f"{f} >200 chars")
+                if f == "language" and v != m.language:
+                    changed_audio = True
+                setattr(m, f, v)
+        save_artifact(ch, book.dir)
+        popped = 0
+        if changed_audio:
+            manifest = load_artifact(AudioManifest, book.dir)
+            if manifest is not None:
+                popped = len(manifest.units)
+                manifest.units.clear()
+                save_artifact(manifest, book.dir)
+        return {"ok": True, "meta": m.model_dump(), "audio_invalidated": popped}
 
     @app.put("/api/books/{book_id}/chapters/{chapter}")
     def rename_chapter(book_id: str, chapter: int, title: str = "") -> dict[str, Any]:

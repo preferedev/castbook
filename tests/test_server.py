@@ -428,3 +428,18 @@ def test_unit_emotions_endpoint(client_setup) -> None:  # type: ignore[no-untype
     assert r.status_code == 200 and r.json()["fixed"] == 1
     attrib = load_artifact(AttributionFile, d)
     assert attrib.units[0].emotion == "joyful" and attrib.units[1].emotion == "sad"
+
+
+def test_meta_endpoint(client_setup) -> None:  # type: ignore[no-untyped-def]
+    from castbook.artifacts import ChaptersFile, load_artifact
+
+    client, tmp_path = client_setup
+    book_id = _import_txt(client, tmp_path)
+    d = tmp_path / "books" / book_id
+    r = client.put(f"/api/books/{book_id}/meta", json={"title": "New Title", "language": "fr"})
+    assert r.status_code == 200
+    assert r.json()["meta"]["title"] == "New Title" and r.json()["meta"]["language"] == "fr"
+    ch = load_artifact(ChaptersFile, d)
+    assert ch.meta.title == "New Title"
+    assert client.put(f"/api/books/{book_id}/meta", json={"title": "x" * 300}).status_code == 422
+    assert client.get(f"/api/books/{book_id}").json()["meta"]["title"] == "New Title"

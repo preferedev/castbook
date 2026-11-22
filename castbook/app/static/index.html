@@ -84,6 +84,7 @@
 <section id="cast-section" style="display:none">
   <div class="book-head">
     <h2 id="cast-title" style="font-size:1.05rem"></h2>
+    <button id="meta-edit" class="ghost" title="edit title, author, language">✎</button>
     <span class="muted" id="cast-meta"></span>
   </div>
   <table>
@@ -264,8 +265,19 @@ async function openBook(id) {
   current = id;
   const d = await api(`/api/books/${id}`);
   $("cast-section").style.display = "";
-  $("cast-title").textContent = id;
-  $("cast-meta").textContent = `${d.units} units · ${d.needs_review.length} need review`;
+  const meta = d.meta || {};
+  $("cast-title").textContent = meta.title || id;
+  $("cast-meta").textContent = [meta.author, meta.language, `${d.units} units`, `${d.needs_review.length} need review`].filter(Boolean).join(" · ");
+  $("meta-edit").onclick = async () => {
+    const body = {};
+    const t = prompt("title", meta.title); if (t) body.title = t;
+    const a = prompt("author", meta.author); if (a) body.author = a;
+    const l = prompt("language (e.g. en, fr, de) — changing this re-renders audio", meta.language); if (l) body.language = l;
+    if (!Object.keys(body).length) return;
+    const r = await api(`/api/books/${id}/meta`, {method: "PUT", body: JSON.stringify(body)});
+    if (r.audio_invalidated) alert(`${r.audio_invalidated} rendered units invalidated — re-generate to apply`);
+    openBook(id); loadBooks();
+  };
   $("q-results").innerHTML = "";
   $("q").value = "";
   showEstimate();
