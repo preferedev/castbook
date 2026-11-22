@@ -17,7 +17,7 @@
   #bar button { font:inherit; background:#333; color:#eee; border:0; padding:.3rem .8rem; border-radius:.25rem; cursor:pointer; }
   #spd { margin-left:auto; }
 </style>
-<header><a href="/">← castbook</a> — <b id="title"></b></header>
+<header><a id="home-link" href="/">← castbook</a> — <b id="title"></b></header>
 <div id="body"></div>
 <div id="bar">
   <button id="prev">⏮</button><button id="back">−15s</button><button id="play">▶</button><button id="fwd">+15s</button><button id="next">⏭</button>
@@ -33,6 +33,7 @@ const esc = (s) => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}
 let units = [], cur = -1, align = {}, curWord = -1;
 const CB_TOKEN = document.querySelector('meta[name="cb-token"]')?.content || "";
 const tok = p => CB_TOKEN ? p + (p.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(CB_TOKEN) : p;
+if (CB_TOKEN) document.getElementById("home-link").href = tok("/");
 const audio = new Audio();
 audio.onended = () => playAt(nextPlayable(cur));
 $("spd").onchange = e => audio.playbackRate = +e.target.value;

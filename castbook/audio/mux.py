@@ -58,6 +58,7 @@ def mux_m4b(
 
     concat = _concat_file(chapter_wavs)
     tmp = out.with_suffix(".tmp.m4b")
+    has_cover = cover is not None and cover.exists()
     args = [
         "-f",
         "concat",
@@ -67,15 +68,17 @@ def mux_m4b(
         str(concat),
         "-i",
         str(meta_file),
+    ]
+    if has_cover:
+        args += ["-i", str(cover)]
+    args += [
         "-map_metadata",
         "1",
         "-map_chapters",
         "1",
     ]
-    if cover and cover.exists():
+    if has_cover:
         args += [
-            "-i",
-            str(cover),
             "-map",
             "0:a",
             "-map",
