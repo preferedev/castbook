@@ -558,7 +558,8 @@ async function runSearch() {
   if (!q) return;
   const r = await api(`/api/books/${current}/search?q=` + encodeURIComponent(q));
   $("q-results").innerHTML = r.matches.length
-    ? r.matches.map(m => `<div>ch${m.chapter} · <b>${esc(m.speaker)}</b> — “${esc(m.excerpt)}”</div>`).join("")
+    ? r.matches.map(m => `<div>ch${m.chapter} · <b>${esc(m.speaker)}</b> — “${esc(m.excerpt)}”
+        <a href="${tok(`/api/books/${current}/audio/${m.unit_id}`)}" target="_blank" title="play this unit">▶</a></div>`).join("")
     : "no matches";
 }
 $("q-btn").onclick = runSearch;

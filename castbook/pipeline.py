@@ -207,6 +207,7 @@ def search_units(book_dir: Path, query: str, limit: int = 50) -> list[dict[str, 
         )
         out.append(
             {
+                "unit_id": u.id,
                 "chapter": u.chapter,
                 "speaker_id": u.speaker,
                 "speaker": names.get(u.speaker, u.speaker),
