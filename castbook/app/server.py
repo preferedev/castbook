@@ -159,7 +159,9 @@ def create_app(cfg: Settings) -> FastAPI:
         for k, v in body.items():
             if not isinstance(k, str) or not isinstance(v, str):
                 raise HTTPException(422, "lexicon entries must be word→replacement strings")
-        (book.dir / "lexicon.json").write_text(json.dumps(body, indent=2, ensure_ascii=False))
+        tmp = book.dir / "lexicon.json.tmp"
+        tmp.write_text(json.dumps(body, indent=2, ensure_ascii=False))
+        tmp.replace(book.dir / "lexicon.json")
         return {"saved": len(body)}
 
     @app.get("/api/books/{book_id}/align")
@@ -270,7 +272,7 @@ def create_app(cfg: Settings) -> FastAPI:
                 workers=workers,
                 cancel=cancel,
             )
-            if export:
+            if export and not cancel.is_set():
                 log("[export] started")
                 outs = export_book(book, cfg, log=log)
                 log(f"[export] wrote {', '.join(p.name for p in outs)}")

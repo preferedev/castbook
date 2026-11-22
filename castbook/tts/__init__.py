@@ -68,7 +68,10 @@ def _load_lexicon(book: BookPaths, cfg: Settings) -> dict[str, str]:
     out: dict[str, str] = {}
     for f in (cfg.data_dir / "lexicon.json", book.dir / "lexicon.json"):
         if f.exists():
-            out.update({str(k): str(v) for k, v in json.load(f.open()).items()})
+            try:
+                out.update({str(k): str(v) for k, v in json.load(f.open()).items()})
+            except (json.JSONDecodeError, OSError):
+                continue
     return out
 
 
@@ -203,7 +206,7 @@ def run(
                         f"({rendered} new, {skipped} cached, {failed} failed)"
                     )
         finally:
-            pool.shutdown(wait=True)
+            pool.shutdown(wait=True, cancel_futures=True)
     else:
         for unit in pending:
             if cancel is not None and cancel.is_set():
