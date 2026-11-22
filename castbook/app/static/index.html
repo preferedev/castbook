@@ -73,6 +73,7 @@
   </div>
 </details>
 
+<div class="muted" id="lib-stats" style="font-size:.8rem;margin-bottom:.4rem"></div>
 <div id="books"></div>
 
 <details id="models-details" style="margin-top:1rem">
@@ -243,6 +244,11 @@ setInterval(async () => {
 }, 4000);
 
 async function loadBooks() {
+  api("/api/stats").then(s => {
+    $("lib-stats").textContent = s.books
+      ? `${s.books} books · ${s.units.toLocaleString()} units · ~${s.minutes_rendered} min rendered · ${s.needs_review} to review`
+      : "";
+  }).catch(() => {});
   const books = await api("/api/books");
   $("books").innerHTML = books.map(b => `
     <section>

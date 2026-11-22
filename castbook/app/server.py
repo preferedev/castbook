@@ -180,6 +180,43 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             out.append(_status(d, ch))
         return out
 
+    @app.get("/api/stats")
+    def stats() -> dict[str, Any]:
+        books = 0
+        units = rendered = 0
+        chars = 0.0
+        review = 0
+        if cfg.data_dir.exists():
+            for d in cfg.data_dir.iterdir():
+                if not d.is_dir():
+                    continue
+                ch = load_artifact(ChaptersFile, d)
+                if ch is None:
+                    continue
+                books += 1
+                attrib = load_artifact(AttributionFile, d)
+                if attrib is None:
+                    continue
+                units += len(attrib.units)
+                review += len(attrib.needs_review)
+                manifest = load_artifact(AudioManifest, d)
+                done = (
+                    {k for k, e in manifest.units.items() if e.status == UnitStatus.done}
+                    if manifest
+                    else set()
+                )
+                for u in attrib.units:
+                    if u.id in done:
+                        rendered += 1
+                        chars += len(u.text)
+        return {
+            "books": books,
+            "units": units,
+            "rendered_units": rendered,
+            "minutes_rendered": round(chars / 15 / 60),
+            "needs_review": review,
+        }
+
     @app.get("/api/models")
     def models() -> list[dict[str, Any]]:
         busy = _jobs.get("models:pull")
