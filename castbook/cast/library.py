@@ -6,6 +6,7 @@ Source: Kokoro-82M preset voices (Apache-2.0) via kokoro-onnx.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 
 from pydantic import BaseModel
@@ -105,8 +106,21 @@ def load_memory(data_dir: Path) -> dict[str, str]:
     return {str(k): str(v) for k, v in json.load(f.open()).items()}
 
 
+_mem_lock = threading.Lock()
+
+
 def save_memory(data_dir: Path, mapping: dict[str, str]) -> None:
     import json
+    import os
+    import tempfile
 
-    merged = {**load_memory(data_dir), **{_norm(k): v for k, v in mapping.items()}}
-    Path(data_dir, "voice-memory.json").write_text(json.dumps(merged, indent=2))
+    with _mem_lock:
+        merged = {**load_memory(data_dir), **{_norm(k): v for k, v in mapping.items()}}
+        fd, tmp = tempfile.mkstemp(dir=data_dir, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(json.dumps(merged, indent=2))
+            Path(tmp).replace(Path(data_dir) / "voice-memory.json")
+        except BaseException:
+            Path(tmp).unlink(missing_ok=True)
+            raise
