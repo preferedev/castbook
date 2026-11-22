@@ -192,7 +192,8 @@ async function openBook(id) {
       <td class="muted">${esc(role)}${n ? ` · ${n} units` : ""}</td>
       <td>${voices.length ? `<select data-speaker="${sp}">${voices.map(v =>
         `<option value="${v.id}" ${v.id === cur ? "selected" : ""}>${v.id} — ${esc(v.description)}</option>`
-      ).join("")}</select>` : `<input data-speaker="${sp}" data-voice-text value="${esc(cur)}" placeholder="voice description" style="width:16rem">`}
+      ).join("")}${cur && !voices.some(v => v.id === cur) ?
+        `<option value="${esc(cur)}" selected>${esc(cur.split("/").pop())} (cloned)</option>` : ""}</select>` : `<input data-speaker="${sp}" data-voice-text value="${esc(cur)}" placeholder="voice description" style="width:16rem">`}
         <input class="spd" data-sp="${sp}" type="number" min="0.5" max="2" step="0.05" value="${d.casting[sp]?.speed ?? 1}" style="width:4rem" title="speed">
         <input class="mix" data-sp="${sp}" placeholder="mix a:0.7+b:0.3" style="width:9rem" title="custom voice spec" value="${/\+/.test(d.casting[sp]?.voice || '') ? esc(d.casting[sp].voice) : ''}"></td>
       <td><button class="ghost" data-preview="${sp}" type="button">▶</button>
