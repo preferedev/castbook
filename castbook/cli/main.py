@@ -221,17 +221,28 @@ def export(
     format: Annotated[str, typer.Option("--format", "-f")] = "m4b",
     layout: Annotated[str | None, typer.Option("--layout", help="abs for Audiobookshelf")] = None,
     chapters: Annotated[str | None, typer.Option("--chapters", help="subset, e.g. 1-3,7")] = None,
+    epub: Annotated[
+        bool, typer.Option("--epub", help="also write a read-aloud EPUB3 (media overlay)")
+    ] = False,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Mux finished chapters to M4B or MP3."""
     cfg = _cfg(config)
+    book_paths = _book(cfg, book)
     export_book(
-        _book(cfg, book),
+        book_paths,
         cfg,
         format=format,
         layout=layout,
         only=_chapter_range(chapters),
     )
+    if epub:
+        from ..epubout import build_media_epub
+
+        ch = load_artifact(ChaptersFile, book_paths.dir)
+        title = (ch.meta.title if ch else book_paths.book_id) or book_paths.book_id
+        out = build_media_epub(book_paths, book_paths.export / f"{title}-read-along.epub")
+        typer.echo(f"wrote {out}")
 
 
 @app.command()

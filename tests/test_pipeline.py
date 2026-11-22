@@ -125,3 +125,60 @@ def test_build_feed(tmp_path) -> None:
     assert xml is not None
     assert "<enclosure" in xml and "chapters/1/audio" in xml
     assert build_feed(tmp_path / "empty", "http://x/") is None
+
+
+def test_media_epub(tmp_path) -> None:
+    import numpy as np
+    import soundfile as sf
+
+    from castbook.artifacts import (
+        AttributionFile,
+        AudioEntry,
+        AudioManifest,
+        BookMeta,
+        Chapter,
+        ChapterAudio,
+        ChaptersFile,
+        Unit,
+        save_artifact,
+    )
+    from castbook.epubout import build_media_epub
+    from castbook.workdir import BookPaths
+
+    book = BookPaths(tmp_path, "b").ensure()
+    sf.write(book.audio / "ch001.wav", np.zeros(8000, dtype=np.float32), 22050)
+    save_artifact(
+        ChaptersFile(
+            book_id="b",
+            meta=BookMeta(title="T", author="A"),
+            chapters=[Chapter(index=1, title="I", text="hello world", word_count=2)],
+            input_hash="h",
+        ),
+        book.dir,
+    )
+    save_artifact(
+        AttributionFile(
+            book_id="b",
+            attributor="t",
+            input_hash="h",
+            units=[Unit(id="u1", chapter=1, text="hello world", speaker="narrator")],
+        ),
+        book.dir,
+    )
+    save_artifact(
+        AudioManifest(
+            book_id="b",
+            input_hash="h",
+            units={"u1": AudioEntry(path="u1.wav", duration_s=0.4, status="done", unit_hash="h")},
+            chapters={"1": ChapterAudio(path="ch001.wav", duration_s=0.4, status="done")},
+        ),
+        book.dir,
+    )
+    out = build_media_epub(book, book.export / "t.epub")
+    import zipfile
+
+    names = zipfile.ZipFile(out).namelist()
+    assert names[0] == "mimetype"
+    assert "OEBPS/ch001.smil" in names and "OEBPS/audio/ch001.mp3" in names
+    smil = zipfile.ZipFile(out).read("OEBPS/ch001.smil").decode()
+    assert 'clipBegin="0:00:00.000"' in smil and 'clipEnd="0:00:00.400"' in smil
