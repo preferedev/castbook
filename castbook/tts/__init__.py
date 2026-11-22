@@ -55,13 +55,14 @@ def _unit_voice(voice: VoiceSpec, emotion: str, speed: float = 1.0) -> VoiceSpec
     return voice.model_copy(update={"speed": max(0.7, min(1.4, voice.speed * factor))})
 
 
-def _load_lexicon(book: BookPaths) -> dict[str, str]:
-    f = book.dir / "lexicon.json"
-    if f.exists():
-        import json
+def _load_lexicon(book: BookPaths, cfg: Settings) -> dict[str, str]:
+    import json
 
-        return {str(k): str(v) for k, v in json.load(f.open()).items()}
-    return {}
+    out: dict[str, str] = {}
+    for f in (cfg.data_dir / "lexicon.json", book.dir / "lexicon.json"):
+        if f.exists():
+            out.update({str(k): str(v) for k, v in json.load(f.open()).items()})
+    return out
 
 
 def _apply_lexicon(text: str, lex: dict[str, str]) -> str:
@@ -86,7 +87,7 @@ def run(
         raise FileNotFoundError(f"{book.dir} — run `castbook analyze` and `castbook cast` first")
 
     backend = backend or make_backend(cfg)
-    lexicon = _load_lexicon(book)
+    lexicon = _load_lexicon(book, cfg)
     manifest = load_artifact(AudioManifest, book.dir)
     if manifest is None or manifest.input_hash != attribution.input_hash:
         manifest = AudioManifest(book_id=book.book_id, input_hash=attribution.input_hash)
