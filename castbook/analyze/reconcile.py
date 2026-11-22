@@ -113,7 +113,7 @@ def merge_speakers(book_dir: Path, src_id: str, dst_id: str) -> int:
         if u.speaker == src_id:
             u.speaker = dst_id
             touched += 1
-    attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous"]
+    attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous" or u.guess]
     save_artifact(attrib, d)
 
     dst.aliases = sorted({*dst.aliases, src.name, *src.aliases} - {dst.name})

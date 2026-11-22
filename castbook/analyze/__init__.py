@@ -98,7 +98,7 @@ def run(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> P
     if new_names:
         log(f"[analyze] {len(new_names)} unattributed speaker names → ambiguous")
 
-    needs_review = [u.id for u in all_units if u.speaker == RESERVED_AMBIGUOUS]
+    needs_review = [u.id for u in all_units if u.speaker == RESERVED_AMBIGUOUS or u.guess]
     save_artifact(
         AttributionFile(
             book_id=book.book_id,
