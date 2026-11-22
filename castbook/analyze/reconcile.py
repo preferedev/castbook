@@ -101,6 +101,8 @@ def merge_speakers(book_dir: Path, src_id: str, dst_id: str) -> int:
     if attrib is None or cast is None:
         raise FileNotFoundError(f"{d} — run `castbook analyze` first")
 
+    if src_id == dst_id:
+        raise ValueError(f"cannot merge {src_id!r} into itself")
     src = next((c for c in cast.characters if c.id == src_id), None)
     dst = next((c for c in cast.characters if c.id == dst_id), None)
     if src is None or dst is None:
