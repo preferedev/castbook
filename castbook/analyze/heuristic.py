@@ -29,8 +29,14 @@ SAID_VERBS = (
     "murmura|cria|\u00e9cria|exclama|interrompit|continua|souffla|questionna|"
     "r\u00e9pliqua|r\u00e9pliqu\u00e9|sagte|fragte|antwortete|rief|fl\u00fcsterte"
 )
-_NAME_PLAIN = r"[A-Z][a-z]+(?:\s+(?:(?:de|van|von|of|the|al|bin)\s+)?[A-Z][a-z]+){0,2}"
-_NAME_TITLED = r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain)\s+[A-Z][a-z]+"
+_WORD = r"[A-Z\u00c0-\u00de][a-z\u00df-\u017f]+"
+_NAME_PLAIN = (
+    _WORD + r"(?:\s+(?:(?:de|van|von|of|the|al|bin|du|la|le|di|del)\s+)?" + _WORD + r"){0,2}"
+)
+_NAME_TITLED = (
+    r"(?:Mr\.?|Mrs\.?|Miss|Dr\.?|Lady|Lord|Sir|Captain|Mme?\.?|Mlle\.?|Herr|"
+    r"Frau|Fr\u00e4ulein)\s+" + _WORD
+)
 NAME = rf"(?-i:((?:the\s+)?(?:{_NAME_TITLED}|{_NAME_PLAIN})))"
 
 TAG_AFTER = re.compile(rf"[”\"'\u2019\u00bb\u201c]\s*,?\s*({SAID_VERBS})\s+{NAME}", re.IGNORECASE)

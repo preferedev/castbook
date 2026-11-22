@@ -141,7 +141,10 @@ _VERBS = (
     "said|asked|replied|cried|exclaimed|answered|whispered|added|observed|continued|returned|"
     "dit|demanda|r\u00e9pondit|reprit|ajouta|murmura|cria|exclama|sagte|fragte|antwortete|rief"
 )
-_NAME = r"(?:[A-Z][a-zA-Z'.\-]+\s+){0,2}[A-Z][a-zA-Z'.\-]+"
+_NAME = (
+    r"(?:[A-Z\u00c0-\u00de][a-zA-Z'.\-\u00df-\u017f]+\s+){0,2}"
+    r"[A-Z\u00c0-\u00de][a-zA-Z'.\-\u00df-\u017f]+"
+)
 _SAID = re.compile(
     rf"[\"“”«»„].{{0,400}}[\"“”«»]\s*,?\s*(?:{_VERBS})\s+"
     rf"({_NAME})(?:[.,;!?:)\"“”«»]|\s+to\s|$)"
