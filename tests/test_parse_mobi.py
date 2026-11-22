@@ -8,7 +8,7 @@ from castbook.parse import parse
 
 def _mobi(text: bytes, compression: int = 1, encryption: int = 0) -> bytes:
     head = bytearray(512)
-    struct.pack_into(">H I H H H", head, 0, compression, len(text), 1, 4096, encryption)
+    struct.pack_into(">H H I H H H", head, 0, compression, 0, len(text), 1, 4096, encryption)
     head[16:20] = b"MOBI"
     struct.pack_into(">I", head, 20, 0xE4)
     struct.pack_into(">I", head, 28, 65001)

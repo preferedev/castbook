@@ -29,7 +29,11 @@ def parse(path: Path, cover_dir: Path | None = None) -> tuple[BookMeta, list[Cha
     records = _records(data)
     head = records[0]
 
-    compression, _text_len, count, _size, enc_type = struct.unpack(">H I H H H", head[:12])
+    # PalmDOC header: compression(2), unused(2), text_length(4), record_count(2),
+    # record_size(2), encryption_type(2), unknown(2)
+    compression, _unused, _text_len, count, _size, enc_type = struct.unpack(
+        ">H H I H H H", head[:14]
+    )
     if enc_type:
         raise ValueError("MOBI file is DRM-encrypted; Castbook does not break DRM")
     if compression == _HUFFCDIC:
@@ -41,7 +45,11 @@ def parse(path: Path, cover_dir: Path | None = None) -> tuple[BookMeta, list[Cha
     title = _exth(head, 503) or _fullname(head) or path.stem.replace("_", " ").title()
     author = _exth(head, 100) or "Unknown"
 
-    raw = b"".join(_strip_trailer(records[i]) for i in range(1, min(count + 1, len(records))))
+    extra_flags = _u16(head, 16 + 0xF2) if len(head) > 16 + 0xF2 + 2 else 0
+    raw = b"".join(
+        _strip_trailer(records[i]) if extra_flags else records[i]
+        for i in range(1, min(count + 1, len(records)))
+    )
     if compression == 2:
         raw = _palmdoc(raw)
     text = _html_to_text(raw.decode(encoding, errors="replace"))
@@ -62,6 +70,10 @@ def _records(data: bytes) -> list[bytes]:
     if not out:
         raise ValueError("MOBI file has no records")
     return out
+
+
+def _u16(buf: bytes, off: int) -> int:
+    return int(struct.unpack(">H", buf[off : off + 2])[0])
 
 
 def _u32(buf: bytes, off: int) -> int:
