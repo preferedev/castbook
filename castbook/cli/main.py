@@ -13,6 +13,7 @@ from ..artifacts import (
     AudioManifest,
     CastingFile,
     ChaptersFile,
+    UnitStatus,
     load_artifact,
     save_artifact,
 )
@@ -69,22 +70,28 @@ def _book(cfg: Settings, book: str) -> BookPaths:
 
 @app.command("import")
 def import_cmd(
-    file: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    files: Annotated[list[Path], typer.Argument(exists=True, dir_okay=False)],
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
-    """Copy a book into the library and parse it into chapters."""
+    """Copy books into the library and parse them into chapters."""
     cfg = _cfg(config)
-    book = import_book(file, cfg)
-    typer.echo(f"book id: {book.book_id}")
+    for file in files:
+        book = import_book(file, cfg)
+        typer.echo(f"book id: {book.book_id}")
 
 
 @app.command()
 def analyze(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    backend: Annotated[
+        str | None, typer.Option("--backend", help="attributor: heuristic|llamacpp")
+    ] = None,
 ) -> None:
     """Extract the cast and attribute speakers (cast.json + attribution.json)."""
     cfg = _cfg(config)
+    if backend is not None:
+        cfg.llm.backend = backend
     analyze_book(_book(cfg, book), cfg)
 
 
@@ -93,6 +100,10 @@ def cast(
     book: str,
     map: Annotated[
         list[str] | None, typer.Option("--map", help="speaker=voice_id overrides")
+    ] = None,
+    speed: Annotated[
+        list[str] | None,
+        typer.Option("--speed", help="speaker=rate overrides, e.g. narrator=0.9"),
     ] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
@@ -104,7 +115,13 @@ def cast(
             raise typer.BadParameter("--map takes speaker=voice_id")
         k, v = pair.split("=", 1)
         overrides[k.strip()] = v.strip()
-    cast_book(_book(cfg, book), cfg, overrides)
+    speeds = {}
+    for pair in speed or []:
+        if "=" not in pair:
+            raise typer.BadParameter("--speed takes speaker=rate")
+        k, v = pair.split("=", 1)
+        speeds[k.strip()] = float(v)
+    cast_book(_book(cfg, book), cfg, overrides, speeds)
 
 
 @app.command()
@@ -113,10 +130,22 @@ def generate(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     chapters: Annotated[str | None, typer.Option("--chapters")] = None,
     speed: Annotated[float, typer.Option("--speed", min=0.5, max=2.0)] = 1.0,
+    limit: Annotated[
+        int | None,
+        typer.Option("--limit", min=1, help="render only the first N units (no assembly)"),
+    ] = None,
+    workers: Annotated[int, typer.Option("--workers", min=1, max=16)] = 1,
 ) -> None:
     """Synthesize units and assemble chapter audio (resumable)."""
     cfg = _cfg(config)
-    generate_book(_book(cfg, book), cfg, _chapter_range(chapters), speed=speed)
+    generate_book(
+        _book(cfg, book),
+        cfg,
+        _chapter_range(chapters),
+        speed=speed,
+        limit=limit,
+        workers=workers,
+    )
 
 
 @app.command()
@@ -127,8 +156,7 @@ def export(
 ) -> None:
     """Mux finished chapters to M4B or MP3."""
     cfg = _cfg(config)
-    cfg.export.format = format
-    export_book(_book(cfg, book), cfg)
+    export_book(_book(cfg, book), cfg, format=format)
 
 
 @app.command()
@@ -270,9 +298,23 @@ def books(
     if not cfg.data_dir.exists():
         typer.echo("(no books yet)")
         return
+    from ..artifacts import load_artifact
+
     for d in sorted(cfg.data_dir.iterdir()):
-        if d.is_dir() and (d / "chapters.json").exists():
-            typer.echo(d.name)
+        if not d.is_dir() or not (d / "chapters.json").exists():
+            continue
+        chapters = load_artifact(ChaptersFile, d)
+        attrib = load_artifact(AttributionFile, d)
+        manifest = load_artifact(AudioManifest, d)
+        title = chapters.meta.title if chapters else "?"
+        done = (
+            sum(1 for e in manifest.units.values() if e.status == UnitStatus.done)
+            if manifest
+            else 0
+        )
+        total = len(attrib.units) if attrib else 0
+        rendered = f" · {done}/{total} rendered" if manifest else " · not rendered"
+        typer.echo(f"{d.name:30} {title}{rendered}")
 
 
 @models_app.command("list")
@@ -305,3 +347,58 @@ def serve(
 
     cfg = _cfg(config)
     uvicorn.run(create_app(cfg), host="127.0.0.1", port=port, log_level="info")
+
+
+@app.command()
+def align(
+    book: str,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Word-level timestamps via faster-whisper (needs castbook[align])."""
+    from ..audio import align as align_mod
+
+    cfg = _cfg(config)
+    align_mod.run(_book(cfg, book), cfg)
+
+
+@app.command()
+def merge(
+    book: str,
+    src: Annotated[str, typer.Argument(help="speaker id to fold away")],
+    dst: Annotated[str, typer.Argument(help="speaker id that survives")],
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Merge one speaker into another (aliases, units, casting)."""
+    from ..analyze.reconcile import merge_speakers
+
+    b = _book(_cfg(config), book)
+    try:
+        n = merge_speakers(b.dir, src, dst)
+    except (FileNotFoundError, ValueError) as e:
+        typer.echo(str(e))
+        raise typer.Exit(1) from e
+    typer.echo(f"merged {src} → {dst} ({n} units re-attributed)")
+
+
+@app.command()
+def reset(
+    book: str,
+    keep_source: Annotated[
+        bool, typer.Option("--keep-source", help="keep the imported source file")
+    ] = True,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Delete a book's artifacts (chapters/attribution/casting/audio/export)."""
+    import shutil
+
+    b = _book(_cfg(config), book)
+    if not b.dir.is_dir():
+        typer.echo(f"unknown book {book!r}")
+        raise typer.Exit(1)
+    for stem in ("chapters", "attribution", "cast", "casting", "manifest"):
+        (b.dir / f"{stem}.json").unlink(missing_ok=True)
+    for d in (b.dir / "audio", b.dir / "export"):
+        shutil.rmtree(d, ignore_errors=True)
+    if not keep_source:
+        shutil.rmtree(b.dir / "source", ignore_errors=True)
+    typer.echo(f"reset {book}")

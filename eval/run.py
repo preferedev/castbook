@@ -13,10 +13,12 @@ Units are produced by `split_units`, so labels key on unit.id.
 
 from __future__ import annotations
 
+import argparse
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from castbook.analyze.attributor import Attributor
 from castbook.analyze.heuristic import HeuristicAttributor, slugify
 from castbook.artifacts import Chapter, Character
 
@@ -44,12 +46,18 @@ def _load(path: Path) -> tuple[Chapter, list[Character], dict[str, str]]:
     return chapter, cast, raw["labels"]
 
 
-def evaluate(path: Path) -> dict[str, object]:
+def evaluate(path: Path, attributor: Attributor) -> dict[str, object]:
     chapter, cast, labels = _load(path)
-    units = HeuristicAttributor().attribute(chapter, cast)
+    units = attributor.attribute(chapter, cast)
     labeled = [u for u in units if u.id in labels]
-    correct = sum(1 for u in labeled if u.speaker == labels[u.id])
-    missed = [u for u in labeled if u.speaker != labels[u.id]]
+    from castbook.analyze.reconcile import normalize
+
+    def same(a: str, b: str) -> bool:
+        a, b = normalize(a), normalize(b)
+        return a == b or a.endswith(f" {b}") or b.endswith(f" {a}")
+
+    correct = sum(1 for u in labeled if same(u.speaker, labels[u.id]))
+    missed = [u for u in labeled if not same(u.speaker, labels[u.id])]
     return {
         "name": path.stem,
         "total_units": len(units),
@@ -65,10 +73,25 @@ def evaluate(path: Path) -> dict[str, object]:
 
 
 def main() -> int:
-    results = [evaluate(p) for p in sorted(GOLD_DIR.glob("*.json"))]
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--llm", action="store_true", help="use Qwen3-4B instead of heuristic")
+    args = ap.parse_args()
+    attributor: Attributor = HeuristicAttributor()
+    if args.llm:
+        from castbook.analyze.llm import LlamaCppAttributor
+        from castbook.config import Settings
+        from castbook.models import resolve_model
+
+        cfg = Settings.load()
+        path = resolve_model(cfg.models_dir, cfg.llm.model)
+        if path is None:
+            raise SystemExit(f"model not downloaded: castbook models pull {cfg.llm.model}")
+        attributor = LlamaCppAttributor(path, cfg.llm)
+
+    results = [evaluate(p, attributor) for p in sorted(GOLD_DIR.glob("*.json"))]
     lines = [
         "# Castbook attribution eval",
-        f"_{datetime.now(timezone.utc).isoformat(timespec='seconds')}Z_",
+        f"_{datetime.now(timezone.utc).isoformat(timespec='seconds')}Z — {attributor.name}_",
         "",
         "| book | units | labeled | correct | accuracy | ambiguous |",
         "|---|---|---|---|---|---|",

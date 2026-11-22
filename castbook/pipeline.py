@@ -45,9 +45,10 @@ def cast_book(
     book: BookPaths,
     cfg: Settings,
     overrides: dict[str, str] | None = None,
+    speeds: dict[str, float] | None = None,
     log: Callable[[str], None] = print,
 ) -> Path:
-    return cast.run(book, cfg, overrides, log)
+    return cast.run(book, cfg, overrides, speeds, log)
 
 
 def generate_book(
@@ -56,14 +57,22 @@ def generate_book(
     chapters: set[int] | None = None,
     log: Callable[[str], None] = print,
     speed: float = 1.0,
+    limit: int | None = None,
+    workers: int = 1,
 ) -> Path:
-    out = tts.run(book, cfg, log, chapters=chapters, speed=speed)
-    audio.assemble_chapters(book, cfg, log)
+    out = tts.run(book, cfg, log, chapters=chapters, speed=speed, limit=limit, workers=workers)
+    if limit is None:
+        audio.assemble_chapters(book, cfg, log)
     return out
 
 
-def export_book(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> list[Path]:
-    return audio.export(book, cfg, log)
+def export_book(
+    book: BookPaths,
+    cfg: Settings,
+    log: Callable[[str], None] = print,
+    format: str | None = None,
+) -> list[Path]:
+    return audio.export(book, cfg, log, format=format)
 
 
 def run_book(

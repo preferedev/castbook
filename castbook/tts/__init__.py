@@ -14,6 +14,7 @@ from ..artifacts import (
     AudioEntry,
     AudioManifest,
     CastingFile,
+    Unit,
     UnitStatus,
     VoiceSpec,
     load_artifact,
@@ -50,18 +51,23 @@ EMOTION_SPEED = {
 
 def _unit_voice(voice: VoiceSpec, emotion: str, speed: float = 1.0) -> VoiceSpec:
     factor = EMOTION_SPEED.get(emotion, 1.0) * speed
-    if factor == 1.0:
+    if factor == 1.0 or voice.speed <= 0:
         return voice
-    return voice.model_copy(update={"speed": max(0.7, min(1.4, voice.speed * factor))})
+    # clamp the factor to what keeps voice.speed * factor inside the backend's
+    # range — clamping the product directly could invert the intended direction
+    lo, hi = 0.5 / voice.speed, 2.0 / voice.speed
+    factor = max(lo, min(hi, factor))
+    return voice.model_copy(update={"speed": voice.speed * factor})
 
 
-def _load_lexicon(book: BookPaths) -> dict[str, str]:
-    f = book.dir / "lexicon.json"
-    if f.exists():
-        import json
+def _load_lexicon(book: BookPaths, cfg: Settings) -> dict[str, str]:
+    import json
 
-        return {str(k): str(v) for k, v in json.load(f.open()).items()}
-    return {}
+    out: dict[str, str] = {}
+    for f in (cfg.data_dir / "lexicon.json", book.dir / "lexicon.json"):
+        if f.exists():
+            out.update({str(k): str(v) for k, v in json.load(f.open()).items()})
+    return out
 
 
 def _apply_lexicon(text: str, lex: dict[str, str]) -> str:
@@ -79,54 +85,138 @@ def run(
     backend: Backend | None = None,
     chapters: set[int] | None = None,
     speed: float = 1.0,
+    limit: int | None = None,
+    workers: int = 1,
 ) -> Path:
     attribution = load_artifact(AttributionFile, book.dir)
     casting = load_artifact(CastingFile, book.dir)
     if attribution is None or casting is None:
         raise FileNotFoundError(f"{book.dir} — run `castbook analyze` and `castbook cast` first")
 
-    backend = backend or make_backend(cfg)
-    lexicon = _load_lexicon(book)
+    injected_backend = backend is not None
+    lexicon = _load_lexicon(book, cfg)
     manifest = load_artifact(AudioManifest, book.dir)
     if manifest is None or manifest.input_hash != attribution.input_hash:
         manifest = AudioManifest(book_id=book.book_id, input_hash=attribution.input_hash)
 
     units = [u for u in attribution.units if chapters is None or u.chapter in chapters]
+    if limit is not None:
+        if limit < 1:
+            raise ValueError(f"limit must be >= 1, got {limit}")
+        units = units[:limit]
+    if workers < 1:
+        raise ValueError(f"workers must be >= 1, got {workers}")
+    if injected_backend:
+        workers = 1  # injected backend instances are not thread-shared
+    if workers <= 1 and backend is None:
+        backend = make_backend(cfg)
     total = len(units)
-    rendered = skipped = failed = 0
-    for i, unit in enumerate(units):
+    rendered = skipped = failed = done_i = 0
+
+    def render(unit: Unit, be: Backend) -> tuple[str, float, str, str, str]:
+        base = casting.map.get(unit.speaker) or casting.map["narrator"]
+        voice = _unit_voice(base, unit.emotion, speed)
+        text = _apply_lexicon(unit.text, lexicon)
+        unit_hash = text_hash(text + voice.model_dump_json())
+        wav = book.unit_wav(unit.id)
+        duration = be.synthesize(text, voice, wav)
+        return unit.id, duration, wav.name, unit_hash, unit.text[:60]
+
+    pending = []
+    for unit in units:
         base = casting.map.get(unit.speaker) or casting.map["narrator"]
         voice = _unit_voice(base, unit.emotion, speed)
         text = _apply_lexicon(unit.text, lexicon)
         unit_hash = text_hash(text + voice.model_dump_json())
         existing = manifest.units.get(unit.id)
-        wav = book.unit_wav(unit.id)
         if (
             existing
             and existing.unit_hash == unit_hash
             and existing.status == UnitStatus.done
-            and wav.exists()
+            and book.unit_wav(unit.id).exists()
         ):
             skipped += 1
-            continue
+        else:
+            pending.append(unit)
+
+    if workers > 1 and pending:
+        import os
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+
+        tls = threading.local()
+        import queue
+
+        ready: queue.Queue[Backend] = queue.Queue()
+        ready.put(make_backend(cfg))  # fail fast + hand off to first worker
+
+        def render_t(unit: Unit) -> tuple[str, float, str, str, str]:
+            try:
+                be = ready.get_nowait()
+            except queue.Empty:
+                if not hasattr(tls, "backend"):
+                    tls.backend = make_backend(cfg)
+                be = tls.backend
+            return render(unit, be)
+
+        pool = ThreadPoolExecutor(max_workers=min(workers, os.cpu_count() or 1))
+        futures = [pool.submit(render_t, u) for u in pending]
         try:
-            duration = backend.synthesize(text, voice, wav)
-            manifest.units[unit.id] = AudioEntry(
-                path=wav.name,
-                duration_s=round(duration, 3),
-                status=UnitStatus.done,
-                unit_hash=unit_hash,
-            )
-            rendered += 1
-        except Exception as e:
-            manifest.units[unit.id] = AudioEntry(
-                path="", duration_s=0.0, status=UnitStatus.failed, unit_hash=unit_hash
-            )
-            failed += 1
-            log(f"[tts] {unit.id} failed: {e}")
-        if (i + 1) % 10 == 0 or i + 1 == total:
-            save_artifact(manifest, book.dir)
-            log(f"[tts] {i + 1}/{total} units ({rendered} new, {skipped} cached, {failed} failed)")
+            for f in futures:
+                done_i += 1
+                try:
+                    uid, dur, name, uh, _ = f.result()
+                    manifest.units[uid] = AudioEntry(
+                        path=name,
+                        duration_s=round(dur, 3),
+                        status=UnitStatus.done,
+                        unit_hash=uh,
+                    )
+                    rendered += 1
+                except Exception as e:
+                    manifest.units[pending[done_i - 1].id] = AudioEntry(
+                        path="",
+                        duration_s=0.0,
+                        status=UnitStatus.failed,
+                        unit_hash="",
+                    )
+                    failed += 1
+                    log(f"[tts] {pending[done_i - 1].id} failed: {e}")
+                if done_i % 10 == 0 or done_i == len(futures):
+                    save_artifact(manifest, book.dir)
+                    log(
+                        f"[tts] {done_i + skipped}/{total} units "
+                        f"({rendered} new, {skipped} cached, {failed} failed)"
+                    )
+        finally:
+            pool.shutdown(wait=True)
+    else:
+        for unit in pending:
+            done_i += 1
+            try:
+                uid, dur, name, uh, _ = render(unit, backend)  # type: ignore[arg-type]
+                manifest.units[uid] = AudioEntry(
+                    path=name,
+                    duration_s=round(dur, 3),
+                    status=UnitStatus.done,
+                    unit_hash=uh,
+                )
+                rendered += 1
+            except Exception as e:
+                base = casting.map.get(unit.speaker) or casting.map["narrator"]
+                voice = _unit_voice(base, unit.emotion, speed)
+                uh = text_hash(_apply_lexicon(unit.text, lexicon) + voice.model_dump_json())
+                manifest.units[unit.id] = AudioEntry(
+                    path="", duration_s=0.0, status=UnitStatus.failed, unit_hash=uh
+                )
+                failed += 1
+                log(f"[tts] {unit.id} failed: {e}")
+            if done_i % 10 == 0 or done_i == len(pending):
+                save_artifact(manifest, book.dir)
+                log(
+                    f"[tts] {done_i + skipped}/{total} units "
+                    f"({rendered} new, {skipped} cached, {failed} failed)"
+                )
 
     save_artifact(manifest, book.dir)
     return book.dir / "manifest.json"

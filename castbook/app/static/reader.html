@@ -7,6 +7,7 @@
   .u { display:block; margin:0 0 .6rem; padding:.1rem .3rem; border-radius:.2rem; cursor:default; }
   .u[data-audio] { cursor:pointer; }
   .u.playing { background:#fff3c4; }
+  .w.playing { background:#ffd54d; border-radius:.15rem; }
   .who { font-size:.7rem; color:#888; vertical-align:.1rem; margin-right:.4rem; font-family:system-ui; }
   h2 { font-family:system-ui; font-size:1.1rem; margin-top:2rem; }
   header { font-family:system-ui; margin-bottom:1rem; }
@@ -19,15 +20,17 @@
 <header><a href="/">← castbook</a> — <b id="title"></b></header>
 <div id="body"></div>
 <div id="bar">
-  <button id="prev">⏮</button><button id="play">▶</button><button id="next">⏭</button>
+  <button id="prev">⏮</button><button id="back">−15s</button><button id="play">▶</button><button id="fwd">+15s</button><button id="next">⏭</button>
+  <button id="sleep" class="ghost" style="color:#aaa">☾</button>
   <span id="pos" style="font-size:.8rem;color:#aaa"></span>
   <select id="spd"><option>1</option><option>1.25</option><option>1.5</option><option>2</option></select>
+  <select id="chap" style="max-width:9rem"></select>
 </div>
 <script>
 const BOOK = "__BOOK_ID__";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
-let units = [], cur = -1;
+let units = [], cur = -1, align = {}, curWord = -1;
 const audio = new Audio();
 audio.onended = () => playAt(nextPlayable(cur));
 $("spd").onchange = e => audio.playbackRate = +e.target.value;
@@ -36,6 +39,7 @@ async function boot() {
   $("title").textContent = BOOK;
   const d = await (await fetch(`/api/books/${BOOK}/units`)).json();
   units = d.units;
+  align = await (await fetch(`/api/books/${BOOK}/align`)).json();
   let lastCh = -1;
   $("body").innerHTML = units.map((u, i) => {
     const ch = u.chapter !== lastCh ? `<h2>Chapter ${u.chapter + 1}</h2>` : "";
@@ -50,17 +54,61 @@ async function boot() {
   };
   const rendered = units.filter(u => u.has_audio).length;
   $("pos").textContent = `${rendered}/${units.length} rendered`;
+  const chs = [...new Set(units.map(u => u.chapter))];
+  $("chap").innerHTML = chs.map(c => `<option value="${c}">ch ${c + 1}</option>`).join("");
+  $("chap").onchange = e => {
+    const i = units.findIndex(u => u.chapter === +e.target.value);
+    if (i >= 0) { $(`u${i}`).scrollIntoView({block: "start"}); if (units[i].has_audio) playAt(i); }
+  };
+  const saved = localStorage.getItem(`castbook-pos-${BOOK}`);
+  if (saved) {
+    const {i, t} = JSON.parse(saved);
+    if (units[i]?.has_audio) { playAt(i); audio.currentTime = t; }
+  }
 }
 
 const nextPlayable = i => units.findIndex((u, j) => j > i && u.has_audio);
 const prevPlayable = i => { for (let j = i - 1; j >= 0; j--) if (units[j].has_audio) return j; return -1; };
 
+function spanWords(i) {
+  const words = (align[units[i].id] || {}).w;
+  if (!words) return;
+  const el = $(`u${i}`);
+  const who = el.querySelector(".who");
+  el.innerHTML = (who ? who.outerHTML : "") +
+    words.map(w => `<span class="w">${esc(w[0])}</span>`).join(" ");
+}
+
+function savePos() {
+  if (cur >= 0) localStorage.setItem(`castbook-pos-${BOOK}`, JSON.stringify({i: cur, t: audio.currentTime}));
+}
+setInterval(savePos, 2000);
+window.addEventListener("beforeunload", savePos);
+
+audio.ontimeupdate = () => {
+  const words = cur >= 0 && align[units[cur].id] && align[units[cur].id].w;
+  if (!words) return;
+  const t = audio.currentTime;
+  let idx = -1;
+  for (let k = 0; k < words.length; k++) if (t >= words[k][1]) idx = k;
+  if (idx !== curWord) {
+    curWord = idx;
+    document.querySelectorAll(".w.playing").forEach(e => e.classList.remove("playing"));
+    const el = $(`u${cur}`);
+    const spans = el && el.querySelectorAll(".w");
+    if (spans && spans[idx]) spans[idx].classList.add("playing");
+  }
+};
+
 function playAt(i) {
   if (i < 0 || !units[i].has_audio) { audio.pause(); $("play").textContent = "▶"; return; }
   document.querySelectorAll(".u.playing").forEach(e => e.classList.remove("playing"));
   cur = i;
+  curWord = -1;
   const el = $(`u${i}`);
+  spanWords(i);
   el.classList.add("playing");
+  $("chap").value = String(units[i].chapter);
   el.scrollIntoView({block: "center", behavior: "smooth"});
   audio.src = `/api/books/${BOOK}/audio/${units[i].id}`;
   audio.playbackRate = +$("spd").value;
@@ -71,5 +119,27 @@ function playAt(i) {
 $("play").onclick = () => audio.paused ? (cur < 0 ? playAt(nextPlayable(-1)) : (audio.play(), $("play").textContent = "⏸")) : (audio.pause(), $("play").textContent = "▶");
 $("next").onclick = () => playAt(nextPlayable(cur));
 $("prev").onclick = () => playAt(prevPlayable(cur));
+$("back").onclick = () => audio.currentTime = Math.max(0, audio.currentTime - 15);
+$("fwd").onclick = () => audio.currentTime += 15;
+let sleepAt = null;
+$("sleep").onclick = () => {
+  sleepAt = sleepAt ? null : Date.now() + 15 * 60e3;
+  $("sleep").style.color = sleepAt ? "#ffd54d" : "#aaa";
+  $("sleep").textContent = sleepAt ? "☾ 15m" : "☾";
+};
+setInterval(() => { if (sleepAt && Date.now() > sleepAt) { audio.pause(); sleepAt = null; $("sleep").textContent = "☾"; $("sleep").style.color = "#aaa"; $("play").textContent = "▶"; } }, 5000);
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+  if (e.code === "Space") { e.preventDefault(); $("play").click(); }
+  else if (e.code === "ArrowRight") $("next").click();
+  else if (e.code === "ArrowLeft") $("prev").click();
+  else if (e.code === "ArrowUp" || e.code === "ArrowDown") {
+    e.preventDefault();
+    const opts = [...$("spd").options].map(o => +o.value);
+    const i = opts.indexOf(+($("spd").value || 1));
+    const j = Math.max(0, Math.min(opts.length - 1, i + (e.code === "ArrowUp" ? 1 : -1)));
+    $("spd").value = String(opts[j]); audio.playbackRate = opts[j];
+  }
+});
 boot();
 </script>

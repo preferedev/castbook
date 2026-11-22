@@ -13,7 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from ..artifacts import (
@@ -51,11 +51,17 @@ def _log_to(path: Path) -> Callable[[str], None]:
     return log
 
 
-def _spawn(key: str, target: Callable[[], object]) -> None:
+def _spawn(key: str, target: Callable[[], object], log: Callable[[str], None]) -> None:
+    def wrapped() -> None:
+        try:
+            target()
+        except Exception as e:
+            log(f"[{key.split(':')[0]}] failed: {e}")
+
     with _jobs_lock:
         if key in _jobs and _jobs[key].is_alive():
             raise HTTPException(409, f"{key} already running")
-        t = threading.Thread(target=target, daemon=True)
+        t = threading.Thread(target=wrapped, daemon=True)
         _jobs[key] = t
         t.start()
 
@@ -126,40 +132,162 @@ def create_app(cfg: Settings) -> FastAPI:
             "units": len(attrib.units) if attrib else 0,
         }
 
-    @app.post("/api/books/{book_id}/cast")
-    def set_cast(book_id: str, overrides: dict[str, str]) -> dict[str, Any]:
+    @app.get("/api/books/{book_id}/align")
+    def alignment(book_id: str) -> Any:
+        import json
+
+        f = _require_book(cfg, book_id).dir / "align.json"
+        return json.loads(f.read_text()) if f.exists() else {}
+
+    @app.post("/api/books/{book_id}/merge")
+    def merge(book_id: str, src: str, dst: str) -> dict[str, Any]:
+        from ..analyze.reconcile import merge_speakers
+
         book = _require_book(cfg, book_id)
-        cast_book(book, cfg, overrides=overrides)
+        try:
+            n = merge_speakers(book.dir, src, dst)
+        except (FileNotFoundError, ValueError) as e:
+            raise HTTPException(422, str(e)) from e
+        return {"merged": n}
+
+    @app.get("/api/books/{book_id}/log")
+    def book_log(book_id: str, lines: int = 100) -> dict[str, Any]:
+        f = _require_book(cfg, book_id).dir / "job.log"
+        text = f.read_text() if f.exists() else ""
+        return {"lines": text.splitlines()[-lines:]}
+
+    @app.delete("/api/books/{book_id}")
+    def delete_book(book_id: str) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        with _jobs_lock:
+            busy = [k for k, t in _jobs.items() if k.endswith(f":{book_id}") and t.is_alive()]
+        if busy:
+            raise HTTPException(409, f"job still running: {busy[0].split(':')[0]}")
+        shutil.rmtree(book.dir)
+        return {"ok": True}
+
+    @app.post("/api/books/{book_id}/cast")
+    def set_cast(book_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        voices: dict[str, str] = {}
+        speeds: dict[str, float] = {}
+        for sp, v in spec.items():
+            if isinstance(v, dict):
+                if "voice" in v:
+                    voices[sp] = str(v["voice"])
+                if "speed" in v:
+                    speeds[sp] = float(v["speed"])
+            else:
+                voices[sp] = str(v)
+        cast_book(book, cfg, overrides=voices, speeds=speeds)
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/analyze")
-    def analyze(book_id: str) -> dict[str, Any]:
+    def analyze(book_id: str, backend: str | None = None) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
+        if backend is not None and backend not in ("heuristic", "llamacpp"):
+            raise HTTPException(422, f"bad backend {backend!r}")
+        local_cfg = (
+            cfg.model_copy(update={"llm": cfg.llm.model_copy(update={"backend": backend})})
+            if backend is not None
+            else cfg
+        )
         log = _log_to(book.dir / "job.log")
 
         def work() -> None:
-            analyze_book(book, cfg, log)
-            cast_book(book, cfg, log=log)
+            analyze_book(book, local_cfg, log)
+            cast_book(book, local_cfg, log=log)
 
-        _spawn(f"analyze:{book_id}", work)
+        _spawn(f"analyze:{book_id}", work, log)
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/generate")
-    def generate(book_id: str) -> dict[str, Any]:
+    def generate(
+        book_id: str,
+        limit: Annotated[int | None, Query(ge=1)] = None,
+        chapters: str | None = None,
+        workers: Annotated[int, Query(ge=1, le=16)] = 1,
+    ) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
+        sel: set[int] | None = None
+        if chapters:
+            try:
+                sel = set()
+                for part in chapters.split(","):
+                    part = part.strip()
+                    if "-" in part:
+                        a, b = (int(x) for x in part.split("-", 1))
+                        sel.update(range(min(a, b), max(a, b) + 1))
+                    elif part:
+                        sel.add(int(part))
+                if len(sel) > 2000:
+                    raise ValueError("range too wide")
+            except ValueError as e:
+                raise HTTPException(422, f"bad chapters {chapters!r}") from e
         log = _log_to(book.dir / "job.log")
-        _spawn(f"generate:{book_id}", lambda: generate_book(book, cfg, log=log))
+        _spawn(
+            f"generate:{book_id}",
+            lambda: generate_book(book, cfg, log=log, chapters=sel, limit=limit, workers=workers),
+            log,
+        )
         return {"ok": True}
+
+    @app.post("/api/books/{book_id}/regenerate")
+    def regenerate(book_id: str, chapters: str) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        sel: set[int] = set()
+        try:
+            for part in chapters.split(","):
+                part = part.strip()
+                if "-" in part:
+                    a, b = (int(x) for x in part.split("-", 1))
+                    sel.update(range(min(a, b), max(a, b) + 1))
+                elif part:
+                    sel.add(int(part))
+        except ValueError:
+            raise HTTPException(422, f"bad chapters {chapters!r}") from None
+        if not sel or len(sel) > 2000:
+            raise HTTPException(422, f"bad chapters {chapters!r}")
+        attribution = load_artifact(AttributionFile, book.dir)
+        manifest = load_artifact(AudioManifest, book.dir)
+        if attribution is None or manifest is None:
+            raise HTTPException(409, "nothing to regenerate")
+        unit_ids = {u.id for u in attribution.units if u.chapter in sel}
+        popped = sum(1 for uid in unit_ids if uid in manifest.units)
+
+        def work() -> None:
+            for uid in unit_ids:
+                manifest.units.pop(uid, None)
+            for cid in [str(c) for c in sel]:
+                manifest.chapters.pop(cid, None)
+            save_artifact(manifest, book.dir)
+            generate_book(book, cfg, log=log, chapters=sel)
+
+        log = _log_to(book.dir / "job.log")
+        _spawn(f"generate:{book_id}", work, log)
+        return {"ok": True, "popped": popped}
+
+    @app.get("/api/books/{book_id}/chapters/{chapter}/audio")
+    def chapter_audio(book_id: str, chapter: int) -> FileResponse:
+        book = _require_book(cfg, book_id)
+        wav = book.dir / "audio" / f"ch{chapter:03d}.wav"
+        if not wav.exists():
+            raise HTTPException(404, "chapter not rendered")
+        return FileResponse(wav, media_type="audio/wav")
 
     @app.post("/api/preview")
     def preview(spec: dict[str, Any]) -> FileResponse:
         voice = str(spec.get("voice", "af_sarah"))
+        speed = float(spec.get("speed") or 1.0)
+        speed = speed if 0 < speed <= 2 else 1.0
         text = str(spec.get("text") or "A quick preview of this voice.")
-        out = cfg.data_dir / ".previews" / f"{voice}-{abs(hash(text))}.wav"
+        out = cfg.data_dir / ".previews" / f"{voice}-{speed}-{abs(hash(text))}.wav"
         out.parent.mkdir(parents=True, exist_ok=True)
         if not out.exists():
             backend = _preview_backend(cfg)
-            backend.synthesize(text[:300], VoiceSpec(backend="kokoro", voice=voice), out)
+            backend.synthesize(
+                text[:300], VoiceSpec(backend="kokoro", voice=voice, speed=speed), out
+            )
         return FileResponse(out, media_type="audio/wav")
 
     @app.get("/api/books/{book_id}/review")
@@ -254,11 +382,19 @@ def create_app(cfg: Settings) -> FastAPI:
         }
 
     @app.post("/api/books/{book_id}/export")
-    def export(book_id: str) -> dict[str, Any]:
+    def export(book_id: str, format: str | None = None) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
-        outs = export_book(book, cfg)
-        files = [p.name if p.is_file() else f"{p.name}/" for p in outs]
-        return {"files": files}
+        if format is not None and format not in ("m4b", "mp3", "both"):
+            raise HTTPException(422, f"bad format {format!r}")
+        log = _log_to(book.dir / "job.log")
+        log(f"[export] started ({format or cfg.export.format})")
+
+        def work() -> None:
+            outs = export_book(book, cfg, format=format, log=log)
+            log(f"[export] wrote {', '.join(p.name for p in outs)}")
+
+        _spawn(f"export:{book_id}", work, log)
+        return {"started": True}
 
     @app.get("/api/books/{book_id}/download/{name}")
     def download(book_id: str, name: str) -> FileResponse:
@@ -285,8 +421,10 @@ def _preview_backend(cfg: Settings) -> Backend:
 
 
 def _require_book(cfg: Settings, book_id: str) -> BookPaths:
+    root = cfg.data_dir.resolve()
     book = BookPaths(cfg.data_dir, book_id)
-    if not book.dir.is_dir():
+    d = book.dir.resolve()
+    if d == root or root not in d.parents or not d.is_dir():
         raise HTTPException(404, "unknown book")
     return book
 
