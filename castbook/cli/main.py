@@ -555,11 +555,19 @@ def open_book(
         url += f"?ch={chapter}"
     import socket
 
-    with socket.socket() as sock:
-        sock.settimeout(0.5)
-        if sock.connect_ex(("127.0.0.1", port)) != 0:
-            typer.echo(f"nothing listening on :{port} — run `castbook serve` first")
-            raise typer.Exit(1)
+    listening = False
+    for family, host in (
+        (socket.AF_INET, "127.0.0.1"),
+        (socket.AF_INET6, "::1"),
+    ):
+        with socket.socket(family) as sock:
+            sock.settimeout(0.5)
+            if sock.connect_ex((host, port)) == 0:
+                listening = True
+                break
+    if not listening:
+        typer.echo(f"nothing listening on :{port} — run `castbook serve` first")
+        raise typer.Exit(1)
     typer.echo(url)
     webbrowser.open(url)
 
