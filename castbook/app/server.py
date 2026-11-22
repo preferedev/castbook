@@ -22,7 +22,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from .. import net
@@ -733,6 +733,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 for c in ch.chapters
             ]
         }
+
+    @app.get("/api/books/{book_id}/feed.xml")
+    def feed(book_id: str, request: Request) -> Response:
+        from ..rss import build_feed
+
+        book = _require_book(cfg, book_id)
+        xml = build_feed(book.dir, str(request.base_url))
+        if xml is None:
+            raise HTTPException(404, "no rendered chapters yet")
+        return Response(content=xml, media_type="application/rss+xml")
 
     @app.get("/api/books/{book_id}/chapters/{chapter}/audio")
     def chapter_audio(book_id: str, chapter: int) -> FileResponse:

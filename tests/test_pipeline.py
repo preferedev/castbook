@@ -73,3 +73,55 @@ def test_rename_speaker(tmp_path) -> None:
 
     with pytest.raises(ValueError):
         rename_speaker(d, "nope", "X")
+
+
+def test_build_feed(tmp_path) -> None:
+    from castbook.artifacts import (
+        AttributionFile,
+        AudioEntry,
+        AudioManifest,
+        BookMeta,
+        Chapter,
+        ChaptersFile,
+        Unit,
+        save_artifact,
+    )
+    from castbook.rss import build_feed
+
+    d = tmp_path / "b"
+    (d / "audio").mkdir(parents=True)
+    (d / "audio" / "ch001.wav").write_bytes(b"RIFF")
+    save_artifact(
+        ChaptersFile(
+            book_id="b",
+            meta=BookMeta(title="T", author="A"),
+            chapters=[Chapter(index=1, title="I", text="x", word_count=1)],
+            input_hash="h",
+        ),
+        d,
+    )
+    save_artifact(
+        AttributionFile(
+            book_id="b",
+            attributor="t",
+            input_hash="h",
+            units=[
+                Unit(id="u1", chapter=1, text="x", speaker="narrator"),
+            ],
+        ),
+        d,
+    )
+    save_artifact(
+        AudioManifest(
+            book_id="b",
+            input_hash="h",
+            units={
+                "u1": AudioEntry(path="u1.wav", duration_s=1, status="done", unit_hash="h"),
+            },
+        ),
+        d,
+    )
+    xml = build_feed(d, "http://localhost:3000/")
+    assert xml is not None
+    assert "<enclosure" in xml and "chapters/1/audio" in xml
+    assert build_feed(tmp_path / "empty", "http://x/") is None
