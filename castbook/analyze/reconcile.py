@@ -109,10 +109,12 @@ def merge_speakers(book_dir: Path, src_id: str, dst_id: str) -> int:
         raise ValueError(f"unknown speaker ids {src_id!r} → {dst_id!r}")
 
     touched = 0
+    moved: list[str] = []
     for u in attrib.units:
         if u.speaker == src_id:
             u.speaker = dst_id
             touched += 1
+            moved.append(u.id)
     attrib.needs_review = [u.id for u in attrib.units if u.speaker == "ambiguous" or u.guess]
     save_artifact(attrib, d)
 
@@ -126,8 +128,7 @@ def merge_speakers(book_dir: Path, src_id: str, dst_id: str) -> int:
 
     manifest = load_artifact(AudioManifest, d)
     if manifest is not None:
-        for u in attrib.units:
-            if u.speaker == dst_id:
-                manifest.units.pop(u.id, None)
+        for uid in moved:
+            manifest.units.pop(uid, None)
         save_artifact(manifest, d)
     return touched
