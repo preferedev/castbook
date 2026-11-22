@@ -607,6 +607,14 @@ def doctor(
     mi = detect()
     typer.echo(f"machine:     {mi.tier} · {mi.cores} cores · {mi.ram_gb} GB RAM")
     typer.echo(mi.verdict)
+    free_gb = (
+        shutil.disk_usage(cfg.data_dir.parent if cfg.data_dir.parent.is_dir() else Path.home()).free
+        / 1e9
+    )
+    typer.echo(
+        f"disk free    {free_gb:.1f} GB"
+        + (" — low: a full novel render wants ~2 GB" if free_gb < 2 else "")
+    )
     if cfg.data_dir.is_dir():
         junk = sum(
             1
