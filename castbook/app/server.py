@@ -1379,6 +1379,7 @@ def _status(d: Path, ch: ChaptersFile) -> dict[str, Any]:
         "book_id": ch.book_id,
         "title": ch.meta.title,
         "author": ch.meta.author,
+        "language": ch.meta.language,
         "chapters": len(ch.chapters),
         "chapters_rendered": done,
         "stages": stages,

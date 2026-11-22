@@ -286,6 +286,7 @@ async function loadBooks() {
       <div class="book-head">
         <img src="${tok(`/api/books/${b.book_id}/cover`)}" onerror="this.remove()" style="width:2.2rem;height:2.9rem;object-fit:cover;margin-right:.6rem;border-radius:2px;vertical-align:middle">
         <strong>${esc(b.title)}</strong>
+        ${b.language && b.language !== "en" ? `<span class="muted" style="border:1px solid var(--line);border-radius:4px;padding:0 .3rem;font-size:.7rem">${esc(b.language)}</span>` : ""}
         <span class="muted">${esc(b.author)} · ${b.chapters} ch · ${b.chapters_rendered} rendered</span>
       </div>
       <div class="row" style="margin-top:.5rem">
