@@ -235,12 +235,16 @@ def create_app(cfg: Settings) -> FastAPI:
     @app.post("/api/preview")
     def preview(spec: dict[str, Any]) -> FileResponse:
         voice = str(spec.get("voice", "af_sarah"))
+        speed = float(spec.get("speed") or 1.0)
+        speed = speed if 0 < speed <= 2 else 1.0
         text = str(spec.get("text") or "A quick preview of this voice.")
-        out = cfg.data_dir / ".previews" / f"{voice}-{abs(hash(text))}.wav"
+        out = cfg.data_dir / ".previews" / f"{voice}-{speed}-{abs(hash(text))}.wav"
         out.parent.mkdir(parents=True, exist_ok=True)
         if not out.exists():
             backend = _preview_backend(cfg)
-            backend.synthesize(text[:300], VoiceSpec(backend="kokoro", voice=voice), out)
+            backend.synthesize(
+                text[:300], VoiceSpec(backend="kokoro", voice=voice, speed=speed), out
+            )
         return FileResponse(out, media_type="audio/wav")
 
     @app.get("/api/books/{book_id}/review")

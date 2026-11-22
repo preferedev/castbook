@@ -143,10 +143,13 @@ async function openBook(id) {
   $("merge-dst").innerHTML = opts;
   document.querySelectorAll("[data-preview]").forEach(b => b.onclick = async () => {
     const sel = b.closest("tr").querySelector("select");
+    const mix = b.closest("tr").querySelector("input.mix").value.trim();
+    const spd = +b.closest("tr").querySelector("input.spd").value;
     b.textContent = "…";
     const r = await fetch("/api/preview", {method:"POST",
       headers:{"content-type":"application/json"},
-      body: JSON.stringify({voice: sel.value, text: `A line spoken by ${b.dataset.preview}.`})});
+      body: JSON.stringify({voice: mix || sel.value, speed: spd > 0 ? spd : 1,
+        text: `A line spoken by ${b.dataset.preview}.`})});
     const blob = await r.blob();
     new Audio(URL.createObjectURL(blob)).play();
     b.textContent = "▶";
