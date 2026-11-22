@@ -75,15 +75,57 @@ LIBRARY: list[VoiceEntry] = [
 
 DEFAULT_NARRATOR = "af_sarah"
 DEFAULT_AMBIGUOUS = "bm_daniel"
+POCKET_NARRATOR = "paul"
+POCKET_AMBIGUOUS = "george"
+
+
+def defaults_for(backend: str) -> tuple[str, str]:
+    if backend == "pocket":
+        return POCKET_NARRATOR, POCKET_AMBIGUOUS
+    return DEFAULT_NARRATOR, DEFAULT_AMBIGUOUS
 
 
 def get(voice_id: str) -> VoiceEntry | None:
     return next((v for v in LIBRARY if v.id == voice_id), None)
 
 
-def pool(gender: str, age: str = "") -> list[VoiceEntry]:
+POCKET_LIBRARY: list[VoiceEntry] = [
+    VoiceEntry(id=n, backend="pocket", gender="f", age=a, description=f"pocket-tts {n}")
+    for n, a in [
+        ("alba", "adult"),
+        ("anna", "adult"),
+        ("azelma", "young"),
+        ("cosette", "young"),
+        ("eponine", "young"),
+        ("eve", "adult"),
+        ("fantine", "adult"),
+        ("jane", "adult"),
+        ("jean", "adult"),
+        ("mary", "adult"),
+        ("vera", "old"),
+        ("caro_davy", "adult"),
+        ("estelle", "adult"),
+    ]
+] + [
+    VoiceEntry(id=n, backend="pocket", gender="m", age=a, description=f"pocket-tts {n}")
+    for n, a in [
+        ("bill_boerst", "old"),
+        ("charles", "adult"),
+        ("george", "adult"),
+        ("javert", "adult"),
+        ("marius", "young"),
+        ("michael", "adult"),
+        ("paul", "adult"),
+        ("peter_yearsley", "old"),
+        ("stuart_bell", "adult"),
+    ]
+]
+
+
+def pool(gender: str, age: str = "", backend: str = "kokoro") -> list[VoiceEntry]:
     g = "f" if gender == "f" else "m" if gender == "m" else ""
-    voices = [v for v in LIBRARY if (v.gender == g if g else True)]
+    lib = POCKET_LIBRARY if backend == "pocket" else LIBRARY
+    voices = [v for v in lib if (v.gender == g if g else True)]
     if age == "old":
         aged = [v for v in voices if v.age == "old"]
         if aged:
