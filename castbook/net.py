@@ -76,6 +76,6 @@ def fetch_book_url(url: str, tmp_dir: Path, max_size: int = MAX_UPLOAD) -> Path:
                 size += len(chunk)
                 if size > max_size:
                     tmp_path.unlink(missing_ok=True)
-                    raise FetchError("file too large")
+                    raise FetchError("file too large", status=413)
                 out.write(chunk)
     return tmp_path
