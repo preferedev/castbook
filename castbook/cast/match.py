@@ -85,7 +85,11 @@ def _auto_cast_descriptions(
     out: dict[str, VoiceSpec] = {}
     for c in sorted(characters, key=lambda c: (_role_rank(c.role), c.name)):
         remembered = memory.get(_norm(c.name))
-        desc = remembered or c.vibe or f"{c.gender} voice, {c.age}, {c.role}"
+        desc = (
+            remembered
+            if remembered and not _looks_like_preset(remembered)
+            else (c.vibe or f"{c.gender} voice, {c.age}, {c.role}")
+        )
         out[c.id] = VoiceSpec(backend="qwen", voice=desc, seed=_seed(f"{book_id}:{c.id}"))
     out["narrator"] = VoiceSpec(
         backend="qwen",
@@ -98,6 +102,16 @@ def _auto_cast_descriptions(
         seed=_seed(book_id + "?"),
     )
     return out
+
+
+def _looks_like_preset(name: str) -> bool:
+    """Preset ids/mixes/clips are voice handles, not prose descriptions."""
+    return (
+        "+" in name
+        or "/" in name
+        or "\\" in name
+        or bool(__import__("re").fullmatch(r"[a-z]{2}_[a-z0-9_]+", name))
+    )
 
 
 def _role_rank(role: str) -> int:
