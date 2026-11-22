@@ -268,14 +268,19 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         params = {"page": str(page)}
         if q.strip():
             params["search"] = q.strip()
-        url = "https://gutendex.com/books?" + urllib.parse.urlencode(params)
+        url = "https://gutendex.com/books/?" + urllib.parse.urlencode(params)
         _public_host(url)
         req = urllib.request.Request(url, headers={"User-Agent": "castbook/0.1"})
-        try:
-            with _url_opener.open(req, timeout=30) as resp:
-                data = json.loads(resp.read())
-        except urllib.error.URLError as e:
-            raise HTTPException(502, f"gutendex failed: {e.reason}") from e
+        for attempt in range(2):
+            try:
+                with _url_opener.open(req, timeout=30) as resp:
+                    data = json.loads(resp.read())
+                break
+            except TimeoutError:
+                if attempt:
+                    raise HTTPException(502, "gutendex timed out — retry") from None
+            except urllib.error.URLError as e:
+                raise HTTPException(502, f"gutendex failed: {e.reason}") from e
         results = []
         for r in data.get("results", []):
             fmts = r.get("formats") or {}
