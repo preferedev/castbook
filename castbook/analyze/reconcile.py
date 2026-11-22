@@ -152,3 +152,31 @@ def rename_speaker(book_dir: Path, speaker_id: str, name: str) -> str:
     c.name = name
     save_artifact(cast, Path(book_dir))
     return name
+
+
+def suggest_merges(characters: list[Character]) -> list[tuple[str, str]]:
+    """Pairs of character ids that look like the same person.
+
+    Signals: shared normalized name/alias, or a token-subset of a name
+    ('elizabeth' ⊂ 'elizabeth bennet'). Surname-only overlap is NOT a
+    signal — families share surnames (Mr. vs Mrs. Bennet are different people).
+    """
+    keys = [
+        (c.id, {normalize(x) for x in [c.name, *c.aliases] if normalize(x)}) for c in characters
+    ]
+    out: list[tuple[str, str]] = []
+    for i, (a_id, a_keys) in enumerate(keys):
+        for b_id, b_keys in keys[i + 1 :]:
+            if a_keys & b_keys:
+                out.append((a_id, b_id))
+                continue
+            subset = any(
+                k.split() and all(t in bk.split() for bk in b_keys for t in k.split())
+                for k in a_keys
+            ) or any(
+                k.split() and all(t in ak.split() for ak in a_keys for t in k.split())
+                for k in b_keys
+            )
+            if subset:
+                out.append((a_id, b_id))
+    return out

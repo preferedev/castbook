@@ -152,6 +152,7 @@
   </details>
   <details id="review-details" style="margin-top:1rem">
     <summary class="muted">Needs review <b id="review-count"></b> — ambiguous or guessed speakers; ~ marks a turn-taking guess</summary>
+    <div id="review-hints" class="muted" style="font-size:.8rem;margin-bottom:.5rem"></div>
     <table><tbody id="review-table"></tbody></table>
     <button id="save-review" class="ghost">Save speakers</button>
     <span class="muted" id="review-status"></span>
@@ -526,6 +527,16 @@ async function loadReview(id) {
   const r = await api(`/api/books/${id}/review`);
   const units = r.units || [];
   $("review-count").textContent = `(${units.length})`;
+  const sug = r.merge_suggestions || [];
+  $("review-hints").innerHTML = sug.length
+    ? "possible duplicates: " + sug.map(s =>
+        `${esc(s.src_name)} / ${esc(s.dst_name)} <button class="ghost" data-merge-hint="${s.src}|${s.dst}">merge</button>`).join(" · ")
+    : "";
+  document.querySelectorAll("[data-merge-hint]").forEach(b => b.onclick = async () => {
+    const [src, dst] = b.dataset.mergeHint.split("|");
+    await api(`/api/books/${current}/merge?src=${src}&dst=${dst}`, {method: "POST"});
+    openBook(current);
+  });
   const names = [...document.querySelectorAll("#cast-table select, #cast-table input[data-voice-text]")]
     .map(x => x.dataset.speaker).concat(["narrator"]);
   $("review-table").innerHTML = units.map(u =>

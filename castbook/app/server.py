@@ -883,6 +883,18 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         attrib = load_artifact(AttributionFile, book.dir)
         if attrib is None:
             raise HTTPException(404, "run analyze first")
+        from ..analyze.reconcile import suggest_merges
+
+        cast_f = load_artifact(CastFile, book.dir)
+        by_id = {c.id: c.name for c in cast_f.characters} if cast_f else {}
+        suggestions = (
+            [
+                {"src": a, "dst": b, "src_name": by_id.get(a, a), "dst_name": by_id.get(b, b)}
+                for a, b in suggest_merges(cast_f.characters)
+            ]
+            if cast_f
+            else []
+        )
         return {
             "units": [
                 {
@@ -894,7 +906,8 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 }
                 for u in attrib.units
                 if u.speaker == "ambiguous" or u.guess
-            ]
+            ],
+            "merge_suggestions": suggestions,
         }
 
     @app.post("/api/books/{book_id}/speakers")
