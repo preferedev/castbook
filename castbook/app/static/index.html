@@ -152,7 +152,9 @@
   <details id="lex-details" style="margin-top:1rem">
     <summary>Pronunciation lexicon</summary>
     <textarea id="lex-txt" rows="6" style="width:100%;font-family:monospace" placeholder='{"Cheshire":"CHEH-shur"}'></textarea>
+    <textarea id="lex-global" rows="4" style="width:100%;font-family:monospace;margin-top:.5rem" placeholder='{"global":"applies to every book"}'></textarea>
     <button id="lex-save" class="ghost" style="margin-top:.5rem">Save lexicon</button>
+    <button id="lex-global-save" class="ghost" style="margin-top:.5rem">Save global</button>
     <button id="lex-hear" class="ghost" style="margin-top:.5rem" title="hear the first 5 entries">▶ audition</button>
     <audio id="lex-player" style="display:none" controls></audio>
     <span class="muted" id="lex-meta"></span>
@@ -524,7 +526,7 @@ async function dlTranscript(id) {
 async function loadLexicon(id) {
   const r = await api(`/api/books/${id}/lexicon`);
   $("lex-txt").value = Object.keys(r.book).length ? JSON.stringify(r.book, null, 2) : "";
-  $("lex-meta").textContent = Object.keys(r.global).length ? ` · ${Object.keys(r.global).length} global entries` : "";
+  $("lex-global").value = Object.keys(r.global).length ? JSON.stringify(r.global, null, 2) : "";
 }
 async function runSearch() {
   const q = $("q").value.trim();
@@ -554,6 +556,13 @@ $("lex-hear").onclick = async () => {
     $("lex-player").play();
     $("lex-meta").textContent = "";
   } else $("lex-meta").textContent = " · audition failed";
+};
+$("lex-global-save").onclick = async () => {
+  let body;
+  try { body = JSON.parse($("lex-global").value || "{}"); } catch { $("lex-meta").textContent = " · invalid JSON"; return; }
+  const r = await fetch(tok("/api/lexicon"), {method: "PUT",
+    headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  $("lex-meta").textContent = r.ok ? ` · saved ${(await r.json()).saved} global entries` : " · save failed";
 };
 $("lex-save").onclick = async () => {
   let body;

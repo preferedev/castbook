@@ -419,6 +419,20 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         Path(tmppath).replace(book.dir / "lexicon.json")
         return {"saved": len(body)}
 
+    @app.put("/api/lexicon")
+    def put_global_lexicon(body: dict[str, str]) -> dict[str, Any]:
+        import json
+
+        cfg.data_dir.mkdir(parents=True, exist_ok=True)
+        for k, v in body.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise HTTPException(422, "lexicon entries must be word→replacement strings")
+        fd, tmppath = tempfile.mkstemp(dir=cfg.data_dir, suffix=".tmp", prefix="lexicon-")
+        with os.fdopen(fd, "w") as fh:
+            fh.write(json.dumps(body, indent=2, ensure_ascii=False))
+        Path(tmppath).replace(cfg.data_dir / "lexicon.json")
+        return {"saved": len(body)}
+
     @app.get("/api/books/{book_id}/align")
     def alignment(book_id: str) -> Any:
         import json
