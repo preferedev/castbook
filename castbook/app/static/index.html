@@ -104,6 +104,7 @@
   </table>
   <div class="row" style="margin-top:.75rem">
     <button id="save-cast" class="ghost">Save casting</button>
+    <button id="audition-all" class="ghost" title="play every voice in turn">▶ all</button>
     <label class="muted" style="font-size:.8rem" title="single-voice: everyone reads as the narrator"><input type="checkbox" id="flat-cast"> 1 voice</label>
     <button id="pack-export" class="ghost" title="download casting as a shareable voice pack">⤓ pack</button>
     <button id="pack-import" class="ghost" title="apply a voice pack file">⤒ pack</button>
@@ -377,6 +378,11 @@ async function openBook(id) {
     new Audio(URL.createObjectURL(blob)).play();
     b.textContent = "▶";
   });
+  $("audition-all").onclick = async () => {
+    $("audition-all").disabled = true;
+    for (const b of document.querySelectorAll("[data-preview]")) { await b.onclick(); }
+    $("audition-all").disabled = false;
+  };
   document.querySelectorAll("[data-clone]").forEach(b => b.onclick = () => {
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = ".wav,.mp3,.flac";
