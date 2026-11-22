@@ -134,3 +134,16 @@ def test_voice_mix_vector() -> None:
     vec = backend._voice_vector("va:0.75+vb:0.25")
     assert np.allclose(vec, [0.75, 0.75, 0.75, 0.75])
     assert backend._voice_vector("solo") == "solo"
+
+
+def test_cancel_stops_before_pending_units(tmp_path) -> None:
+    import threading
+
+    book = _book(tmp_path)
+    ev = threading.Event()
+    ev.set()
+    backend = FakeBackend()
+    run(book, Settings(), backend=backend, log=lambda _: None, cancel=ev)
+    assert backend.calls == []
+    manifest = load_artifact(AudioManifest, book.dir)
+    assert manifest is not None and len(manifest.units) == 0

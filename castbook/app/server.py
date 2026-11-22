@@ -38,6 +38,7 @@ STATIC = Path(__file__).parent / "static"
 MAX_UPLOAD = 200 * 1024 * 1024
 
 _jobs: dict[str, threading.Thread] = {}
+_cancels: dict[str, threading.Event] = {}
 _jobs_lock = threading.Lock()
 _import_lock = threading.Lock()
 
@@ -62,6 +63,8 @@ def _spawn(key: str, target: Callable[[], object], log: Callable[[str], None]) -
     with _jobs_lock:
         if key in _jobs and _jobs[key].is_alive():
             raise HTTPException(409, f"{key} already running")
+        cancel = _cancels.setdefault(key, threading.Event())
+        cancel.clear()
         t = threading.Thread(target=wrapped, daemon=True)
         _jobs[key] = t
         t.start()
@@ -231,7 +234,16 @@ def create_app(cfg: Settings) -> FastAPI:
         log = _log_to(book.dir / "job.log")
 
         def work() -> None:
-            generate_book(book, cfg, log=log, chapters=sel, limit=limit, workers=workers)
+            cancel = _cancels[f"job:{book_id}"]
+            generate_book(
+                book,
+                cfg,
+                log=log,
+                chapters=sel,
+                limit=limit,
+                workers=workers,
+                cancel=cancel,
+            )
             if export:
                 log("[export] started")
                 outs = export_book(book, cfg, log=log)
@@ -269,7 +281,7 @@ def create_app(cfg: Settings) -> FastAPI:
             for cid in [str(c) for c in sel]:
                 manifest.chapters.pop(cid, None)
             save_artifact(manifest, book.dir)
-            generate_book(book, cfg, log=log, chapters=sel)
+            generate_book(book, cfg, log=log, chapters=sel, cancel=_cancels[f"job:{book_id}"])
 
         log = _log_to(book.dir / "job.log")
         _spawn(f"job:{book_id}", work, log)
@@ -397,6 +409,18 @@ def create_app(cfg: Settings) -> FastAPI:
             "eta_s": eta_s,
             "log": log_tail,
         }
+
+    @app.post("/api/books/{book_id}/cancel")
+    def cancel(book_id: str) -> dict[str, Any]:
+        _require_book(cfg, book_id)
+        key = f"job:{book_id}"
+        ev = _cancels.get(key)
+        t = _jobs.get(key)
+        if t is None or not t.is_alive():
+            raise HTTPException(409, "no job running")
+        if ev:
+            ev.set()
+        return {"cancelled": True}
 
     @app.post("/api/books/{book_id}/align")
     def align_words(book_id: str) -> dict[str, Any]:
