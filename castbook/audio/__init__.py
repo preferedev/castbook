@@ -91,6 +91,9 @@ def export(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -
         ((int(i), c) for i, c in manifest.chapters.items() if c.status == ChapterStatus.done),
         key=lambda x: x[0],
     )
+    skipped = len(manifest.chapters) - len(done)
+    if skipped:
+        log(f"[export] {skipped} chapters not rendered — excluded; re-run `castbook generate`")
     wavs = [book.audio / c.path for _, c in done]
     titles = [chapters.chapters[i].title for i, _ in done]
 
