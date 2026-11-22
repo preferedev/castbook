@@ -159,15 +159,10 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     def put_config(patch: dict[str, Any]) -> dict[str, Any]:
         tts = patch.get("tts") or {}
         backend = tts.get("backend")
-        if backend is not None:
-            if backend not in ("kokoro", "pocket", "qwen"):
-                raise HTTPException(422, f"unknown tts backend: {backend}")
-            cfg.tts.backend = backend
-            recast = _drop_mismatched_casting(cfg)
-            global _backend
-            with _backend_lock:
-                _backend = None
         strength = tts.get("emotion_strength")
+        if backend is not None and backend not in ("kokoro", "pocket", "qwen"):
+            raise HTTPException(422, f"unknown tts backend: {backend}")
+        v: float | None = None
         if strength is not None:
             try:
                 v = float(strength)
@@ -175,6 +170,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 raise HTTPException(422, "emotion_strength must be a number") from None
             if not 0.0 <= v <= 2.0:
                 raise HTTPException(422, "emotion_strength must be 0..2")
+        # validate first, mutate second — a 422 must not touch config or casting
+        if backend is not None:
+            cfg.tts.backend = backend
+            recast = _drop_mismatched_casting(cfg)
+            global _backend
+            with _backend_lock:
+                _backend = None
+        else:
+            recast = []
+        if v is not None:
             cfg.tts.emotion_strength = v
         cfg.save()
         out = cfg.model_dump(mode="json")
