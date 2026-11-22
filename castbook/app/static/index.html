@@ -108,7 +108,7 @@
     <span class="muted" id="lex-meta"></span>
   </details>
   <details id="review-details" style="margin-top:1rem">
-    <summary class="muted">Ambiguous units <b id="review-count"></b> — assign a speaker</summary>
+    <summary class="muted">Needs review <b id="review-count"></b> — ambiguous or guessed speakers; ~ marks a turn-taking guess</summary>
     <table><tbody id="review-table"></tbody></table>
     <button id="save-review" class="ghost">Save speakers</button>
     <span class="muted" id="review-status"></span>
@@ -390,7 +390,7 @@ async function loadReview(id) {
   const names = [...document.querySelectorAll("#cast-table select, #cast-table input[data-voice-text]")]
     .map(x => x.dataset.speaker).concat(["narrator"]);
   $("review-table").innerHTML = units.map(u =>
-    `<tr><td class="muted" style="font-size:.8rem">ch${u.chapter}</td>` +
+    `<tr><td class="muted" style="font-size:.8rem">ch${u.chapter}${u.guess ? " ~" : ""}</td>` +
     `<td>${esc(u.text.slice(0,140))}</td>` +
     `<td><select data-unit="${u.id}">` +
     `<option value="">pick speaker…</option>` +
