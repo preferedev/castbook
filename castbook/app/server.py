@@ -1161,6 +1161,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         format: str | None = None,
         layout: str | None = None,
         chapters: str | None = None,
+        epub: bool = False,
     ) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         if format is not None and format not in ("m4b", "mp3", "both"):
@@ -1181,6 +1182,12 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
 
         def work() -> None:
             outs = export_book(book, cfg, format=format, layout=layout, only=only, log=log)
+            if epub:
+                from ..epubout import build_media_epub
+
+                ch = load_artifact(ChaptersFile, book.dir)
+                title = (ch.meta.title if ch else book_id) or book_id
+                outs.append(build_media_epub(book, book.export / f"{title}-read-along.epub"))
             log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
         _spawn(f"job:{book_id}", work, log)
