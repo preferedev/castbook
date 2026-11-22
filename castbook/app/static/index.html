@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Castbook</title>
+<style>
+  :root { --ink:#1a1a1a; --muted:#6b7280; --line:#e5e7eb; --accent:#7c3aed; }
+  * { box-sizing:border-box; }
+  body { font:15px/1.5 system-ui,sans-serif; color:var(--ink); max-width:960px;
+         margin:0 auto; padding:2rem 1rem 4rem; background:#fafaf9; }
+  h1 { font-size:1.4rem; letter-spacing:-.01em; }
+  h1 small { color:var(--muted); font-weight:400; font-size:.85rem; }
+  section { background:#fff; border:1px solid var(--line); border-radius:10px;
+            padding:1rem 1.25rem; margin:1rem 0; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:7px;
+           padding:.45rem .9rem; font:inherit; cursor:pointer; }
+  button.ghost { background:#fff; color:var(--ink); border:1px solid var(--line); }
+  button:disabled { opacity:.45; cursor:default; }
+  select,input[type=file] { font:inherit; }
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:.35rem .5rem; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:500; font-size:.8rem; text-transform:uppercase;
+       letter-spacing:.04em; }
+  .muted { color:var(--muted); }
+  .row { display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+  .bar { height:8px; border-radius:4px; background:var(--line); overflow:hidden; }
+  .bar>i { display:block; height:100%; background:var(--accent); }
+  pre { background:#111; color:#d4d4d4; padding:.75rem; border-radius:8px;
+        font-size:.78rem; max-height:220px; overflow:auto; white-space:pre-wrap; }
+  .book-head { display:flex; justify-content:space-between; align-items:baseline; }
+</style>
+</head>
+<body>
+<h1>Castbook <small>— ebooks in, full-cast audiobooks out</small></h1>
+
+<section>
+  <div class="row">
+    <input type="file" id="file" accept=".epub,.txt,.md">
+    <button id="import">Import</button>
+    <span class="muted" id="import-status"></span>
+  </div>
+</section>
+
+<div id="books"></div>
+
+<section id="cast-section" style="display:none">
+  <div class="book-head">
+    <h2 id="cast-title" style="font-size:1.05rem"></h2>
+    <span class="muted" id="cast-meta"></span>
+  </div>
+  <table>
+    <thead><tr><th>Speaker</th><th>Role</th><th>Voice</th></tr></thead>
+    <tbody id="cast-table"></tbody>
+  </table>
+  <div class="row" style="margin-top:.75rem">
+    <button id="save-cast" class="ghost">Save casting</button>
+    <button id="analyze">Re-analyze</button>
+    <button id="generate">Generate</button>
+    <button id="export" class="ghost">Export</button>
+  </div>
+  <div class="bar" style="margin-top:.75rem"><i id="prog" style="width:0%"></i></div>
+  <div class="muted" id="prog-label" style="margin:.25rem 0"></div>
+  <pre id="log" style="display:none"></pre>
+  <div id="downloads" class="row" style="margin-top:.5rem"></div>
+
+  <details id="review-details" style="margin-top:1rem">
+    <summary class="muted">Ambiguous units <b id="review-count"></b> — assign a speaker</summary>
+    <table><tbody id="review-table"></tbody></table>
+    <button id="save-review" class="ghost">Save speakers</button>
+    <span class="muted" id="review-status"></span>
+  </details>
+</section>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let current = null, voices = [], pollTimer = null;
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+async function loadVoices() { voices = await api("/api/voices"); }
+
+async function loadBooks() {
+  const books = await api("/api/books");
+  $("books").innerHTML = books.map(b => `
+    <section>
+      <div class="book-head">
+        <strong>${esc(b.title)}</strong>
+        <span class="muted">${esc(b.author)} · ${b.chapters} ch · ${b.chapters_rendered} rendered</span>
+      </div>
+      <div class="row" style="margin-top:.5rem">
+        <button class="ghost" onclick="openBook('${b.book_id}')">Open</button>
+        <a class="ghost" href="/reader/${b.book_id}">Read</a>
+        ${b.exports.map(f => `<a href="/api/books/${b.book_id}/download/${f}">${esc(f)}</a>`).join("")}
+      </div>
+    </section>`).join("");
+}
+
+async function openBook(id) {
+  current = id;
+  const d = await api(`/api/books/${id}`);
+  $("cast-section").style.display = "";
+  $("cast-title").textContent = id;
+  $("cast-meta").textContent = `${d.units} units · ${d.needs_review.length} need review`;
+  const rows = [];
+  const speakers = new Set(Object.keys(d.casting));
+  for (const c of d.characters) speakers.add(c.id);
+  for (const sp of [...speakers].sort()) {
+    const cur = d.casting[sp]?.voice || "";
+    const char = d.characters.find(c => c.id === sp);
+    const role = char ? `${char.role} · ${char.gender} · ${char.vibe || ""}` : "";
+    rows.push(`<tr>
+      <td>${esc(char?.name || sp)}${sp === "narrator" || sp === "ambiguous" ? " <span class=muted>(reserved)</span>" : ""}</td>
+      <td class="muted">${esc(role)}</td>
+      <td><select data-speaker="${sp}">${voices.map(v =>
+        `<option value="${v.id}" ${v.id === cur ? "selected" : ""}>${v.id} — ${esc(v.description)}</option>`
+      ).join("")}</select></td>
+      <td><button class="ghost" data-preview="${sp}" type="button">▶</button></td></tr>`);
+  }
+  $("cast-table").innerHTML = rows.join("");
+  document.querySelectorAll("[data-preview]").forEach(b => b.onclick = async () => {
+    const sel = b.closest("tr").querySelector("select");
+    b.textContent = "…";
+    const r = await fetch("/api/preview", {method:"POST",
+      headers:{"content-type":"application/json"},
+      body: JSON.stringify({voice: sel.value, text: `A line spoken by ${b.dataset.preview}.`})});
+    const blob = await r.blob();
+    new Audio(URL.createObjectURL(blob)).play();
+    b.textContent = "▶";
+  });
+  loadReview(id);
+  refreshProgress();
+}
+
+async function saveCast() {
+  const overrides = {};
+  document.querySelectorAll("#cast-table select").forEach(s => overrides[s.dataset.speaker] = s.value);
+  await api(`/api/books/${current}/cast`, {
+    method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(overrides)});
+}
+
+async function refreshProgress() {
+  if (!current) return;
+  try {
+    const p = await api(`/api/books/${current}/progress`);
+    const pct = p.total ? Math.round(100 * p.done / p.total) : 0;
+    $("prog").style.width = pct + "%";
+    $("prog-label").textContent = `${p.done}/${p.total} units rendered` + (p.failed ? ` · ${p.failed} failed` : "");
+    if (p.log) { $("log").style.display = ""; $("log").textContent = p.log; }
+    if (p.busy) {
+      clearTimeout(pollTimer);
+      pollTimer = setTimeout(refreshProgress, 1500);
+    }
+  } catch (e) { /* book may not have artifacts yet */ }
+}
+
+$("import").onclick = async () => {
+  const f = $("file").files[0];
+  if (!f) return;
+  $("import-status").textContent = "parsing…";
+  const fd = new FormData();
+  fd.append("file", f);
+  try {
+    const r = await api("/api/import", {method: "POST", body: fd});
+    $("import-status").textContent = `imported: ${r.book_id}`;
+    loadBooks();
+  } catch (e) { $("import-status").textContent = e.message; }
+};
+async function loadReview(id) {
+  const r = await api(`/api/books/${id}/review`);
+  const units = r.units || [];
+  $("review-count").textContent = `(${units.length})`;
+  const names = [...document.querySelectorAll("#cast-table select")]
+    .map(x => x.dataset.speaker).concat(["narrator"]);
+  $("review-table").innerHTML = units.map(u =>
+    `<tr><td class="muted" style="font-size:.8rem">ch${u.chapter}</td>` +
+    `<td>${esc(u.text.slice(0,140))}</td>` +
+    `<td><select data-unit="${u.id}">` +
+    names.map(n => `<option value="${n}">${n}</option>`).join("") +
+    `</select></td></tr>`).join("");
+}
+
+$("save-review").onclick = async () => {
+  const fixes = {};
+  document.querySelectorAll("#review-table select").forEach(s => fixes[s.dataset.unit] = s.value);
+  if (!Object.keys(fixes).length) return;
+  const r = await api(`/api/books/${current}/speakers`, {
+    method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(fixes)});
+  $("review-status").textContent = `fixed ${r.fixed} — re-generate to render`;
+  loadReview(current);
+};
+
+$("save-cast").onclick = saveCast;
+$("analyze").onclick = () => api(`/api/books/${current}/analyze`, {method: "POST"}).then(refreshProgress);
+$("generate").onclick = () => api(`/api/books/${current}/generate`, {method: "POST"}).then(refreshProgress);
+$("export").onclick = async () => {
+  const r = await api(`/api/books/${current}/export`, {method: "POST"});
+  $("downloads").innerHTML = r.files.map(f =>
+    `<a href="/api/books/${current}/download/${f}">${esc(f)}</a>`).join("");
+};
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+loadVoices().then(loadBooks);
+</script>
+</body>
+</html>

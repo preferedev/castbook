@@ -1,0 +1,75 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Castbook reader</title>
+<style>
+  body { font:16px/1.7 Georgia, serif; max-width:44rem; margin:2rem auto; padding:0 1rem; color:#1a1a1a; }
+  .u { display:block; margin:0 0 .6rem; padding:.1rem .3rem; border-radius:.2rem; cursor:default; }
+  .u[data-audio] { cursor:pointer; }
+  .u.playing { background:#fff3c4; }
+  .who { font-size:.7rem; color:#888; vertical-align:.1rem; margin-right:.4rem; font-family:system-ui; }
+  h2 { font-family:system-ui; font-size:1.1rem; margin-top:2rem; }
+  header { font-family:system-ui; margin-bottom:1rem; }
+  header a { color:#555; }
+  #bar { position:fixed; bottom:0; left:0; right:0; background:#111; color:#eee; font-family:system-ui;
+         padding:.6rem 1rem; display:none; align-items:center; gap:.75rem; }
+  #bar button { font:inherit; background:#333; color:#eee; border:0; padding:.3rem .8rem; border-radius:.25rem; cursor:pointer; }
+  #spd { margin-left:auto; }
+</style>
+<header><a href="/">← castbook</a> — <b id="title"></b></header>
+<div id="body"></div>
+<div id="bar">
+  <button id="prev">⏮</button><button id="play">▶</button><button id="next">⏭</button>
+  <span id="pos" style="font-size:.8rem;color:#aaa"></span>
+  <select id="spd"><option>1</option><option>1.25</option><option>1.5</option><option>2</option></select>
+</div>
+<script>
+const BOOK = "__BOOK_ID__";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+let units = [], cur = -1;
+const audio = new Audio();
+audio.onended = () => playAt(nextPlayable(cur));
+$("spd").onchange = e => audio.playbackRate = +e.target.value;
+
+async function boot() {
+  $("title").textContent = BOOK;
+  const d = await (await fetch(`/api/books/${BOOK}/units`)).json();
+  units = d.units;
+  let lastCh = -1;
+  $("body").innerHTML = units.map((u, i) => {
+    const ch = u.chapter !== lastCh ? `<h2>Chapter ${u.chapter + 1}</h2>` : "";
+    lastCh = u.chapter;
+    const who = u.speaker !== "narrator" ? `<span class="who">${esc(u.speaker)}</span>` : "";
+    return `${ch}<span class="u" id="u${i}" data-i="${i}" ${u.has_audio ? "data-audio" : ""}>` +
+      `${who}${esc(u.text)}</span>`;
+  }).join("");
+  $("body").onclick = e => {
+    const el = e.target.closest(".u[data-audio]");
+    if (el) playAt(+el.dataset.i);
+  };
+  const rendered = units.filter(u => u.has_audio).length;
+  $("pos").textContent = `${rendered}/${units.length} rendered`;
+}
+
+const nextPlayable = i => units.findIndex((u, j) => j > i && u.has_audio);
+const prevPlayable = i => { for (let j = i - 1; j >= 0; j--) if (units[j].has_audio) return j; return -1; };
+
+function playAt(i) {
+  if (i < 0 || !units[i].has_audio) { audio.pause(); $("play").textContent = "▶"; return; }
+  document.querySelectorAll(".u.playing").forEach(e => e.classList.remove("playing"));
+  cur = i;
+  const el = $(`u${i}`);
+  el.classList.add("playing");
+  el.scrollIntoView({block: "center", behavior: "smooth"});
+  audio.src = `/api/books/${BOOK}/audio/${units[i].id}`;
+  audio.playbackRate = +$("spd").value;
+  audio.play();
+  $("bar").style.display = "flex";
+  $("play").textContent = "⏸";
+}
+$("play").onclick = () => audio.paused ? (cur < 0 ? playAt(nextPlayable(-1)) : (audio.play(), $("play").textContent = "⏸")) : (audio.pause(), $("play").textContent = "▶");
+$("next").onclick = () => playAt(nextPlayable(cur));
+$("prev").onclick = () => playAt(prevPlayable(cur));
+boot();
+</script>
