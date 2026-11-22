@@ -202,10 +202,31 @@ def create_app(cfg: Settings) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/generate")
-    def generate(book_id: str, limit: Annotated[int | None, Query(ge=1)] = None) -> dict[str, Any]:
+    def generate(
+        book_id: str,
+        limit: Annotated[int | None, Query(ge=1)] = None,
+        chapters: str | None = None,
+    ) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
+        sel: set[int] | None = None
+        if chapters:
+            try:
+                sel = set()
+                for part in chapters.split(","):
+                    part = part.strip()
+                    if "-" in part:
+                        a, b = (int(x) for x in part.split("-", 1))
+                        sel.update(range(a, b + 1))
+                    elif part:
+                        sel.add(int(part))
+            except ValueError as e:
+                raise HTTPException(422, f"bad chapters {chapters!r}") from e
         log = _log_to(book.dir / "job.log")
-        _spawn(f"generate:{book_id}", lambda: generate_book(book, cfg, log=log, limit=limit), log)
+        _spawn(
+            f"generate:{book_id}",
+            lambda: generate_book(book, cfg, log=log, chapters=sel, limit=limit),
+            log,
+        )
         return {"ok": True}
 
     @app.post("/api/preview")
