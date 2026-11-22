@@ -31,6 +31,8 @@ from ..artifacts import (
 )
 from ..cast.library import LIBRARY
 from ..config import Settings
+from ..models import MANIFEST, resolve_model
+from ..models import pull as models_pull
 from ..pipeline import analyze_book, cast_book, export_book, generate_book, import_book
 from ..tts.backend import Backend
 from ..workdir import BookPaths
@@ -109,6 +111,35 @@ def create_app(cfg: Settings) -> FastAPI:
                 continue
             out.append(_status(d, ch))
         return out
+
+    @app.get("/api/models")
+    def models() -> list[dict[str, Any]]:
+        busy = _jobs.get("job:models")
+        return [
+            {
+                "id": m.id,
+                "kind": m.kind,
+                "size_mb": round(m.size_bytes / 1e6),
+                "license": m.license,
+                "required": m.required,
+                "downloaded": resolve_model(cfg.models_dir, m.id) is not None,
+                "busy": busy is not None and busy.is_alive(),
+            }
+            for m in MANIFEST
+        ]
+
+    @app.get("/api/models/log")
+    def models_log(lines: int = 100) -> dict[str, Any]:
+        path = cfg.models_dir / "models.log"
+        text = path.read_text(errors="replace") if path.exists() else ""
+        return {"lines": text.splitlines()[-lines:]}
+
+    @app.post("/api/models/pull")
+    def pull_models(ids: str = "") -> dict[str, Any]:
+        wanted = [i for i in ids.split(",") if i] or None
+        log = _log_to(cfg.models_dir / "models.log")
+        _spawn("job:models", lambda: models_pull(cfg.models_dir, wanted, log=log), log)
+        return {"ok": True}
 
     @app.post("/api/import")
     def upload(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
