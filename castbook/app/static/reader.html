@@ -71,5 +71,13 @@ function playAt(i) {
 $("play").onclick = () => audio.paused ? (cur < 0 ? playAt(nextPlayable(-1)) : (audio.play(), $("play").textContent = "⏸")) : (audio.pause(), $("play").textContent = "▶");
 $("next").onclick = () => playAt(nextPlayable(cur));
 $("prev").onclick = () => playAt(prevPlayable(cur));
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+  if (e.code === "Space") { e.preventDefault(); $("play").click(); }
+  else if (e.code === "ArrowRight") $("next").click();
+  else if (e.code === "ArrowLeft") $("prev").click();
+  else if (e.code === "ArrowUp") { e.preventDefault(); $("spd").value = Math.min(2, +$("spd").value + 0.25); audio.playbackRate = +$("spd").value; }
+  else if (e.code === "ArrowDown") { e.preventDefault(); $("spd").value = Math.max(1, +$("spd").value - 0.25); audio.playbackRate = +$("spd").value; }
+});
 boot();
 </script>

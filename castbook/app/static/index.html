@@ -36,8 +36,9 @@
 
 <section>
   <div class="row">
-    <input type="file" id="file" accept=".epub,.txt,.md,.pdf">
+    <input type="file" id="file" accept=".epub,.txt,.md,.pdf" hidden>
     <button id="import">Import</button>
+    <button id="pick" class="ghost">Choose file…</button>
     <span class="muted" id="import-status"></span>
   </div>
 </section>
@@ -164,6 +165,12 @@ async function refreshProgress() {
     }
   } catch (e) { /* book may not have artifacts yet */ }
 }
+
+$("pick").onclick = () => $("file").click();
+["dragover", "dragleave", "drop"].forEach(ev => document.addEventListener(ev, e => {
+  e.preventDefault();
+  if (ev === "drop" && e.dataTransfer.files[0]) { $("file").files = e.dataTransfer.files; $("import").click(); }
+}));
 
 $("import").onclick = async () => {
   const f = $("file").files[0];
