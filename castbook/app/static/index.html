@@ -106,7 +106,6 @@ async function openBook(id) {
   $("cast-section").style.display = "";
   $("cast-title").textContent = id;
   $("cast-meta").textContent = `${d.units} units · ${d.needs_review.length} need review`;
-  loadReview(id);
   const rows = [];
   const speakers = new Set(Object.keys(d.casting));
   for (const c of d.characters) speakers.add(c.id);
@@ -133,6 +132,7 @@ async function openBook(id) {
     new Audio(URL.createObjectURL(blob)).play();
     b.textContent = "▶";
   });
+  loadReview(id);
   refreshProgress();
 }
 
@@ -170,6 +170,30 @@ $("import").onclick = async () => {
     loadBooks();
   } catch (e) { $("import-status").textContent = e.message; }
 };
+async function loadReview(id) {
+  const r = await api(`/api/books/${id}/review`);
+  const units = r.units || [];
+  $("review-count").textContent = `(${units.length})`;
+  const names = [...document.querySelectorAll("#cast-table select")]
+    .map(x => x.dataset.speaker).concat(["narrator"]);
+  $("review-table").innerHTML = units.map(u =>
+    `<tr><td class="muted" style="font-size:.8rem">ch${u.chapter}</td>` +
+    `<td>${esc(u.text.slice(0,140))}</td>` +
+    `<td><select data-unit="${u.id}">` +
+    names.map(n => `<option value="${n}">${n}</option>`).join("") +
+    `</select></td></tr>`).join("");
+}
+
+$("save-review").onclick = async () => {
+  const fixes = {};
+  document.querySelectorAll("#review-table select").forEach(s => fixes[s.dataset.unit] = s.value);
+  if (!Object.keys(fixes).length) return;
+  const r = await api(`/api/books/${current}/speakers`, {
+    method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(fixes)});
+  $("review-status").textContent = `fixed ${r.fixed} — re-generate to render`;
+  loadReview(current);
+};
+
 $("save-cast").onclick = saveCast;
 $("analyze").onclick = () => api(`/api/books/${current}/analyze`, {method: "POST"}).then(refreshProgress);
 $("generate").onclick = () => api(`/api/books/${current}/generate`, {method: "POST"}).then(refreshProgress);
