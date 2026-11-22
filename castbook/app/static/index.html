@@ -279,6 +279,7 @@ async function loadBooks() {
         <button class="ghost" onclick="deleteBook('${b.book_id}')">Delete</button>
         <a class="ghost" href="${tok(`/reader/${b.book_id}`)}">Read</a>
         <a class="ghost" href="#" onclick="dlTranscript('${b.book_id}');return false">SRT</a>
+        <a class="ghost" href="#" onclick="dlTranscript('${b.book_id}',true);return false" title="single file, continuous timestamps">full SRT</a>
         ${b.exports.map(f => `<a href="${tok(`/api/books/${b.book_id}/download/${f.split("/").map(encodeURIComponent).join("/")}`)}">${esc(f)}</a>`).join("")}
       </div>
     </section>`).join("");
@@ -519,10 +520,11 @@ $("import-url-btn").onclick = async () => {
     loadBooks();
   } catch (e) { $("import-status").textContent = e.message; }
 };
-async function dlTranscript(id) {
+async function dlTranscript(id, merged) {
   let r;
-  try { r = await api(`/api/books/${id}/transcript`, {method: "POST"}); }
+  try { r = await api(`/api/books/${id}/transcript${merged ? "?merged=1" : ""}`, {method: "POST"}); }
   catch (e) { $("import-status").textContent = e.message; return; }
+  if (merged) { window.open(tok(`/api/books/${id}/chapters/-1/transcript?fmt=srt`), "_blank"); return; }
   if (r.first_chapter == null) { $("import-status").textContent = "no rendered chapters yet"; return; }
   window.open(tok(`/api/books/${id}/chapters/${r.first_chapter}/transcript?fmt=srt`), "_blank");
 }
