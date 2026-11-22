@@ -160,6 +160,10 @@
     <table><tbody id="review-table"></tbody></table>
     <button id="save-review" class="ghost">Save speakers</button>
     <label class="muted" style="font-size:.8rem" title="apply each fix to every unit with identical text"><input type="checkbox" id="review-cascade"> cascade</label>
+    <span class="muted" style="font-size:.8rem;margin-left:.8rem">bulk:</span>
+    <select id="bulk-ch" class="muted" style="font-size:.8rem"></select>
+    <select id="bulk-sp" class="muted" style="font-size:.8rem"></select>
+    <button id="bulk-apply" class="ghost" title="assign every flagged unit in that chapter">apply</button>
     <span class="muted" id="review-status"></span>
   </details>
 </section>
@@ -588,6 +592,17 @@ async function loadReview(id) {
       `<option value="${e}" ${e === u.emotion ? "selected" : ""}>${e}</option>`).join("") +
     `</select></td>` +
     `<td><button class="ghost" data-hear type="button" title="hear this line">▶</button></td></tr>`).join("");
+  $("bulk-ch").innerHTML = [...new Set(units.map(u => u.chapter))].sort((a, b) => a - b)
+    .map(c => `<option value="${c}">ch ${c}</option>`).join("");
+  $("bulk-sp").innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join("");
+  $("bulk-apply").onclick = () => {
+    const ch = +$("bulk-ch").value, sp = $("bulk-sp").value;
+    let n = 0;
+    document.querySelectorAll("#review-table tr").forEach((tr, i) => {
+      if (units[i].chapter === ch) { tr.querySelector("select[data-unit]").value = sp; n++; }
+    });
+    $("review-status").textContent = `${n} rows set to ${sp} — save to apply`;
+  };
   document.querySelectorAll("[data-hear]").forEach(b => b.onclick = async () => {
     const tr = b.closest("tr");
     const sp = tr.querySelector("select[data-unit]").value || tr.dataset.uspeaker || "narrator";
