@@ -170,7 +170,7 @@ async function loadBooks() {
         <button class="ghost" onclick="deleteBook('${b.book_id}')">Delete</button>
         <a class="ghost" href="${tok(`/reader/${b.book_id}`)}">Read</a>
         <a class="ghost" href="#" onclick="dlTranscript('${b.book_id}');return false">SRT</a>
-        ${b.exports.map(f => `<a href="${tok(`/api/books/${b.book_id}/download/${f}`)}">${esc(f)}</a>`).join("")}
+        ${b.exports.map(f => `<a href="${tok(`/api/books/${b.book_id}/download/${f.split("/").map(encodeURIComponent).join("/")}`)}">${esc(f)}</a>`).join("")}
       </div>
     </section>`).join("");
 }
@@ -480,7 +480,7 @@ $("export").onclick = async () => {
       const books = await api(`/api/books`);
       const b = books.find(x => x.book_id === current);
       if (b) $("downloads").innerHTML = b.exports.map(f =>
-        `<a href="${tok(`/api/books/${current}/download/${f}`)}">${esc(f)}</a>`).join("");
+        `<a href="${tok(`/api/books/${current}/download/${f.split("/").map(encodeURIComponent).join("/")}`)}">${esc(f)}</a>`).join("");
       const p = await api(`/api/books/${current}/progress`);
       if (!p.busy) {
         clearInterval(timer);
