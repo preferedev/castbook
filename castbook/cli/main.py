@@ -497,6 +497,7 @@ def watch(
         raise typer.Exit(1)
     exts = set(supported_suffixes())
     seen = {p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in exts}
+    sizes: dict[Path, int] = {}
     typer.echo(f"watching {folder} ({len(seen)} existing ebook(s) skipped) — Ctrl-C to stop")
     try:
         while True:
@@ -507,12 +508,20 @@ def watch(
                     and p.suffix.lower() in exts
                     and not p.name.endswith(".part")
                 ):
-                    seen.add(p)
+                    size = p.stat().st_size
+                    if sizes.get(p) != size:
+                        sizes[p] = size  # still copying — try again next poll
+                        continue
                     try:
                         book = import_book(p, cfg, lang=lang)
                     except Exception as e:
+                        # stable size + failed import: the file is bad, not mid-copy
+                        sizes.pop(p, None)
+                        seen.add(p)
                         typer.echo(f"{p.name}: import failed: {e}")
                         continue
+                    sizes.pop(p, None)
+                    seen.add(p)
                     typer.echo(f"imported {p.name} → {book.book_id}")
                     if chain:
                         try:
