@@ -166,6 +166,9 @@ def cast(
         list[str] | None,
         typer.Option("--speed", help="speaker=rate overrides, e.g. narrator=0.9"),
     ] = None,
+    flat: Annotated[
+        bool, typer.Option("--flat", help="single-voice: everyone reads as the narrator")
+    ] = False,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Auto-assign voices to characters (casting.json)."""
@@ -182,7 +185,7 @@ def cast(
             raise typer.BadParameter("--speed takes speaker=rate")
         k, v = pair.split("=", 1)
         speeds[k.strip()] = float(v)
-    cast_book(_book(cfg, book), cfg, overrides, speeds)
+    cast_book(_book(cfg, book), cfg, overrides, speeds, flat=flat)
 
 
 @app.command()

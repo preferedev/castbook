@@ -17,6 +17,7 @@ def run(
     cfg: Settings,
     overrides: dict[str, str] | None = None,
     speeds: dict[str, float] | None = None,
+    flat: bool = False,
     log: Callable[[str], None] = print,
 ) -> Path:
     cast_file = load_artifact(CastFile, book.dir)
@@ -41,11 +42,19 @@ def run(
     for speaker, speed in (speeds or {}).items():
         if speaker in mapping and 0 < speed <= 2:
             mapping[speaker].speed = speed
+    if flat:
+        narrator = mapping["narrator"]
+        for spec in mapping.values():
+            spec.voice, spec.seed = narrator.voice, narrator.seed
+        log("[cast] flat mode — every speaker reads in the narrator's voice")
 
-    save_memory(
-        cfg.data_dir,
-        {c.name: mapping[c.id].voice for c in cast_file.characters if c.id in mapping},
-    )
+    # a single-voice cast is never worth remembering — it would poison every
+    # character's voice for future books
+    if len({s.voice for s in mapping.values()}) > 1:
+        save_memory(
+            cfg.data_dir,
+            {c.name: mapping[c.id].voice for c in cast_file.characters if c.id in mapping},
+        )
     save_artifact(
         CastingFile(book_id=book.book_id, map=mapping, input_hash=cast_file.input_hash),
         book.dir,

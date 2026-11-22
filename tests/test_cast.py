@@ -152,3 +152,20 @@ def test_voicepack_rejects_foreign_backend(tmp_path) -> None:  # type: ignore[no
     res = apply_pack(b, pack, "pocket")
     assert res["applied"] == []
     assert set(res["mismatched"]) == {"mara", "mystery"}
+
+
+def test_flat_cast_uses_narrator_voice(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from castbook import cast as cast_mod
+    from castbook.artifacts import CastFile, CastingFile, load_artifact, save_artifact
+    from castbook.config import Settings
+    from castbook.workdir import BookPaths
+
+    b = BookPaths(tmp_path / "books", "b1")
+    b.dir.mkdir(parents=True)
+    save_artifact(CastFile(book_id="b1", characters=_chars(), input_hash="h"), b.dir)
+    cfg = Settings(data_dir=tmp_path / "books", models_dir=tmp_path / "models")
+    cast_mod.run(b, cfg, flat=True, log=lambda _: None)
+    casting = load_artifact(CastingFile, b.dir)
+    assert casting is not None
+    voices = {s.voice for s in casting.map.values()}
+    assert voices == {casting.map["narrator"].voice}

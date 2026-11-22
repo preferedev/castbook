@@ -411,7 +411,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/cast")
-    def set_cast(book_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+    def set_cast(book_id: str, spec: dict[str, Any], flat: bool = Query(False)) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         voices: dict[str, str] = {}
         speeds: dict[str, float] = {}
@@ -423,7 +423,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                     speeds[sp] = float(v["speed"])
             else:
                 voices[sp] = str(v)
-        cast_book(book, cfg, overrides=voices, speeds=speeds)
+        cast_book(book, cfg, overrides=voices, speeds=speeds, flat=flat)
         return {"ok": True}
 
     @app.get("/api/books/{book_id}/voicepack")
