@@ -133,7 +133,7 @@ def _tail(text: str, n: int = 160) -> str:
 
 
 _VERBS = "said|asked|replied|cried|exclaimed|answered|whispered|added|observed|continued|returned"
-_NAME = r"(?:[A-Z][a-z]+\.?\s+){0,2}[A-Z][a-z]+\.?"
+_NAME = r"(?:[A-Z][a-zA-Z'.\-]+\s+){0,2}[A-Z][a-zA-Z'.\-]+"
 _SAID = re.compile(
     rf"[\"“”].{{0,400}}[\"“”]\s*,?\s*(?:{_VERBS})\s+"
     rf"({_NAME})(?:[.,;!?:)\"“”]|\s+to\s|$)"
