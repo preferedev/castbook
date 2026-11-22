@@ -182,6 +182,8 @@ def test_import_from_url(client_setup) -> None:  # type: ignore[no-untyped-def]
         functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(tmp_path)),
     )
     (tmp_path / "book.txt").write_text("CHAPTER I\n\nHello, said Alice.\n" * 5)
+    monkeypatch2 = __import__("pytest").MonkeyPatch()
+    monkeypatch2.setattr("castbook.app.server._public_host", lambda url: None)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         port = srv.server_address[1]
@@ -199,3 +201,22 @@ def test_import_from_url(client_setup) -> None:  # type: ignore[no-untyped-def]
         )
     finally:
         srv.shutdown()
+        monkeypatch2.undo()
+
+
+def test_url_import_rejects_private_hosts() -> None:
+    from castbook.app.server import _public_host
+
+    for bad in (
+        "http://127.0.0.1/x.epub",
+        "http://localhost/x.epub",
+        "http://10.0.0.1/x.epub",
+        "http://169.254.169.254/latest",
+    ):
+        try:
+            _public_host(bad)
+        except Exception as e:
+            assert getattr(e, "status_code", None) in (400, 502), bad
+        else:
+            raise AssertionError(f"{bad} not rejected")
+    _public_host("http://93.184.216.34/book.epub")  # public IP literal passes

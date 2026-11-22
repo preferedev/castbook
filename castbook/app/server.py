@@ -6,8 +6,10 @@ artifacts, so the UI survives a server restart.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import shutil
+import socket
 import tempfile
 import threading
 import time
@@ -45,6 +47,34 @@ from ..workdir import BookPaths
 STATIC = Path(__file__).parent / "static"
 MAX_UPLOAD = 200 * 1024 * 1024
 SUPPORTED_SUFFIXES = (".epub", ".txt", ".md", ".pdf")
+
+
+def _public_host(url: str) -> None:
+    host = urllib.parse.urlparse(url).hostname or ""
+    try:
+        ip = ipaddress.ip_address(host)
+        addrs = [ip]
+    except ValueError:
+        try:
+            addrs = [ipaddress.ip_address(i[4][0]) for i in socket.getaddrinfo(host, None)]
+        except (socket.gaierror, ValueError) as e:
+            raise HTTPException(502, f"cannot resolve host {host}") from e
+    if not addrs or not all(a.is_global for a in addrs):
+        raise HTTPException(400, "url host is not public")
+
+
+class _CheckedRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str
+    ) -> Any:
+        if not newurl.lower().startswith(("http://", "https://")):
+            raise HTTPException(400, "redirect to unsupported scheme")
+        _public_host(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_url_opener = urllib.request.build_opener(_CheckedRedirect())
+
 
 _jobs: dict[str, threading.Thread] = {}
 _cancels: dict[str, threading.Event] = {}
@@ -208,9 +238,12 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     def _save_url(url: str, tmp_dir: Path) -> Path:
         if not url.lower().startswith(("http://", "https://")):
             raise HTTPException(400, "url must start with http:// or https://")
+        _public_host(url)
         req = urllib.request.Request(url, headers={"User-Agent": "castbook/0.1"})
         try:
-            resp = urllib.request.urlopen(req, timeout=60)
+            resp = _url_opener.open(req, timeout=60)
+        except HTTPException:
+            raise
         except urllib.error.URLError as e:
             raise HTTPException(502, f"fetch failed: {e.reason}") from e
         with resp:
