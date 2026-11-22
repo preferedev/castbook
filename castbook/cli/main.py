@@ -455,6 +455,9 @@ def models_pull(
 def serve(
     port: Annotated[int, typer.Option("--port", "-p")] = 8484,
     host: Annotated[str, typer.Option("--host")] = "127.0.0.1",
+    open_browser: Annotated[
+        bool, typer.Option("--open", help="open the UI in your browser")
+    ] = False,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Run the local web UI (--host 0.0.0.0 to share on the LAN)."""
@@ -469,6 +472,12 @@ def serve(
 
         token = secrets.token_urlsafe(16)
         typer.echo(f"LAN mode — share as ?token= or header x-castbook-token:\n  {token}")
+    if open_browser:
+        import threading
+        import webbrowser
+
+        url = f"http://{host}:{port}" + (f"?token={token}" if token else "")
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     uvicorn.run(create_app(cfg, token=token), host=host, port=port, log_level="info")
 
 
