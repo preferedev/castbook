@@ -154,8 +154,11 @@ def export_book(
     format: str | None = None,
     layout: str | None = None,
     only: set[int] | None = None,
+    split_hours: float | None = None,
 ) -> list[Path]:
-    return audio.export(book, cfg, log, format=format, layout=layout, only=only)
+    return audio.export(
+        book, cfg, log, format=format, layout=layout, only=only, split_hours=split_hours
+    )
 
 
 def run_book(

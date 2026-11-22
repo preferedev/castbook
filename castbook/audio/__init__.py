@@ -141,6 +141,7 @@ def export(
     format: str | None = None,
     layout: str | None = None,
     only: set[int] | None = None,
+    split_hours: float | None = None,
 ) -> list[Path]:
     manifest = load_artifact(AudioManifest, book.dir)
     chapters = load_artifact(ChaptersFile, book.dir)
@@ -170,9 +171,33 @@ def export(
         m4b_path = book.m4b(chapters.meta.title)
         if only is not None:
             m4b_path = m4b_path.with_name(f"{m4b_path.stem}-{_range_label(sorted(only))}.m4b")
-        out = mux_m4b(wavs, titles, chapters.meta, m4b_path, book.dir)
-        outputs.append(out)
-        log(f"[export] {out.name}")
+        parts = [(wavs, titles)]
+        if split_hours and split_hours > 0:
+            budget = split_hours * 3600
+            parts = []
+            cur_w: list[Path] = []
+            cur_t: list[str] = []
+            acc = 0.0
+            for w, t, (_, c) in zip(wavs, titles, done, strict=True):
+                if cur_w and acc + c.duration_s > budget:
+                    parts.append((cur_w, cur_t))
+                    cur_w, cur_t, acc = [], [], 0.0
+                cur_w.append(w)
+                cur_t.append(t)
+                acc += c.duration_s
+            if cur_w:
+                parts.append((cur_w, cur_t))
+        for pi, (pw, pt) in enumerate(parts):
+            p_out = m4b_path
+            p_meta = chapters.meta
+            if len(parts) > 1:
+                p_out = m4b_path.with_name(f"{m4b_path.stem}-part{pi + 1}.m4b")
+                p_meta = chapters.meta.model_copy(
+                    update={"title": f"{chapters.meta.title} (part {pi + 1}/{len(parts)})"}
+                )
+            out = mux_m4b(pw, pt, p_meta, p_out, book.dir)
+            outputs.append(out)
+            log(f"[export] {out.name}")
     label = _range_label(sorted(only)) if only is not None else ""
     if fmt in ("mp3", "both"):
         mp3_dir = book.export

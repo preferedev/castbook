@@ -1189,6 +1189,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         layout: str | None = None,
         chapters: str | None = None,
         epub: bool = False,
+        split: float | None = None,
     ) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         if format is not None and format not in ("m4b", "mp3", "both"):
@@ -1208,7 +1209,15 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         log(f"[export] started ({format or cfg.export.format})")
 
         def work() -> None:
-            outs = export_book(book, cfg, format=format, layout=layout, only=only, log=log)
+            outs = export_book(
+                book,
+                cfg,
+                format=format,
+                layout=layout,
+                only=only,
+                log=log,
+                split_hours=split,
+            )
             if epub:
                 from ..epubout import build_media_epub
 

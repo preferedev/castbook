@@ -228,6 +228,10 @@ def export(
     epub: Annotated[
         bool, typer.Option("--epub", help="also write a read-aloud EPUB3 (media overlay)")
     ] = False,
+    split: Annotated[
+        float | None,
+        typer.Option("--split", help="split the M4B into parts of at most N hours"),
+    ] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Mux finished chapters to M4B or MP3."""
@@ -239,6 +243,7 @@ def export(
         format=format,
         layout=layout,
         only=_chapter_range(chapters),
+        split_hours=split,
     )
     if epub:
         from ..epubout import build_media_epub
