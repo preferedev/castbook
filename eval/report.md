@@ -1,5 +1,5 @@
 # Castbook attribution eval
-_2026-11-22T18:32:14+00:00Z — heuristic_
+_2026-11-22T19:01:12+00:00Z — heuristic_
 
 | book | units | labeled | correct | accuracy | ambiguous |
 |---|---|---|---|---|---|
@@ -11,6 +11,7 @@ _2026-11-22T18:32:14+00:00Z — heuristic_
 | jane-eyre | 26 | 20 | 18 | 90% | 0 |
 | moby-dick | 36 | 20 | 19 | 95% | 2 |
 | pride-and-prejudice | 34 | 20 | 15 | 75% | 1 |
+| rumpelstilzchen | 16 | 16 | 11 | 69% | 0 |
 | sherlock-holmes | 36 | 29 | 26 | 90% | 0 |
 | treasure-island | 35 | 25 | 22 | 88% | 0 |
 
@@ -23,7 +24,7 @@ _2026-11-22T18:32:14+00:00Z — heuristic_
 - **dr-jekyll-and-mr-hyde** `ch001-u0027` expected `mr.-enfield` got `mr-utterson` — 'Mr. Utterson sighed deeply but said never a word; and the young man\npresently re'
 - **great-expectations** `ch001-u0005` expected `magwitch` got `ambiguous` — '“Hold your noise!” cried a terrible voice, as a man started up from\namong the gr'
 - **great-expectations** `ch001-u0037` expected `pip` got `abel-magwitch` — '“My sister, sir,—Mrs. Joe Gargery,—wife of Joe Gargery, the blacksmith,\nsir.”'
-- **huckleberry-finn** `ch008-u0006` expected `jim` got `huckleberry-finn` — '“What’s de use er makin’ up de camp fire to cook strawbries en sich\ntruck? But y'
+- **huckleberry-finn** `ch008-u0005` expected `huckleberry-finn` got `jim` — '“It’s good daylight. Le’s get breakfast. Make up your camp fire good.”'
 - **huckleberry-finn** `ch008-u0019` expected `jim` got `huckleberry-finn` — '“No! W’y, what has you lived on? But you got a gun. Oh, yes, you got a\ngun. Dat’'
 - **jane-eyre** `ch023-u0020` expected `jane-eyre` got `rochester` — '“I am no bird; and no net ensnares me; I am a free human being with an\nindepende'
 - **jane-eyre** `ch023-u0024` expected `jane-eyre` got `rochester` — '“You play a farce, which I merely laugh at.”'
@@ -33,6 +34,11 @@ _2026-11-22T18:32:14+00:00Z — heuristic_
 - **pride-and-prejudice** `ch001-u0015` expected `elizabeth` got `kitty` — '“Tomorrow fortnight.”'
 - **pride-and-prejudice** `ch001-u0018` expected `bennet` got `kitty` — '“Impossible, Mr. Bennet, impossible, when I am not acquainted with him myself; h'
 - **pride-and-prejudice** `ch001-u0019` expected `bennet` got `kitty` — '“I honour your circumspection. A fortnight’s acquaintance is certainly very litt'
+- **rumpelstilzchen** `ch000-u0001` expected `mueller` got `koenig` — 'Es war einmal ein Müller, der war arm, aber er hatte eine schöne Tochter. Nun tr'
+- **rumpelstilzchen** `ch000-u0007` expected `koenig` got `rumpelstilzchen` — '„die mußt du noch in dieser Nacht verspinnen: gelingt dirs aber, so sollst du me'
+- **rumpelstilzchen** `ch000-u0009` expected `rumpelstilzchen` got `koenig` — '„So versprich mir, wenn du Königin wirst, dein erstes Kind.“ „Wer weiß wie das n'
+- **rumpelstilzchen** `ch000-u0014` expected `tochter` got `koenig` — '„heißt du vielleicht Rippenbiest oder Hammelswade oder Schnürbein?“ aber es antw'
+- **rumpelstilzchen** `ch000-u0016` expected `ambiguous` got `rumpelstilzchen` — '„neue Namen habe ich keinen einzigen finden können, aber wie ich an einen hohen '
 - **sherlock-holmes** `ch001-u0026` expected `holmes` got `john-watson` — '“Quite so! You have not observed. And yet you have seen. That is just\nmy point. '
 - **sherlock-holmes** `ch001-u0030` expected `watson` got `sherlock-holmes` — '“There will call upon you to-night, at a quarter to eight o’clock,” it\nsaid, “a '
 - **sherlock-holmes** `ch001-u0033` expected `holmes` got `john-watson` — '“I have no data yet. It is a capital mistake to theorise before one has\ndata. In'
@@ -40,19 +46,21 @@ _2026-11-22T18:32:14+00:00Z — heuristic_
 - **treasure-island** `ch001-u0004` expected `long-john-silver` got `jim-hawkins` — '“Oh!” said he, quite loud, and offering his hand.'
 - **treasure-island** `ch001-u0029` expected `long-john-silver` got `jim-hawkins` — '“Keel-hauling, was you? And a mighty suitable thing, too, and you may\nlay to tha'
 
-## Hybrid run (heuristic + Qwen3-4B second opinion, 2026-11-22)
+## Hybrid run
 
-| book | units | labeled | correct | accuracy | ambiguous |
-|---|---|---|---|---|---|
-| alice-in-wonderland | 146 | 21 | 20 | 95% | 0 |
-| dorian-gray | 21 | 16 | 14 | 88% | 0 |
-| dr-jekyll-and-mr-hyde | 28 | 20 | 19 | 95% | 0 |
-| great-expectations | 46 | 34 | 34 | 100% | 0 |
-| huckleberry-finn | 27 | 20 | 16 | 80% | 0 |
-| jane-eyre | 26 | 20 | 20 | 100% | 0 |
-| moby-dick | 36 | 20 | 20 | 100% | 0 |
-| pride-and-prejudice | 34 | 20 | 17 | 85% | 0 |
-| sherlock-holmes | 36 | 29 | 25 | 86% | 0 |
-| treasure-island | 35 | 25 | 23 | 92% | 0 |
+_2026-11-22 — heuristic + LLM (Qwen3-4B) on uncertain units_
 
-Average: 92.1%.
+| book | accuracy |
+|---|---|
+| alice-in-wonderland | 95% |
+| dorian-gray | 88% |
+| dr-jekyll-and-mr-hyde | 95% |
+| great-expectations | 100% |
+| huckleberry-finn | 80% |
+| jane-eyre | 100% |
+| moby-dick | 100% |
+| pride-and-prejudice | 85% |
+| sherlock-holmes | 86% |
+| treasure-island | 92% |
+
+Average 92.1% vs 89.3% heuristic-only.
