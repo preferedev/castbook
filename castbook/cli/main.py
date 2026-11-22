@@ -889,6 +889,12 @@ def books(
                     "title": title,
                     "language": chapters.meta.language if chapters else None,
                     "stage": stage,
+                    "chapters": len(chapters.chapters) if chapters else 0,
+                    "chapters_rendered": sum(
+                        1 for c in manifest.chapters.values() if c.status == ChapterStatus.done
+                    )
+                    if manifest
+                    else 0,
                     "units": total,
                     "rendered": done,
                     "failed": failed,
