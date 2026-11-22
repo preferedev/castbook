@@ -285,12 +285,19 @@ def review(
 def voices(
     play: Annotated[str | None, typer.Option("--play", help="synthesize a sample")] = None,
     text: Annotated[str, typer.Option("--text")] = "A quick preview of this voice.",
+    backend: Annotated[
+        str | None, typer.Option("--backend", help="kokoro|pocket|qwen — default: config")
+    ] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """List the voice library; --play writes a sample WAV for a voice id."""
     from ..cast.library import LIBRARY, POCKET_LIBRARY
 
     cfg = _cfg(config)
+    if backend is not None:
+        if backend not in ("kokoro", "pocket", "qwen"):
+            raise typer.BadParameter(f"unknown backend {backend!r}")
+        cfg.tts.backend = backend
     lib = {"kokoro": LIBRARY, "pocket": POCKET_LIBRARY}.get(cfg.tts.backend, [])
     if play:
         from ..artifacts import VoiceSpec
