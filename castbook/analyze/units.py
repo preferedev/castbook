@@ -38,14 +38,18 @@ def split_units(chapter: Chapter) -> list[Unit]:
 
 
 def _inside_quote(text: str, inside: bool = False) -> bool:
-    for ch in text:
+    for i, ch in enumerate(text):
         if ch == '"':
             inside = not inside
         elif ch in "\u201c\u2018":
             inside = True
-        elif ch in "\u201d\u2019":
+        elif ch in "\u201d\u2019" and not _apostrophe(text, i):
             inside = False
     return inside
+
+
+def _apostrophe(text: str, i: int) -> bool:
+    return i > 0 and i + 1 < len(text) and text[i - 1].isalnum() and text[i + 1].isalnum()
 
 
 def _paragraphs(text: str) -> list[str]:

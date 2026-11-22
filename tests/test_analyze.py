@@ -39,3 +39,14 @@ def test_split_units_keeps_long_quote_dialogue() -> None:
     ch = Chapter(index=0, title="t", text=speech, word_count=len(speech.split()))
     kinds = [u.kind for u in split_units(ch)]
     assert len(kinds) > 1 and all(k == "dialogue" for k in kinds), kinds
+
+
+def test_split_units_apostrophe_does_not_close_quote() -> None:
+    from castbook.analyze.units import split_units
+    from castbook.artifacts import Chapter
+
+    narration = " ".join(" ".join(["narration"] * 40) + "." for _ in range(6))
+    text = '"I can\u2019t wait," he said. ' + narration
+    ch = Chapter(index=0, title="t", text=text, word_count=len(text.split()))
+    kinds = [u.kind for u in split_units(ch)]
+    assert len(kinds) > 1 and kinds[-1] == "narration", kinds
