@@ -397,6 +397,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             raise HTTPException(422, str(e)) from e
         return {"merged": n}
 
+    @app.post("/api/books/{book_id}/rename")
+    def rename(book_id: str, speaker: str, name: str) -> dict[str, Any]:
+        from ..analyze.reconcile import rename_speaker
+
+        book = _require_book(cfg, book_id)
+        try:
+            return {"name": rename_speaker(book.dir, speaker, name)}
+        except (FileNotFoundError, ValueError) as e:
+            raise HTTPException(422, str(e)) from e
+
     @app.get("/api/books/{book_id}/log")
     def book_log(book_id: str, lines: int = 100) -> dict[str, Any]:
         f = _require_book(cfg, book_id).dir / "job.log"

@@ -48,3 +48,28 @@ def test_search_units(tmp_path) -> None:
     assert hits[0]["chapter"] == 2 and hits[0]["speaker"] == "Cheshire Cat"
     assert "Hello there" in hits[0]["excerpt"]
     assert search_units(d, "zzz") == []
+
+
+def test_rename_speaker(tmp_path) -> None:
+    from castbook.analyze.reconcile import rename_speaker
+    from castbook.artifacts import CastFile, Character, load_artifact, save_artifact
+
+    d = tmp_path / "b"
+    d.mkdir()
+    save_artifact(
+        CastFile(
+            book_id="b",
+            input_hash="h",
+            characters=[
+                Character(id="q", name="the red queen", kind="character"),
+            ],
+        ),
+        d,
+    )
+    assert rename_speaker(d, "q", "Queen of Hearts") == "Queen of Hearts"
+    c = load_artifact(CastFile, d).characters[0]
+    assert c.name == "Queen of Hearts" and "the red queen" in c.aliases
+    import pytest
+
+    with pytest.raises(ValueError):
+        rename_speaker(d, "nope", "X")

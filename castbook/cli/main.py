@@ -567,6 +567,24 @@ def merge(
 
 
 @app.command()
+def rename(
+    book: str,
+    speaker: Annotated[str, typer.Argument(help="speaker id")],
+    name: Annotated[str, typer.Argument(help="new display name")],
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Rename a character's display name (old name kept as an alias)."""
+    from ..analyze.reconcile import rename_speaker
+
+    b = _book(_cfg(config), book)
+    try:
+        typer.echo(f"{speaker} → {rename_speaker(b.dir, speaker, name)}")
+    except (FileNotFoundError, ValueError) as e:
+        typer.echo(str(e))
+        raise typer.Exit(1) from e
+
+
+@app.command()
 def chapters(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,

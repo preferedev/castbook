@@ -132,3 +132,23 @@ def merge_speakers(book_dir: Path, src_id: str, dst_id: str) -> int:
             manifest.units.pop(uid, None)
         save_artifact(manifest, d)
     return touched
+
+
+def rename_speaker(book_dir: Path, speaker_id: str, name: str) -> str:
+    """Rename a character's display name; the old name is kept as an alias."""
+    from ..artifacts import CastFile, load_artifact, save_artifact
+
+    cast = load_artifact(CastFile, Path(book_dir))
+    if cast is None:
+        raise FileNotFoundError(f"{book_dir} — run `castbook analyze` first")
+    c = next((c for c in cast.characters if c.id == speaker_id), None)
+    if c is None:
+        raise ValueError(f"unknown speaker {speaker_id!r}")
+    name = name.strip()
+    if not name or name == c.name:
+        raise ValueError("name is empty or unchanged")
+    if c.name not in c.aliases:
+        c.aliases.append(c.name)
+    c.name = name
+    save_artifact(cast, Path(book_dir))
+    return name
