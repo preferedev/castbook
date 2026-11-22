@@ -72,6 +72,7 @@ _import_lock = threading.Lock()
 
 def _log_to(path: Path) -> Callable[[str], None]:
     lock = threading.Lock()
+    path.parent.mkdir(parents=True, exist_ok=True)
 
     def log(msg: str) -> None:
         with lock, path.open("a") as f:
