@@ -114,7 +114,7 @@ def create_app(cfg: Settings) -> FastAPI:
 
     @app.get("/api/models")
     def models() -> list[dict[str, Any]]:
-        busy = _jobs.get("job:models")
+        busy = _jobs.get("models:pull")
         return [
             {
                 "id": m.id,
@@ -138,7 +138,7 @@ def create_app(cfg: Settings) -> FastAPI:
     def pull_models(ids: str = "") -> dict[str, Any]:
         wanted = [i for i in ids.split(",") if i] or None
         log = _log_to(cfg.models_dir / "models.log")
-        _spawn("job:models", lambda: models_pull(cfg.models_dir, wanted, log=log), log)
+        _spawn("models:pull", lambda: models_pull(cfg.models_dir, wanted, log=log), log)
         return {"ok": True}
 
     @app.post("/api/import")
