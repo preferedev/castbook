@@ -240,13 +240,25 @@ class HeuristicAttributor:
                         if deep and stack:
                             quoted += 1
                 total = sum(len(u.text) for u, _ in run)
+                run_text = " ".join(u.text for u, _ in run)
                 zone = " ".join(_tag_zone(u.text) for u, _ in run)
                 tagged = re.search(SAID_VERBS, zone) is not None
                 left = next(
                     (resolved[j] for j in reversed(seg[:pos]) if resolved[j] in parties),
                     None,
                 )
-                if not left and not tagged and total and quoted / total < 0.3:
+                if (
+                    not left
+                    and not tagged
+                    and total
+                    and quoted / total < 0.3
+                    and not any(
+                        re.search(r"[.!?]\s*$", m.group(1).rstrip())
+                        and len(m.group(1).split()) >= 4
+                        for m in _QUOTED.finditer(run_text)
+                        if m.start() == 0 or not run_text[m.start() - 1].isalpha()
+                    )
+                ):
                     resolved[i] = "narrator"
                     continue
                 spans = [
@@ -278,7 +290,10 @@ class HeuristicAttributor:
                     resolved[i] = named.pop()
                     continue
                 pool = parties or cast_ids
-                cands = [p for p in pool if p not in _addressed(run, names)]
+                dash_owners = _other_owners(run, names)
+                cands = [
+                    p for p in pool if p not in _addressed(run, names) and p not in dash_owners
+                ]
                 if len(cands) == 1:
                     resolved[i] = cands[0]
                     continue
@@ -343,7 +358,10 @@ class HeuristicAttributor:
             prev_speaker = ""
             for i in seg:
                 if resolved[i] is None:
+                    owners = _other_owners(runs[i], names)
                     speaker = prev_speaker or last_speaker or "ambiguous"
+                    if speaker in owners:
+                        speaker = "ambiguous"
                     resolved[i] = speaker
                     if speaker != "ambiguous":
                         for u, _ in runs[i]:
@@ -389,15 +407,23 @@ class HeuristicAttributor:
             if len(raw) <= 3:
                 continue
             pat = re.escape(raw).replace(r"\ ", r"\s+")
-            if re.search(
-                rf"\b({SAID_VERBS})\s+(?!to\b|with\b|for\b|of\b)(?:his|her|their|the)?\s*{pat}",
-                residual,
-                re.IGNORECASE,
-            ):
-                return cid
-            if re.search(rf"\b{pat}\s+\w*\s*({SAID_VERBS})", residual, re.IGNORECASE):
-                return cid
-        hit = _beat_speaker(zone, names)
+            pats = (
+                rf"\b({SAID_VERBS})\s+(?!to\b|with\b|for\b|of\b)"
+                rf"(?:his|her|their|the|le|la|les|l')?\s*{pat}",
+                rf"\b{pat}\s+\w*\s*({SAID_VERBS})",
+            )
+            for k, p in enumerate(pats):
+                for m in re.finditer(p, residual, re.IGNORECASE):
+                    if m.start() >= lead_at:
+                        continue  # tags the next speech, not this quote
+                    if k == 0 and re.search(
+                        r"(?:^|[:.!?…\n\u00ab\u00bb\u201c\u201d\"'\u201e])\s*[\u2014\u2013]\s*"
+                        r"[^\u2014\u2013]{4,200}?[,.!?…;:]\s*$",
+                        residual[: m.start()],
+                    ):
+                        continue  # '— speech, VERB name' — name owns the dash speech
+                    return cid
+        hit = None if lead else _beat_speaker(zone, names)
         if hit:
             return hit
         if re.search(
@@ -533,15 +559,105 @@ def _dedupe(characters: list[Character]) -> list[Character]:
     return out
 
 
+_DASH_SAYS = re.compile(
+    rf"(?:^|[:.!?…\n\u00ab\u00bb\u201c\u201d\"'\u201e])\s*[\u2014\u2013]\s*"
+    rf"[^\u2014\u2013]{{4,200}}?[,.!?…;:]\s*"
+    rf"(?:{SAID_VERBS})\s+{_ART}?\s*({NAME}|(?:{_ART}\s+)?[a-z\u00df-\u017f][\w'\u2019-]*)",
+    re.IGNORECASE,
+)
+
+
+def _dash_speakers(text: str, names: dict[str, str]) -> set[str]:
+    """Names owning an em-dash speech ('— X, dit le gars') when another quote
+    precedes it: the earlier quote belongs to a different speaker."""
+    out: set[str] = set()
+    for m in _DASH_SAYS.finditer(text):
+        if not re.search(r"[\u00ab\u00bb\u201c\u201d\"']", text[: m.start()]):
+            continue
+        hit = next((g for g in m.groups() if g), None)
+        if hit:
+            cid = _lookup(hit, names)
+            if cid:
+                out.add(cid)
+    return out
+
+
+_NAME_SCAN = re.compile(NAME)
+
+_ART_STOP = frozenset(
+    [
+        "le",
+        "la",
+        "les",
+        "l'",
+        "d'",
+        "de",
+        "du",
+        "des",
+        "un",
+        "une",
+        "der",
+        "die",
+        "das",
+        "dem",
+        "den",
+        "ein",
+        "eine",
+        "the",
+        "a",
+        "an",
+    ]
+)
+
+
+def _other_owners(run: list[tuple[Unit, str | None]], names: dict[str, str]) -> set[str]:
+    """Speakers that provably own a *different* speech in this run: a dash
+    speech's tag ('— X, dit le gars') or a colon/dash lead-in announcing the
+    next turn ('Le gars lui cria :'). The unit's own quote is someone else's."""
+    owners = {cid for u, _ in run for cid in _dash_speakers(u.text, names)}
+    tail = " ".join(u.text for u, _ in run).rstrip()
+    if tail.endswith((":", "\u2014", "\u2013")):
+        lead_own = _trailing_says(tail, names)
+        if not lead_own:
+            clause = re.split(r"[.!?»“”]\s*", tail)[-1]
+            for m in _NAME_SCAN.finditer(clause):
+                ext = re.match(
+                    r"\s+([a-z\u00df-\u017f][\w'\u2019-]*(?:\s+[a-z\u00df-\u017f][\w'\u2019-]*){0,2})",
+                    clause[m.end() :],
+                )
+                cands_l = [m.group(1)]
+                if ext:
+                    for w in ext.group(1).split():
+                        cands_l.append(cands_l[-1] + " " + w)
+                lead_own = next(
+                    (cid for cand in reversed(cands_l) if (cid := _lookup(cand, names))),
+                    None,
+                )
+                if lead_own:
+                    break
+        if lead_own:
+            owners.add(lead_own)
+    return owners
+
+
 def _name_index(cast: list[Character]) -> dict[str, str]:
     index: dict[str, str] = {}
     for c in cast:
         for n in [c.name, *c.aliases]:
             index[n] = c.id
+            stripped = re.sub(
+                r"^(?:l'|d'|j'|qu'|de la |du |des |le |la |les |un |une |"
+                r"der |die |das |dem |den |ein |eine )",
+                "",
+                n,
+                flags=re.IGNORECASE,
+            )
+            if stripped != n:
+                index[stripped] = c.id
             parts = n.split()
             if len(parts) > 1:
                 for part in (parts[0], parts[-1]):
-                    if part.lower() not in _NAME_PART_STOP:
+                    if part.lower() not in _NAME_PART_STOP and part.lower() not in _ART_STOP:
                         index[part] = c.id
     return index
 
@@ -553,8 +669,8 @@ _TAIL_WORD = (
 _TAIL_PREP = r"(?:zu|zum|zur|zu dem|to|bei|mit|\u00e0|au|aux|de|a)"
 _TAIL_ADDR = rf"(?:\s*{_TAIL_PREP}\s+(?:{_TAIL_WORD}\s+)?\w+(?:\s+\w+){{0,3}})?"
 _TRAILING_SAYS = re.compile(
-    rf"({NAME}|he|she|I)\s+(?:\w+\s+){{0,4}}(?:{SAID_VERBS}){_TAIL_ADDR}\s*[:\u2014\u2013,-]?\s*$"
-    rf"|(?:{SAID_VERBS})\s+(?:\w+\s+){{0,2}}({NAME}){_TAIL_ADDR}\s*[:\u2014\u2013,-]?\s*$",
+    rf"({NAME}|he|she|I)\s+(?:\w+\s+){{0,4}}(?:{SAID_VERBS}){_TAIL_ADDR}(?:\s*[:\u2014\u2013,-]){{0,2}}\s*$"
+    rf"|(?:{SAID_VERBS})\s+(?:\w+\s+){{0,2}}({NAME}){_TAIL_ADDR}(?:\s*[:\u2014\u2013,-]){{0,2}}\s*$",
     re.IGNORECASE,
 )
 
