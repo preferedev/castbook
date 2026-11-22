@@ -608,7 +608,7 @@ _ART_STOP = frozenset(
 )
 
 
-def _other_owners(run, names: dict[str, str]) -> set[str]:
+def _other_owners(run: list[tuple[Unit, str | None]], names: dict[str, str]) -> set[str]:
     """Speakers that provably own a *different* speech in this run: a dash
     speech's tag ('— X, dit le gars') or a colon/dash lead-in announcing the
     next turn ('Le gars lui cria :'). The unit's own quote is someone else's."""
