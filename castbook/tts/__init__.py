@@ -52,7 +52,11 @@ def _unit_voice(voice: VoiceSpec, emotion: str, speed: float = 1.0) -> VoiceSpec
     factor = EMOTION_SPEED.get(emotion, 1.0) * speed
     if factor == 1.0:
         return voice
-    return voice.model_copy(update={"speed": max(0.7, min(1.4, voice.speed * factor))})
+    # clamp the factor to what keeps voice.speed * factor inside the backend's
+    # range — clamping the product directly could invert the intended direction
+    lo, hi = 0.5 / voice.speed, 2.0 / voice.speed
+    factor = max(lo, min(hi, factor))
+    return voice.model_copy(update={"speed": voice.speed * factor})
 
 
 def _load_lexicon(book: BookPaths, cfg: Settings) -> dict[str, str]:
