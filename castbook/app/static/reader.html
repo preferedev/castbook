@@ -22,6 +22,8 @@
 <div id="bar">
   <button id="prev">⏮</button><button id="back">−15s</button><button id="play">▶</button><button id="fwd">+15s</button><button id="next">⏭</button>
   <button id="sleep" class="ghost" style="color:#aaa">☾</button>
+  <button id="bmk" class="ghost" title="bookmark this spot">☆</button>
+  <select id="bmks" style="max-width:8rem;display:none"></select>
   <span id="pos" style="font-size:.8rem;color:#aaa"></span>
   <select id="spd"><option>1</option><option>1.25</option><option>1.5</option><option>2</option></select>
   <select id="chap" style="max-width:9rem"></select>
@@ -89,6 +91,31 @@ function savePos() {
 }
 setInterval(savePos, 2000);
 window.addEventListener("beforeunload", savePos);
+
+const bkey = `castbook-bmk-${BOOK}`;
+const getBmks = () => JSON.parse(localStorage.getItem(bkey) || "[]");
+function renderBmks() {
+  const b = getBmks(), sel = $("bmks");
+  sel.innerHTML = `<option value="">bookmarks (${b.length})</option>` +
+    b.map((x, i) => `<option value="${i}">★ ch${x.c + 1} — ${esc((x.t || "").slice(0, 34))}</option>`).join("");
+  sel.style.display = b.length ? "" : "none";
+}
+$("bmk").onclick = () => {
+  if (cur < 0) return;
+  const b = getBmks();
+  b.push({i: cur, t: units[cur].text, c: units[cur].chapter, at: audio.currentTime});
+  localStorage.setItem(bkey, JSON.stringify(b));
+  renderBmks();
+  $("bmk").textContent = "★";
+  setTimeout(() => $("bmk").textContent = "☆", 800);
+};
+$("bmks").onchange = e => {
+  if (e.target.value === "") return;
+  const x = getBmks()[+e.target.value];
+  if (x) { playAt(x.i); audio.currentTime = x.at || 0; }
+  e.target.value = "";
+};
+renderBmks();
 
 audio.ontimeupdate = () => {
   const words = cur >= 0 && align[units[cur].id] && align[units[cur].id].w;
