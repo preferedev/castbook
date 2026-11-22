@@ -417,7 +417,7 @@ class HeuristicAttributor:
                     if m.start() >= lead_at:
                         continue  # tags the next speech, not this quote
                     if k == 0 and re.search(
-                        r"(?:^|[:\n\u00ab\u00bb\u201c\u201d\"'\u201e])\s*[\u2014\u2013]\s*"
+                        r"(?:^|[:.!?…\n\u00ab\u00bb\u201c\u201d\"'\u201e])\s*[\u2014\u2013]\s*"
                         r"[^\u2014\u2013]{4,200}?[,.!?…;:]\s*$",
                         residual[: m.start()],
                     ):
@@ -560,7 +560,7 @@ def _dedupe(characters: list[Character]) -> list[Character]:
 
 
 _DASH_SAYS = re.compile(
-    rf"(?:^|[:\n\u00ab\u00bb\u201c\u201d\"'\u201e])\s*[\u2014\u2013]\s*"
+    rf"(?:^|[:.!?…\n\u00ab\u00bb\u201c\u201d\"'\u201e])\s*[\u2014\u2013]\s*"
     rf"[^\u2014\u2013]{{4,200}}?[,.!?…;:]\s*"
     rf"(?:{SAID_VERBS})\s+{_ART}?\s*({NAME}|(?:{_ART}\s+)?[a-z\u00df-\u017f][\w'\u2019-]*)",
     re.IGNORECASE,
