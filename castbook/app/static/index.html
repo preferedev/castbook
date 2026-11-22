@@ -498,9 +498,9 @@ $("align").onclick = () => api(`/api/books/${current}/align`, {method: "POST"}).
 $("stop").onclick = () => api(`/api/books/${current}/cancel`, {method: "POST"}).then(refreshProgress);
 $("preview-gen").onclick = () => api(`/api/books/${current}/generate?limit=50`, {method: "POST"}).then(refreshProgress);
 $("run-all").onclick = () => {
-  if (confirm(`Run the full pipeline on ${current}? (analyze → cast → generate → export)`))
-    const q = $("run-quality").value;
-    api(`/api/books/${current}/run${q ? `?quality=${q}` : ""}`, {method: "POST"}).then(refreshProgress);
+  if (!confirm(`Run the full pipeline on ${current}? (analyze → cast → generate → export)`)) return;
+  const q = $("run-quality").value;
+  api(`/api/books/${current}/run${q ? `?quality=${q}` : ""}`, {method: "POST"}).then(refreshProgress);
 };
 $("merge-btn").onclick = async () => {
   const src = $("merge-src").value, dst = $("merge-dst").value;
