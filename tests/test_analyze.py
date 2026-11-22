@@ -50,3 +50,39 @@ def test_split_units_apostrophe_does_not_close_quote() -> None:
     ch = Chapter(index=0, title="t", text=text, word_count=len(text.split()))
     kinds = [u.kind for u in split_units(ch)]
     assert len(kinds) > 1 and kinds[-1] == "narration", kinds
+
+
+def test_heuristic_long_speech_keeps_speaker_across_pieces() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="alice", name="Alice", aliases=[]),
+        Character(id="bob", name="Bob", aliases=[]),
+    ]
+    speech = "“" + " ".join(" ".join(["word"] * 20) + "." for _ in range(25)) + ",” said Bob."
+    text = "“Hi,” said Alice.\n\n" + speech
+    ch = Chapter(index=0, title="t", text=text, word_count=len(text.split()))
+    units = HeuristicAttributor().attribute(ch, cast)
+    assert len(units) > 3, len(units)
+    assert units[0].speaker == "alice"
+    assert all(u.speaker == "bob" for u in units[1:]), [u.speaker for u in units]
+
+
+def test_heuristic_untagged_turn_alternates() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="alice", name="Alice", aliases=[]),
+        Character(id="bob", name="Bob", aliases=[]),
+    ]
+    text = (
+        "“First,” said Alice.\n\n"
+        "“Second,” said Bob.\n\n"
+        "“Third.”\n\n"
+        "“Fourth.”"
+    )
+    ch = Chapter(index=0, title="t", text=text, word_count=len(text.split()))
+    units = HeuristicAttributor().attribute(ch, cast)
+    assert [u.speaker for u in units] == ["alice", "bob", "alice", "bob"]
