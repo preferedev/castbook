@@ -6,7 +6,6 @@ artifacts, so the UI survives a server restart.
 
 from __future__ import annotations
 
-import shutil
 import tempfile
 import threading
 from collections.abc import Callable
@@ -87,15 +86,17 @@ def create_app(cfg: Settings) -> FastAPI:
     @app.post("/api/import")
     def upload(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
         suffix = Path(file.filename or "").suffix.lower()
-        if suffix not in (".epub", ".txt", ".md"):
+        if suffix not in (".epub", ".txt", ".md", ".pdf"):
             raise HTTPException(400, f"unsupported format {suffix}")
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            shutil.copyfileobj(file.file, tmp, 1 << 20)
-            tmp_path = Path(tmp.name)
-        if tmp_path.stat().st_size > MAX_UPLOAD:
-            tmp_path.unlink()
-            raise HTTPException(413, "file too large")
+        tmp_path = Path(tempfile.mktemp(suffix=suffix))
+        size = 0
         try:
+            with tmp_path.open("wb") as out:
+                while chunk := file.file.read(1 << 20):
+                    size += len(chunk)
+                    if size > MAX_UPLOAD:
+                        raise HTTPException(413, "file too large")
+                    out.write(chunk)
             book = import_book(tmp_path, cfg)
         finally:
             tmp_path.unlink(missing_ok=True)
