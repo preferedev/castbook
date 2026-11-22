@@ -167,13 +167,20 @@ def create_app(cfg: Settings) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/analyze")
-    def analyze(book_id: str) -> dict[str, Any]:
+    def analyze(book_id: str, backend: str | None = None) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
+        if backend is not None and backend not in ("heuristic", "llamacpp"):
+            raise HTTPException(422, f"bad backend {backend!r}")
+        local_cfg = (
+            cfg.model_copy(update={"llm": cfg.llm.model_copy(update={"backend": backend})})
+            if backend is not None
+            else cfg
+        )
         log = _log_to(book.dir / "job.log")
 
         def work() -> None:
-            analyze_book(book, cfg, log)
-            cast_book(book, cfg, log=log)
+            analyze_book(book, local_cfg, log)
+            cast_book(book, local_cfg, log=log)
 
         _spawn(f"analyze:{book_id}", work)
         return {"ok": True}

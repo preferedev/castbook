@@ -84,9 +84,14 @@ def import_cmd(
 def analyze(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    backend: Annotated[
+        str | None, typer.Option("--backend", help="attributor: heuristic|llamacpp")
+    ] = None,
 ) -> None:
     """Extract the cast and attribute speakers (cast.json + attribution.json)."""
     cfg = _cfg(config)
+    if backend is not None:
+        cfg.llm.backend = backend
     analyze_book(_book(cfg, book), cfg)
 
 
