@@ -567,6 +567,22 @@ def merge(
 
 
 @app.command()
+def chapters(
+    book: str,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """List chapter indexes, titles and word counts (for --chapters ranges)."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    ch = load_artifact(ChaptersFile, b.dir)
+    if ch is None:
+        typer.echo("not imported yet")
+        raise typer.Exit(1)
+    for c in ch.chapters:
+        typer.echo(f"{c.index:<5} {c.word_count:>7}  {c.title}")
+
+
+@app.command()
 def search(
     book: str,
     text: Annotated[str, typer.Argument(help="substring to find in unit text")],

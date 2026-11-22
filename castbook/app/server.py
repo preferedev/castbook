@@ -698,6 +698,32 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         _spawn(f"job:{book_id}", work, log)
         return {"ok": True, "popped": popped}
 
+    @app.get("/api/books/{book_id}/chapters")
+    def chapters(book_id: str) -> dict[str, Any]:
+        book = _require_book(cfg, book_id)
+        ch = load_artifact(ChaptersFile, book.dir)
+        if ch is None:
+            raise HTTPException(404, "not imported")
+        manifest = load_artifact(AudioManifest, book.dir)
+        attrib = load_artifact(AttributionFile, book.dir)
+        rendered: Counter[int] = Counter()
+        if manifest and attrib:
+            ch_by_id = {u.id: u.chapter for u in attrib.units}
+            for uid, e in manifest.units.items():
+                if e.status == UnitStatus.done and (c := ch_by_id.get(uid)) is not None:
+                    rendered[c] += 1
+        return {
+            "chapters": [
+                {
+                    "index": c.index,
+                    "title": c.title,
+                    "words": c.word_count,
+                    "rendered": rendered.get(c.index, 0) > 0,
+                }
+                for c in ch.chapters
+            ]
+        }
+
     @app.get("/api/books/{book_id}/chapters/{chapter}/audio")
     def chapter_audio(book_id: str, chapter: int) -> FileResponse:
         book = _require_book(cfg, book_id)

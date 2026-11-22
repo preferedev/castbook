@@ -139,6 +139,11 @@
   </div>
   <div id="q-results" class="muted" style="font-size:.8rem;margin-top:.25rem"></div>
 
+  <details id="ch-details" style="margin-top:1rem">
+    <summary>Chapters</summary>
+    <div id="ch-list" class="muted" style="font-size:.8rem;max-height:16rem;overflow:auto"></div>
+  </details>
+
   <details id="lex-details" style="margin-top:1rem">
     <summary>Pronunciation lexicon</summary>
     <textarea id="lex-txt" rows="6" style="width:100%;font-family:monospace" placeholder='{"Cheshire":"CHEH-shur"}'></textarea>
@@ -259,6 +264,8 @@ async function openBook(id) {
   $("cast-section").style.display = "";
   $("cast-title").textContent = id;
   $("cast-meta").textContent = `${d.units} units · ${d.needs_review.length} need review`;
+  $("q-results").innerHTML = "";
+  $("q").value = "";
   showEstimate();
   const rows = [];
   const speakers = new Set(Object.keys(d.casting));
@@ -285,6 +292,12 @@ async function openBook(id) {
     .map(sp => `<option value="${sp}">${esc(sp)}</option>`).join("");
   $("merge-src").innerHTML = opts;
   $("merge-dst").innerHTML = opts;
+  api(`/api/books/${id}/chapters`).then(r => {
+    $("ch-list").innerHTML = r.chapters.map(c =>
+      `<div>${c.index} · ${esc(c.title)} <span class="muted">${c.words}w</span>` +
+      (c.rendered ? ` <a href="${tok(`/api/books/${id}/chapters/${c.index}/audio`)}" target="_blank">▶</a>` : "") +
+      `</div>`).join("");
+  }).catch(() => {});
   document.querySelectorAll("[data-preview]").forEach(b => b.onclick = async () => {
     const sel = b.closest("tr").querySelector("select, input[data-voice-text]");
     const mix = b.closest("tr").querySelector("input.mix").value.trim();
