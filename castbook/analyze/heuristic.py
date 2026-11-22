@@ -11,7 +11,7 @@ import re
 from collections import Counter
 
 from ..artifacts import Chapter, Character, Unit
-from .units import _inside_quote, quoted_spans, split_units
+from .units import _apostrophe, _inside_quote, split_units
 
 SAID_VERBS = (
     "said|asked|replied|cried|whispered|shouted|exclaimed|answered|continued|"
@@ -133,47 +133,60 @@ class HeuristicAttributor:
     def attribute(self, chapter: Chapter, cast: list[Character]) -> list[Unit]:
         units = split_units(chapter)
         names = _name_index(cast)
-        runs: list[list[Unit]] = []
+        runs: list[list[tuple[Unit, str | None]]] = []
+        run_after_narration: list[bool] = []
         in_quote = False
+        cur_para = -1
+        narr_break = True
         for u in units:
             if u.kind != "dialogue":
                 u.speaker = "narrator"
                 in_quote = False
+                narr_break = True
                 continue
+            if u.paragraph != cur_para:
+                in_quote = False
+                cur_para = u.paragraph
+            hit = self._speaker_for(u.text, names, in_quote)
             if in_quote and runs:
-                runs[-1].append(u)
+                runs[-1].append((u, hit))
             else:
-                runs.append([u])
+                runs.append([(u, hit)])
+                run_after_narration.append(narr_break)
+            narr_break = False
             in_quote = _inside_quote(u.text, in_quote)
         last_speaker = ""
         prev_speaker = ""
-        for run in runs:
-            speaker = next((s for u in run if (s := self._speaker_for(u.text, names))), None)
+        for run, after_narration in zip(runs, run_after_narration, strict=True):
+            if after_narration:
+                last_speaker = prev_speaker = ""
+            speaker = next((s for _, s in run if s), None)
             if speaker is None:
                 speaker = prev_speaker or last_speaker or "ambiguous"
-            for u in run:
+            for u, _ in run:
                 u.speaker = speaker
             if speaker != "ambiguous" and speaker != last_speaker:
                 prev_speaker = last_speaker or prev_speaker
                 last_speaker = speaker
         return units
 
-    def _speaker_for(self, text: str, names: dict[str, str]) -> str | None:
-        if not (quoted_spans(text) or _QUOTE_CHAR.search(text)):
+    def _speaker_for(self, text: str, names: dict[str, str], in_quote: bool = False) -> str | None:
+        zone = _tag_zone(text, in_quote)
+        if not _QUOTE_CHAR.search(zone):
             return None
-        for m in TAG_AFTER.finditer(text):
+        for m in TAG_AFTER.finditer(zone):
             hit = _lookup(m.group(2), names)
             if hit:
                 return hit
-        for m in NAME_SAYS.finditer(text):
+        for m in NAME_SAYS.finditer(zone):
             hit = _lookup(m.group(1), names)
             if hit:
                 return hit
-        if FIRST_PERSON.search(text):
+        if FIRST_PERSON.search(zone):
             hit = _lookup("I", names)
             if hit:
                 return hit
-        residual = quoted_free(text)
+        residual = zone
         for raw, cid in names.items():
             if len(raw) <= 3:
                 continue
@@ -246,12 +259,23 @@ def _gender_of(raw: str) -> str:
     return FIRST_NAME_GENDER.get(first, "unknown")
 
 
-def quoted_free(text: str) -> str:
-    """Text with quoted spans blanked — the zone where speech tags live."""
-    out = text
-    for span in quoted_spans(text):
-        out = out.replace(span, " ", 1)
-    return out
+def _tag_zone(text: str, inside: bool = False) -> str:
+    """Text outside quoted speech — where speaker tags live. Quote marks stay
+    as regex anchors; everything said inside a quote is dropped."""
+    out: list[str] = []
+    for i, ch in enumerate(text):
+        if ch == '"':
+            inside = not inside
+            out.append(ch)
+        elif ch in "\u201c\u2018":
+            inside = True
+            out.append(ch)
+        elif ch in "\u201d\u2019" and not _apostrophe(text, i):
+            inside = False
+            out.append(ch)
+        elif not inside:
+            out.append(ch)
+    return "".join(out)
 
 
 def identity(name: str) -> str:
