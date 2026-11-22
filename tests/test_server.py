@@ -185,7 +185,7 @@ def test_import_from_url(client_setup) -> None:  # type: ignore[no-untyped-def]
     (tmp_path / "book.txt").write_text("CHAPTER I\n\nHello, said Alice.\n" * 5)
     monkeypatch2 = __import__("pytest").MonkeyPatch()
     monkeypatch2.setattr("castbook.net.assert_public_host", lambda url: None)
-    monkeypatch2.setattr("castbook.net.assert_public_peer", lambda resp: None)
+    monkeypatch2.setattr("castbook.net.assert_public_peer", lambda resp, url: None)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     try:
         port = srv.server_address[1]

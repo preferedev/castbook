@@ -596,7 +596,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         if url:
             try:
                 with net.open_url(url, timeout=30) as resp:
-                    net.assert_public_peer(resp)
+                    net.assert_public_peer(resp, resp.geturl())
                     raw = resp.read(MAX_READ_CHARS + 1)
             except net.FetchError as e:
                 raise _http(e) from e
@@ -618,6 +618,9 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         reads_root.mkdir(parents=True, exist_ok=True)
         stale = sorted(reads_root.iterdir(), key=lambda p: p.stat().st_mtime)
         for old in stale[:-31]:  # keep the newest 32 reads
+            job = _jobs.get(f"read:{old.name}")
+            if job is not None and job.is_alive():
+                continue
             shutil.rmtree(old, ignore_errors=True)
         d = reads_root / read_id
         d.mkdir(parents=True)
