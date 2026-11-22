@@ -957,14 +957,18 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         speed = float(spec.get("speed") or 1.0)
         speed = speed if 0 < speed <= 2 else 1.0
         emotion = str(spec.get("emotion", "neutral"))
-        text = str(spec.get("text") or "A quick preview of this voice.")
-        text_key = hashlib.sha256(text[:300].encode()).hexdigest()[:16]
-        out = cfg.data_dir / ".previews" / f"{voice}-{speed}-{emotion}-{text_key}.wav"
+        text = str(spec.get("text") or "A quick preview of this voice.")[:2000]
+        text_key = hashlib.sha256(text.encode()).hexdigest()[:16]
+        out = (
+            cfg.data_dir
+            / ".previews"
+            / f"{voice}-{speed}-{emotion}-{cfg.tts.backend}-{text_key}.wav"
+        )
         out.parent.mkdir(parents=True, exist_ok=True)
         if not out.exists():
             backend = _preview_backend(cfg)
             backend.synthesize(
-                text[:300],
+                text,
                 VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed, emotion=emotion),
                 out,
             )
