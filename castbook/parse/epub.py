@@ -133,10 +133,12 @@ def _merge_stubs(chapters: list[Chapter]) -> list[Chapter]:
     )
     out: list[Chapter] = []
     for i, ch in enumerate(chapters):
-        if i < body_at and out:
-            continue
-        if i < body_at and not out:
-            out.append(ch)
+        if i < body_at:
+            if out:
+                out[-1].text += "\n\n" + ch.text
+                out[-1].word_count += ch.word_count
+            else:
+                out.append(ch)
             continue
         if ch.word_count < MIN_WORDS * 4 and out:
             out[-1].text += "\n\n" + ch.text
