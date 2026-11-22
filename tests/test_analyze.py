@@ -236,3 +236,34 @@ def test_heuristic_alternation_assignment_is_flagged_as_guess() -> None:
     units = HeuristicAttributor().attribute(ch, cast)
     assert [u.guess for u in units] == [False, False, True]
     assert units[2].speaker == "alice"
+
+
+def test_heuristic_stopword_name_parts_do_not_steal_tags() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="tashtego", name="Tashtego", aliases=["the Gay-Header"]),
+        Character(id="crew", name="Crew", aliases=["the seamen"]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Does he fan-tail a little curious, sir?" said the\nGay-Header.',
+        word_count=0,
+    )
+    assert HeuristicAttributor().attribute(ch, cast)[0].speaker == "tashtego"
+
+
+def test_heuristic_wrapped_alias_still_resolves() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [Character(id="ahab", name="Ahab", aliases=["Captain Ahab"])]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Moby Dick?" shouted\nCaptain Ahab.',
+        word_count=0,
+    )
+    assert HeuristicAttributor().attribute(ch, cast)[0].speaker == "ahab"
