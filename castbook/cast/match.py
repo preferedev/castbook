@@ -111,8 +111,13 @@ def _looks_like_preset(name: str) -> bool:
     if "+" in name:
         return True
     p = Path(name)
-    if p.suffix.lower() in {".wav", ".mp3", ".flac"} or p.exists():
+    if p.suffix.lower() in {".wav", ".mp3", ".flac"}:
         return True
+    try:
+        if p.exists():
+            return True
+    except OSError:
+        return False
     return name in (_valid_ids("kokoro") | _valid_ids("pocket"))
 
 
