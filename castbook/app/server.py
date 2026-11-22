@@ -46,7 +46,7 @@ from ..workdir import BookPaths
 
 STATIC = Path(__file__).parent / "static"
 MAX_UPLOAD = 200 * 1024 * 1024
-SUPPORTED_SUFFIXES = (".epub", ".txt", ".md", ".pdf")
+SUPPORTED_SUFFIXES = (".epub", ".txt", ".md", ".pdf", ".mobi", ".azw", ".azw3")
 
 
 def _public_host(url: str) -> None:
