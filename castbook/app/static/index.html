@@ -130,7 +130,8 @@ async function openBook(id) {
       <td class="muted">${esc(role)}</td>
       <td><select data-speaker="${sp}">${voices.map(v =>
         `<option value="${v.id}" ${v.id === cur ? "selected" : ""}>${v.id} — ${esc(v.description)}</option>`
-      ).join("")}</select></td>
+      ).join("")}</select>
+        <input class="spd" data-sp="${sp}" type="number" min="0.5" max="2" step="0.05" value="${d.casting[sp]?.speed ?? 1}" style="width:4rem" title="speed"></td>
       <td><button class="ghost" data-preview="${sp}" type="button">▶</button></td></tr>`);
   }
   $("cast-table").innerHTML = rows.join("");
@@ -154,7 +155,10 @@ async function openBook(id) {
 
 async function saveCast() {
   const overrides = {};
-  document.querySelectorAll("#cast-table select").forEach(s => overrides[s.dataset.speaker] = s.value);
+  document.querySelectorAll("#cast-table select").forEach(s => {
+    const spd = +document.querySelector(`input.spd[data-sp="${s.dataset.speaker}"]`).value;
+    overrides[s.dataset.speaker] = spd === 1 ? s.value : {voice: s.value, speed: spd};
+  });
   await api(`/api/books/${current}/cast`, {
     method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify(overrides)});
 }
@@ -244,7 +248,14 @@ $("merge-btn").onclick = async () => {
 $("export").onclick = async () => {
   $("export").disabled = true;
   $("export").textContent = "Exporting…";
-  await api(`/api/books/${current}/export`, {method: "POST"});
+  try {
+    await api(`/api/books/${current}/export`, {method: "POST"});
+  } catch (e) {
+    $("export").disabled = false;
+    $("export").textContent = "Export";
+    $("prog-label").textContent = e.message;
+    return;
+  }
   const timer = setInterval(async () => {
     try {
       const books = await api(`/api/books`);

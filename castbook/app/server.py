@@ -51,11 +51,17 @@ def _log_to(path: Path) -> Callable[[str], None]:
     return log
 
 
-def _spawn(key: str, target: Callable[[], object]) -> None:
+def _spawn(key: str, target: Callable[[], object], log: Callable[[str], None]) -> None:
+    def wrapped() -> None:
+        try:
+            target()
+        except Exception as e:
+            log(f"[{key.split(':')[0]}] failed: {e}")
+
     with _jobs_lock:
         if key in _jobs and _jobs[key].is_alive():
             raise HTTPException(409, f"{key} already running")
-        t = threading.Thread(target=target, daemon=True)
+        t = threading.Thread(target=wrapped, daemon=True)
         _jobs[key] = t
         t.start()
 
@@ -161,9 +167,19 @@ def create_app(cfg: Settings) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/cast")
-    def set_cast(book_id: str, overrides: dict[str, str]) -> dict[str, Any]:
+    def set_cast(book_id: str, spec: dict[str, Any]) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
-        cast_book(book, cfg, overrides=overrides)
+        voices: dict[str, str] = {}
+        speeds: dict[str, float] = {}
+        for sp, v in spec.items():
+            if isinstance(v, dict):
+                if "voice" in v:
+                    voices[sp] = str(v["voice"])
+                if "speed" in v:
+                    speeds[sp] = float(v["speed"])
+            else:
+                voices[sp] = str(v)
+        cast_book(book, cfg, overrides=voices, speeds=speeds)
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/analyze")
@@ -182,14 +198,14 @@ def create_app(cfg: Settings) -> FastAPI:
             analyze_book(book, local_cfg, log)
             cast_book(book, local_cfg, log=log)
 
-        _spawn(f"analyze:{book_id}", work)
+        _spawn(f"analyze:{book_id}", work, log)
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/generate")
     def generate(book_id: str, limit: Annotated[int | None, Query(ge=1)] = None) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         log = _log_to(book.dir / "job.log")
-        _spawn(f"generate:{book_id}", lambda: generate_book(book, cfg, log=log, limit=limit))
+        _spawn(f"generate:{book_id}", lambda: generate_book(book, cfg, log=log, limit=limit), log)
         return {"ok": True}
 
     @app.post("/api/preview")
@@ -306,7 +322,7 @@ def create_app(cfg: Settings) -> FastAPI:
             outs = export_book(book, cfg, format=format, log=log)
             log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
-        _spawn(f"export:{book_id}", work)
+        _spawn(f"export:{book_id}", work, log)
         return {"started": True}
 
     @app.get("/api/books/{book_id}/download/{name}")
