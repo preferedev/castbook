@@ -38,15 +38,29 @@ def split_units(chapter: Chapter) -> list[Unit]:
     return units
 
 
+def _quote_step(stack: list[str], ch: str, text: str, i: int) -> None:
+    """One char of quote tracking: 'd'/'s' levels so nested quotes of the other
+    kind can't close the enclosing speech."""
+    if ch == '"':
+        if stack and stack[-1] == "d":
+            stack.pop()
+        else:
+            stack.append("d")
+    elif ch == "\u201c":
+        stack.append("d")
+    elif ch == "\u2018":
+        stack.append("s")
+    elif ch == "\u201d" and stack and stack[-1] == "d":
+        stack.pop()
+    elif ch == "\u2019" and not _apostrophe(text, i) and stack and stack[-1] == "s":
+        stack.pop()
+
+
 def _inside_quote(text: str, inside: bool = False) -> bool:
+    stack: list[str] = ["d"] if inside else []
     for i, ch in enumerate(text):
-        if ch == '"':
-            inside = not inside
-        elif ch in "\u201c\u2018":
-            inside = True
-        elif ch in "\u201d\u2019" and not _apostrophe(text, i):
-            inside = False
-    return inside
+        _quote_step(stack, ch, text, i)
+    return bool(stack)
 
 
 def _apostrophe(text: str, i: int) -> bool:
