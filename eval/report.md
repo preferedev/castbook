@@ -1,5 +1,5 @@
 # Castbook attribution eval
-_2026-11-22T19:15:39+00:00Z — heuristic_
+_2026-11-22T19:23:42+00:00Z — heuristic_
 
 | book | units | labeled | correct | accuracy | ambiguous |
 |---|---|---|---|---|---|
@@ -54,3 +54,22 @@ _2026-11-22T19:15:39+00:00Z — heuristic_
 - **treasure-island** `ch001-u0002` expected `long-john-silver` got `jim-hawkins` — '“Yes, my lad,” said he;'
 - **treasure-island** `ch001-u0004` expected `long-john-silver` got `jim-hawkins` — '“Oh!” said he, quite loud, and offering his hand.'
 - **treasure-island** `ch001-u0029` expected `long-john-silver` got `jim-hawkins` — '“Keel-hauling, was you? And a mighty suitable thing, too, and you may\nlay to tha'
+
+## Hybrid run
+
+_2026-11-22 — heuristic + LLM (Qwen3-4B) on uncertain units_
+
+| book | accuracy |
+|---|---|
+| alice-in-wonderland | 95% |
+| dorian-gray | 88% |
+| dr-jekyll-and-mr-hyde | 95% |
+| great-expectations | 100% |
+| huckleberry-finn | 80% |
+| jane-eyre | 100% |
+| moby-dick | 100% |
+| pride-and-prejudice | 85% |
+| sherlock-holmes | 86% |
+| treasure-island | 92% |
+
+Average 92.1% vs 89.3% heuristic-only.
