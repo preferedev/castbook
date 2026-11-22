@@ -247,7 +247,7 @@ async function openBook(id) {
     const role = char ? `${char.role} · ${char.gender} · ${char.vibe || ""}` : "";
     rows.push(`<tr>
       <td>${esc(char?.name || sp)}${sp === "narrator" || sp === "ambiguous" ? " <span class=muted>(reserved)</span>" : ""}</td>
-      <td class="muted">${esc(role)}${n ? ` · ${n} units` : ""}</td>
+      <td class="muted">${esc(role)}${n ? ` · ${n} units` : ""}${d.speaker_stats?.[sp]?.minutes ? ` · ~${d.speaker_stats[sp].minutes} min` : ""}</td>
       <td>${voices.length ? `<select data-speaker="${sp}">${voices.map(v =>
         `<option value="${v.id}" ${v.id === cur ? "selected" : ""}>${v.id} — ${esc(v.description)}</option>`
       ).join("")}${cur && !voices.some(v => v.id === cur) ?

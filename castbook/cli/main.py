@@ -400,6 +400,15 @@ def stats(
     if attrib:
         ambiguous = sum(1 for u in attrib.units if u.speaker == "ambiguous")
         typer.echo(f"units:     {len(attrib.units):,} ({ambiguous} ambiguous)")
+        agg: dict[str, list[float]] = {}
+        for u in attrib.units:
+            a = agg.setdefault(u.speaker, [0, 0, 0.0])
+            a[0] += 1
+            a[1] += len(u.text.split())
+            a[2] += len(u.text) / 15 / 60
+        typer.echo(f"\n{'speaker':24} {'units':>6} {'words':>7} {'~min':>7}")
+        for sp, (n_units, n_words, mins) in sorted(agg.items(), key=lambda kv: -kv[1][2]):
+            typer.echo(f"{sp:24} {int(n_units):>6} {int(n_words):>7} {mins:>7.1f}")
     if casting:
         voices = {v.voice for v in casting.map.values()}
         typer.echo(f"speakers:  {len(casting.map)} on {len(voices)} voices")

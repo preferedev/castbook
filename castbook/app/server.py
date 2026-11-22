@@ -287,6 +287,14 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         cast_f = load_artifact(CastFile, d)
         casting = load_artifact(CastingFile, d)
         attrib = load_artifact(AttributionFile, d)
+        stats: dict[str, dict[str, float | int]] = {}
+        for u in attrib.units if attrib else []:
+            s = stats.setdefault(u.speaker, {"units": 0, "words": 0, "minutes": 0.0})
+            s["units"] += 1
+            s["words"] += len(u.text.split())
+            s["minutes"] += len(u.text) / 15 / 60
+        for s in stats.values():
+            s["minutes"] = round(s["minutes"], 1)
         return {
             "book_id": book_id,
             "characters": [c.model_dump() for c in cast_f.characters] if cast_f else [],
@@ -294,6 +302,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             "needs_review": attrib.needs_review if attrib else [],
             "units": len(attrib.units) if attrib else 0,
             "unit_counts": (dict(Counter(u.speaker for u in attrib.units)) if attrib else {}),
+            "speaker_stats": stats,
         }
 
     @app.get("/api/books/{book_id}/estimate")
