@@ -19,3 +19,4 @@ jobs:
       - run: ruff format --check . && ruff check .
       - run: mypy castbook
       - run: pytest -q
+      - run: python eval/run.py --fail-under 0.5
