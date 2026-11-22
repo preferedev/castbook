@@ -41,7 +41,14 @@ from ..cast.library import LIBRARY
 from ..config import Settings
 from ..models import MANIFEST, resolve_model
 from ..models import pull as models_pull
-from ..pipeline import analyze_book, cast_book, export_book, generate_book, import_book
+from ..pipeline import (
+    analyze_book,
+    cast_book,
+    export_book,
+    generate_book,
+    import_book,
+    set_cover,
+)
 from ..reader import MAX_READ_CHARS, article_text, split_for_reading
 from ..tts.backend import Backend
 from ..workdir import BookPaths
@@ -323,6 +330,22 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 if f.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}:
                     return FileResponse(f)
         raise HTTPException(404, "no cover")
+
+    @app.post("/api/books/{book_id}/cover")
+    async def set_book_cover(book_id: str, file: Annotated[UploadFile, File()]) -> dict[str, str]:
+        book = _require_book(cfg, book_id)
+        data = await file.read(20 * 1024 * 1024 + 1)
+        if len(data) > 20 * 1024 * 1024:
+            raise HTTPException(413, "cover image too large")
+        tmp = book.dir / ".cover-upload"
+        tmp.write_bytes(data)
+        try:
+            name = set_cover(book, tmp)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+        finally:
+            tmp.unlink(missing_ok=True)
+        return {"cover": name}
 
     @app.get("/api/books/{book_id}/lexicon")
     def get_lexicon(book_id: str) -> dict[str, Any]:

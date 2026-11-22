@@ -38,6 +38,50 @@ def import_book(src: Path, cfg: Settings, log: Callable[[str], None] = print) ->
     return book
 
 
+_COVER_MAGIC = (b"\x89PNG", b"\xff\xd8\xff", b"RIFF", b"GIF8", b"BM")
+
+
+def set_cover(book: BookPaths, image: Path) -> str:
+    """Replace the book's cover art. Any ffmpeg-decodable image is normalized to PNG."""
+    import subprocess
+
+    data = image.read_bytes()
+    if not any(data[:16].startswith(sig) for sig in _COVER_MAGIC):
+        raise ValueError("not a png/jpg/webp image")
+    # Decode to PNG via ffmpeg: validates the bytes are a real image and keeps the
+    # result MP4-compatible (raw webp/gif streams can't embed in M4B).
+    proc = subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            "pipe:0",
+            "-frames:v",
+            "1",
+            "-f",
+            "image2pipe",
+            "-vcodec",
+            "png",
+            "pipe:1",
+        ],
+        input=data,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0 or not proc.stdout:
+        raise ValueError("image can't be decoded")
+    for old in book.dir.glob("cover.*"):
+        old.unlink()
+    dest = book.dir / "cover.png"
+    dest.write_bytes(proc.stdout)
+    chapters = load_artifact(ChaptersFile, book.dir)
+    if chapters is not None:
+        chapters.meta.cover_path = dest.name
+        save_artifact(chapters, book.dir)
+    return dest.name
+
+
 def analyze_book(book: BookPaths, cfg: Settings, log: Callable[[str], None] = print) -> Path:
     return analyze.run(book, cfg, log)
 
