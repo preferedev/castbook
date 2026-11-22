@@ -65,6 +65,7 @@
     <div class="row" style="margin-top:.3rem">
       <input id="read-url" placeholder="…or an article URL" size="34">
       <select id="read-voice"></select>
+      <select id="read-dialogue" title="optional second voice for quoted speech"><option value="">same voice for quotes</option></select>
       <label class="muted">speed <input id="read-speed" type="number" value="1.0" min="0.5" max="2" step="0.1" style="width:3.4rem"></label>
       <button id="read-go">Listen</button>
       <span class="muted" id="read-status"></span>
@@ -185,6 +186,8 @@ async function api(path, opts) {
 async function loadVoices() {
   voices = await api("/api/voices");
   $("read-voice").innerHTML = voices.map(v => `<option value="${v.id}">${v.id}</option>`).join("");
+  $("read-dialogue").innerHTML = `<option value="">same voice for quotes</option>` +
+    voices.map(v => `<option value="${v.id}">${v.id}</option>`).join("");
 }
 
 let readId = null, readIdx = 0, readPoll = null;
@@ -193,7 +196,8 @@ async function readNow() {
   if (!text && !url) return;
   $("read-status").textContent = "synthesizing…";
   const r = await api("/api/read", {method: "POST", headers: {"content-type": "application/json"},
-    body: JSON.stringify({text, url, voice: $("read-voice").value, speed: +$("read-speed").value || 1})});
+    body: JSON.stringify({text, url, voice: $("read-voice").value,
+    dialogue: $("read-dialogue").value, speed: +$("read-speed").value || 1})});
   readId = r.id; readIdx = 0;
   const a = $("read-player");
   a.style.display = ""; a.onended = () => { readIdx++; advanceRead(); };

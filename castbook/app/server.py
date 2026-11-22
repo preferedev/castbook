@@ -908,6 +908,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         if len(chunks) > 400:
             raise HTTPException(413, "too long")
         voice = str(spec.get("voice") or "af_sarah")
+        dialogue = str(spec.get("dialogue") or "")
         speed = float(spec.get("speed") or 1.0)
         speed = speed if 0 < speed <= 2 else 1.0
         read_id = secrets.token_hex(6)
@@ -934,11 +935,17 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             try:
                 backend = _preview_backend(cfg)
                 vspec = VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed)
+                vspec_d = (
+                    VoiceSpec(backend=cfg.tts.backend, voice=dialogue, speed=speed)
+                    if dialogue
+                    else None
+                )
                 cancel = _cancels.get(f"read:{read_id}")
                 for i, chunk in enumerate(chunks):
                     if cancel is not None and cancel.is_set():
                         break
-                    backend.synthesize(chunk, vspec, d / f"{i:04}.wav")
+                    use = vspec_d if vspec_d is not None and chunk.lstrip()[:1] in '"“„«' else vspec
+                    backend.synthesize(chunk, use, d / f"{i:04}.wav")
                     status["done"] = i + 1
                     save_status()
             except Exception as e:
