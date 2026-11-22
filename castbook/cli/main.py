@@ -390,7 +390,7 @@ def show_config(
     typer.echo(f"data_dir:  {cfg.data_dir}")
     typer.echo(f"models:    {cfg.models_dir}")
     typer.echo(f"llm:       {cfg.llm.backend}")
-    typer.echo(f"tts:       {cfg.tts.backend}")
+    typer.echo(f"tts:       {cfg.tts.backend} (emotion_strength={cfg.tts.emotion_strength})")
     typer.echo(f"export:    {cfg.export.format}")
 
 
