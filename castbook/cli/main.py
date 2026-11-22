@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import Annotated
 
@@ -70,13 +71,29 @@ def _book(cfg: Settings, book: str) -> BookPaths:
 
 @app.command("import")
 def import_cmd(
-    files: Annotated[list[Path], typer.Argument(exists=True, dir_okay=False)],
+    files: Annotated[
+        list[str],
+        typer.Argument(help="local files (.epub/.txt/.pdf/…) or http(s) ebook URLs"),
+    ],
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Copy books into the library and parse them into chapters."""
     cfg = _cfg(config)
-    for file in files:
-        book = import_book(file, cfg)
+    for src in files:
+        path = Path(src)
+        if src.lower().startswith(("http://", "https://")):
+            from .. import net
+
+            tmp = Path(tempfile.mkdtemp())
+            try:
+                path = net.fetch_book_url(src, tmp)
+            except net.FetchError as e:
+                typer.echo(f"fetch failed: {e}")
+                raise typer.Exit(1) from e
+        if not path.exists() or path.is_dir():
+            typer.echo(f"no such file: {src}")
+            raise typer.Exit(1)
+        book = import_book(path, cfg)
         typer.echo(f"book id: {book.book_id}")
 
 

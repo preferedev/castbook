@@ -6,17 +6,14 @@ artifacts, so the UI survives a server restart.
 
 from __future__ import annotations
 
-import ipaddress
 import os
 import re
 import shutil
-import socket
 import tempfile
 import threading
 import time
 import urllib.error
 import urllib.parse
-import urllib.request
 from collections import Counter
 from collections.abc import Callable
 from io import BytesIO
@@ -26,6 +23,7 @@ from typing import Annotated, Any
 from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
+from .. import net
 from ..artifacts import (
     AttributionFile,
     AudioManifest,
@@ -46,35 +44,12 @@ from ..tts.backend import Backend
 from ..workdir import BookPaths
 
 STATIC = Path(__file__).parent / "static"
-MAX_UPLOAD = 200 * 1024 * 1024
-SUPPORTED_SUFFIXES = (".epub", ".txt", ".md", ".pdf", ".mobi", ".azw", ".azw3")
+MAX_UPLOAD = net.MAX_UPLOAD
+SUPPORTED_SUFFIXES = net.SUPPORTED_SUFFIXES
 
 
-def _public_host(url: str) -> None:
-    host = urllib.parse.urlparse(url).hostname or ""
-    try:
-        ip = ipaddress.ip_address(host)
-        addrs = [ip]
-    except ValueError:
-        try:
-            addrs = [ipaddress.ip_address(i[4][0]) for i in socket.getaddrinfo(host, None)]
-        except (socket.gaierror, ValueError) as e:
-            raise HTTPException(502, f"cannot resolve host {host}") from e
-    if not addrs or not all(a.is_global for a in addrs):
-        raise HTTPException(400, "url host is not public")
-
-
-class _CheckedRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(
-        self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str
-    ) -> Any:
-        if not newurl.lower().startswith(("http://", "https://")):
-            raise HTTPException(400, "redirect to unsupported scheme")
-        _public_host(newurl)
-        return super().redirect_request(req, fp, code, msg, headers, newurl)
-
-
-_url_opener = urllib.request.build_opener(_CheckedRedirect())
+def _http(e: net.FetchError) -> HTTPException:
+    return HTTPException(e.status, str(e))
 
 
 _jobs: dict[str, threading.Thread] = {}
@@ -237,30 +212,10 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         return tmp_path
 
     def _save_url(url: str, tmp_dir: Path) -> Path:
-        if not url.lower().startswith(("http://", "https://")):
-            raise HTTPException(400, "url must start with http:// or https://")
-        _public_host(url)
-        req = urllib.request.Request(url, headers={"User-Agent": "castbook/0.1"})
         try:
-            resp = _url_opener.open(req, timeout=60)
-        except HTTPException:
-            raise
-        except urllib.error.URLError as e:
-            raise HTTPException(502, f"fetch failed: {e.reason}") from e
-        with resp:
-            name = Path(urllib.parse.urlparse(resp.geturl()).path).name or "book.epub"
-            suffix = Path(name).suffix.lower()
-            if suffix not in SUPPORTED_SUFFIXES:
-                raise HTTPException(400, f"unsupported format {suffix or '(none)'}")
-            tmp_path = tmp_dir / name
-            size = 0
-            with tmp_path.open("wb") as out:
-                while chunk := resp.read(1 << 20):
-                    size += len(chunk)
-                    if size > MAX_UPLOAD:
-                        raise HTTPException(413, "file too large")
-                    out.write(chunk)
-        return tmp_path
+            return net.fetch_book_url(url, tmp_dir)
+        except net.FetchError as e:
+            raise _http(e) from e
 
     @app.get("/api/gutenberg")
     def gutenberg(q: str = "", page: int = 1) -> dict[str, Any]:
@@ -270,18 +225,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         if q.strip():
             params["search"] = q.strip()
         url = "https://gutendex.com/books/?" + urllib.parse.urlencode(params)
-        _public_host(url)
-        req = urllib.request.Request(url, headers={"User-Agent": "castbook/0.1"})
         for attempt in range(2):
             try:
-                with _url_opener.open(req, timeout=30) as resp:
+                with net.open_url(url, timeout=30) as resp:
                     data = json.loads(resp.read())
                 break
             except TimeoutError:
                 if attempt:
                     raise HTTPException(502, "gutendex timed out — retry") from None
-            except urllib.error.URLError as e:
-                raise HTTPException(502, f"gutendex failed: {e.reason}") from e
+            except net.FetchError as e:
+                raise HTTPException(502, f"gutendex failed: {e}") from e
         results = []
         for r in data.get("results", []):
             fmts = r.get("formats") or {}
