@@ -77,12 +77,45 @@ def test_heuristic_untagged_turn_alternates() -> None:
         Character(id="alice", name="Alice", aliases=[]),
         Character(id="bob", name="Bob", aliases=[]),
     ]
-    text = (
-        "“First,” said Alice.\n\n"
-        "“Second,” said Bob.\n\n"
-        "“Third.”\n\n"
-        "“Fourth.”"
-    )
+    text = "“First,” said Alice.\n\n“Second,” said Bob.\n\n“Third.”\n\n“Fourth.”"
     ch = Chapter(index=0, title="t", text=text, word_count=len(text.split()))
     units = HeuristicAttributor().attribute(ch, cast)
     assert [u.speaker for u in units] == ["alice", "bob", "alice", "bob"]
+
+
+def test_heuristic_name_says_inside_quote_is_content_not_tag() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="alice", name="Alice", aliases=[]),
+        Character(id="bob", name="Bob", aliases=[]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Alice said nothing," he noted. "All wrong," said Bob.',
+        word_count=0,
+    )
+    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == ["bob"]
+
+
+def test_heuristic_speaker_history_resets_at_narration() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="alice", name="Alice", aliases=[]),
+        Character(id="bob", name="Bob", aliases=[]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text='"Hi," said Alice.\n\nThe sun set.\n\n"Okay?"',
+        word_count=0,
+    )
+    assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == [
+        "alice",
+        "narrator",
+        "ambiguous",
+    ]
