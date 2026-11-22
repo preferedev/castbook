@@ -185,7 +185,7 @@ def test_heuristic_narration_dominant_quote_is_narrator() -> None:
     ch = Chapter(
         index=0,
         title="t",
-        text='She walked to the stone and read aloud the words carved there, '
+        text="She walked to the stone and read aloud the words carved there, "
         '"REST IN PEACE," before turning slowly toward the empty fields beyond.',
         word_count=0,
     )
@@ -311,4 +311,31 @@ def test_heuristic_pronoun_tag_means_the_non_i_party() -> None:
     assert [u.speaker for u in HeuristicAttributor().attribute(ch, cast)] == [
         "pip",
         "magwitch",
+    ]
+
+
+def test_heuristic_action_beat_subject_speaks() -> None:
+    from castbook.analyze.heuristic import HeuristicAttributor
+    from castbook.artifacts import Chapter, Character
+
+    cast = [
+        Character(id="basil", name="Basil Hallward", aliases=["the painter"]),
+        Character(id="dorian", name="Dorian Gray"),
+        Character(id="henry", name="Lord Henry Wotton", aliases=["Lord Henry"]),
+    ]
+    ch = Chapter(
+        index=0,
+        title="t",
+        text=(
+            'The painter hesitated for a moment, and then said, "Harry, '
+            'I want to finish this picture."\n\n'
+            '"You are too charming, Mr. Gray." And Lord Henry flung himself down.'
+        ),
+        word_count=0,
+    )
+    assert [
+        u.speaker for u in HeuristicAttributor().attribute(ch, cast) if u.kind == "dialogue"
+    ] == [
+        "basil",
+        "henry",
     ]

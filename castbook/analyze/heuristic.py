@@ -294,7 +294,7 @@ class HeuristicAttributor:
                 return cid
             if re.search(rf"\b{pat}\s+\w*\s*({SAID_VERBS})", residual, re.IGNORECASE):
                 return cid
-        return None
+        return _beat_speaker(zone, names)
 
 
 TITLE_GENDER = {
@@ -430,6 +430,43 @@ _TRAILING_SAYS = re.compile(
 def _trailing_says(text: str, names: dict[str, str]) -> str | None:
     m = _TRAILING_SAYS.search(text.strip())
     return _lookup(m.group(1), names) if m else None
+
+
+_SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
+
+
+def _subject_name(sent: str, names: dict[str, str]) -> str | None:
+    head = re.sub(
+        r"^(?:And|But|So|Then|Well|Why|Now)\s+",
+        "",
+        sent.lstrip().lstrip("“”\"'").lstrip(),
+    )
+    for raw, cid in names.items():
+        if len(raw) <= 3 or raw in ("I", "he", "she", "they"):
+            continue
+        pat = re.escape(raw).replace(r"\ ", r"\s+")
+        if re.match(rf"{pat}\b", head, re.IGNORECASE):
+            return cid
+    return None
+
+
+def _beat_speaker(zone: str, names: dict[str, str]) -> str | None:
+    tail = zone.strip().rstrip(",:;\u2014\u2013-").strip()
+    if not tail:
+        return None
+    sents = _SENT_SPLIT.split(tail)
+    last = sents[-1]
+    if re.match(r"(?:He|She|They)\b", last):
+        if not re.search(rf"\b{SAID_VERBS}\b", last):
+            return None
+        for prev in reversed(sents[:-1]):
+            hit = _subject_name(prev, names)
+            if hit:
+                return hit
+            if not re.match(r"(?:He|She|They)\b", prev):
+                return None
+        return None
+    return _subject_name(last, names)
 
 
 _PRONOUN_TAG = re.compile(
