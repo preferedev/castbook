@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from typing import cast as tcast
 
-from ..artifacts import Chapter, Character, Unit
+from ..artifacts import Chapter, Character, Emotion, Unit
 from .units import _apostrophe, _inside_quote, _quote_step, split_units
 
 SAID_VERBS = (
@@ -337,6 +338,8 @@ class HeuristicAttributor:
         for run, final_speaker in zip(runs, resolved, strict=True):
             for u, _ in run:
                 u.speaker = final_speaker or "ambiguous"
+                if u.speaker not in ("narrator", "ambiguous"):
+                    u.emotion = _emotion_of(u.text)
         return units
 
     def _speaker_for(self, text: str, names: dict[str, str], in_quote: bool = False) -> str | None:
@@ -653,3 +656,30 @@ def _lookup(raw: str, names: dict[str, str]) -> str | None:
             if part in names:
                 return names[part]
     return None
+
+
+_EMOTION_CUES: list[tuple[Emotion, re.Pattern[str]]] = [
+    (
+        tcast(Emotion, e),
+        re.compile(rf"\b(?:{pat})\w*", re.IGNORECASE),
+    )
+    for e, pat in (
+        ("whispered", r"whisper|murmur|mutter|hush"),
+        ("shouted", r"shout|yell|scream|roar|bellow|thunder|shriek|holler|ejaculat"),
+        ("sad", r"sob|weep|wept|wail|moan|lament|sniff"),
+        ("joyful", r"laugh|chuckle|giggle|rejoice|delight|merr"),
+        ("angry", r"snarl|growl|fum(?:e|ing)|rag(?:e|ing)|seeth|stormed"),
+        ("fearful", r"trembl|stammer|stutter|quaver|gasp|shudder"),
+        ("sarcastic", r"sneer|scoff|scorn|mock|taunt|dryly|drily|archly"),
+    )
+]
+_SHOUT_TEXT = re.compile(r"(?:!{2,}|[A-Z]{2,}[A-Z\s?!,]{8,}!)")
+
+
+def _emotion_of(text: str) -> Emotion:
+    for emotion, pat in _EMOTION_CUES:
+        if pat.search(text):
+            return emotion
+    if _SHOUT_TEXT.search(text):
+        return "shouted"
+    return "neutral"
