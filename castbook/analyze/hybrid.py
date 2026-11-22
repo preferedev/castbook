@@ -33,7 +33,6 @@ class HybridAttributor:
         if not unsure:
             return units
         llm_units = {u.id: u for u in self._llm.attribute(chapter, cast)}
-        cast_ids = {c.id for c in cast}
         for u in units:
             if u.id not in unsure:
                 continue
