@@ -84,8 +84,9 @@ def export_book(
     cfg: Settings,
     log: Callable[[str], None] = print,
     format: str | None = None,
+    layout: str | None = None,
 ) -> list[Path]:
-    return audio.export(book, cfg, log, format=format)
+    return audio.export(book, cfg, log, format=format, layout=layout)
 
 
 def run_book(

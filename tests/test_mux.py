@@ -46,3 +46,23 @@ def test_m4b_has_chapters_and_metadata(tmp_path) -> None:
     assert titles == ["One", "Two"]
     assert float(info["format"]["duration"]) >= 0.9
     assert info["format"]["tags"]["title"] == "T"
+
+
+def test_abs_layout_dirs_and_metadata(tmp_path: Path) -> None:
+    from castbook.audio import abs_layout
+    from castbook.workdir import BookPaths
+
+    book = BookPaths(tmp_path / "books", "x")
+    book.ensure()
+    out = tmp_path / "out.m4b"
+    out.write_bytes(b"data")
+    meta = type(
+        "M", (), {"author": "Jane Austen", "title": "Pride/Prejudice", "cover_path": None}
+    )()
+    dest = abs_layout(book, meta, [out], tmp_path / "abs")
+    assert (dest / "Pride-Prejudice.m4b").exists()
+    import json
+
+    m = json.loads((dest / "metadata.json").read_text())
+    assert m["authors"] == ["Jane Austen"]
+    assert dest.name == "Pride-Prejudice" and dest.parent.name == "Jane Austen"

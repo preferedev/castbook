@@ -154,11 +154,12 @@ def generate(
 def export(
     book: str,
     format: Annotated[str, typer.Option("--format", "-f")] = "m4b",
+    layout: Annotated[str | None, typer.Option("--layout", help="abs for Audiobookshelf")] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Mux finished chapters to M4B or MP3."""
     cfg = _cfg(config)
-    export_book(_book(cfg, book), cfg, format=format)
+    export_book(_book(cfg, book), cfg, format=format, layout=layout)
 
 
 @app.command()
