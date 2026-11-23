@@ -83,6 +83,10 @@ un-rendered units are synthesized.
 Pass `--quality fast\|balanced\|studio` to `castbook run` to pick an
 LLM+TTS backend pair without editing config.toml.
 
+`[tts]` knobs: `emotion_strength` (0–2, default 1) scales how strongly tagged
+emotions bend the voice; `pause_scale` (0–3, default 1) tightens or relaxes
+inter-line pacing — changing it re-assembles chapters without re-rendering.
+
 ## Docker
 
 ```bash
