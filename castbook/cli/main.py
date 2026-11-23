@@ -482,9 +482,47 @@ def estimate(
 @app.command("config")
 def show_config(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    set_: Annotated[
+        list[str] | None,
+        typer.Option("--set", help="persist section.key=value into config.toml"),
+    ] = None,
 ) -> None:
     """Show the effective configuration and where it came from."""
     cfg = _cfg(config)
+    if set_:
+        from ..config import Settings
+
+        for item in set_:
+            key, eq, raw = item.partition("=")
+            sec, dot, field = key.partition(".")
+            if not eq or not dot or sec not in ("llm", "tts", "export"):
+                typer.echo(f"bad --set {item!r} — use section.key=value")
+                raise typer.Exit(1)
+            section = getattr(cfg, sec)
+            if field not in section.model_fields:
+                typer.echo(f"unknown setting {key!r} (have: {', '.join(section.model_fields)})")
+                raise typer.Exit(1)
+            ann = section.model_fields[field].annotation
+            import collections.abc as _abc
+
+            coerce: _abc.Callable[[str], object] = {
+                "float": float,
+                "int": int,
+                "bool": lambda x: x in ("1", "true", "yes"),
+            }.get(getattr(ann, "__name__", ""), str)
+            try:
+                val = coerce(raw)
+            except ValueError:
+                typer.echo(f"{key}: {raw!r} is not a valid value")
+                raise typer.Exit(1) from None
+            setattr(section, field, val)
+        try:
+            Settings.model_validate(cfg.model_dump())
+        except Exception as e:
+            typer.echo(f"invalid settings: {e}")
+            raise typer.Exit(1) from e
+        path = cfg.save()
+        typer.echo(f"saved {', '.join(set_)} → {path}")
     src = getattr(cfg, "_config_path", None)
     typer.echo(f"file:      {src if src and src.exists() else '(defaults — no config.toml)'}")
     typer.echo(f"data_dir:  {cfg.data_dir}")
