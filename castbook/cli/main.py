@@ -1072,7 +1072,11 @@ def books(
         review = (
             f" · {len(attrib.needs_review)} to review" if attrib and attrib.needs_review else ""
         )
-        lang = f" · {chapters.meta.language}" if chapters and chapters.meta.language != "en" else ""
+        lang = (
+            f" · {chapters.meta.language}"
+            if chapters and not chapters.meta.language.startswith("en")
+            else ""
+        )
         typer.echo(f"{d.name:30} {title}{lang}{rendered}{review}")
     if json_:
         typer.echo(json.dumps(rows, indent=2))
