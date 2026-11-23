@@ -57,8 +57,8 @@ class LlmSettings(BaseModel):
 class TtsSettings(BaseModel):
     backend: str = "kokoro"  # kokoro | pocket | qwen
     # scales the emotion→speed deltas (0 = ignore emotion, 1 = full effect)
-    emotion_strength: float = Field(default=1.0, ge=0.0, le=2.0)
-    pause_scale: float = Field(default=1.0, ge=0.0, le=3.0)
+    emotion_strength: float = 1.0
+    pause_scale: float = 1.0
 
 
 class ExportSettings(BaseModel):
@@ -85,6 +85,8 @@ class Settings(BaseModel):
             cfg = cls.model_validate({**tomllib.loads(path.read_text()), **overrides})
         else:
             cfg = cls.model_validate(overrides)
+        cfg.tts.emotion_strength = min(2.0, max(0.0, cfg.tts.emotion_strength))
+        cfg.tts.pause_scale = min(3.0, max(0.0, cfg.tts.pause_scale))
         cfg._config_path = path
         return cfg
 
