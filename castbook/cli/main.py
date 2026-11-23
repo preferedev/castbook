@@ -920,7 +920,7 @@ def stats(
     """Print book metrics: words, units, voices, rendered audio time."""
     cfg = _cfg(config)
     if book is None:
-        n_books = n_units = n_rendered = 0
+        n_books = n_units = n_rendered = n_failed = 0
         chars = 0.0
         for d in cfg.data_dir.iterdir() if cfg.data_dir.is_dir() else ():
             if not d.is_dir():
@@ -938,12 +938,17 @@ def stats(
                 if manifest_f
                 else set()
             )
+            if manifest_f:
+                n_failed += sum(
+                    1 for e in manifest_f.units.values() if e.status == UnitStatus.failed
+                )
             for u in attrib_f.units:
                 if u.id in done_ids:
                     n_rendered += 1
                     chars += len(u.text)
         typer.echo(f"books:     {n_books}")
-        typer.echo(f"units:     {n_units:,} ({n_rendered:,} rendered)")
+        fail_note = f", {n_failed:,} failed" if n_failed else ""
+        typer.echo(f"units:     {n_units:,} ({n_rendered:,} rendered{fail_note})")
         typer.echo(f"audio:     ~{chars / 15 / 60:.0f} min rendered")
         return
     b = _book(cfg, book)
