@@ -74,9 +74,18 @@ un-rendered units are synthesized.
 | `castbook open <book> [--chapter N]` | open the read-along page in a browser |
 | `castbook books --json` | machine-readable library listing |
 | `castbook transcript <book> --merge` | one SRT/VTT/TXT with continuous timestamps |
+| `castbook info <book>` | detailed status: meta, render state, chapter gaps, exports |
+| `castbook log <book>` | tail the book's job log (`-n`, `-f`) |
+| `castbook config --set tts.backend=pocket` | persist a setting without editing TOML |
+| `castbook verify <book> --fix` | drop orphaned manifest entries so lost wavs re-render |
+| `castbook import <f> --title T --author A` | override detected title/author at import |
 
 Pass `--quality fast\|balanced\|studio` to `castbook run` to pick an
 LLM+TTS backend pair without editing config.toml.
+
+`[tts]` knobs: `emotion_strength` (0–2, default 1) scales how strongly tagged
+emotions bend the voice; `pause_scale` (0–3, default 1) tightens or relaxes
+inter-line pacing — changing it re-assembles chapters without re-rendering.
 
 ## Docker
 

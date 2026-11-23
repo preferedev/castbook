@@ -64,7 +64,7 @@ def write_transcript(
             if entry is None or entry.status != UnitStatus.done:
                 continue
             if prev is not None:
-                t += pause_after(prev, u)
+                t += pause_after(prev, u, ch_audio.pause_scale if ch_audio else 1.0)
             if want is None or u.speaker == want:
                 speaker_name = speakers.get(u.speaker, u.speaker)
                 cues.append((t, t + entry.duration_s, speaker_name, u.text))

@@ -91,6 +91,12 @@ def import_cmd(
     lang: Annotated[
         str | None, typer.Option("--lang", help="override detected language (e.g. fr, de)")
     ] = None,
+    title: Annotated[
+        str | None, typer.Option("--title", help="override the detected title")
+    ] = None,
+    author: Annotated[
+        str | None, typer.Option("--author", help="override the detected author")
+    ] = None,
 ) -> None:
     """Copy books into the library and parse them into chapters."""
     cfg = _cfg(config)
@@ -98,6 +104,14 @@ def import_cmd(
     try:
         for path in paths:
             book = import_book(path, cfg, lang=lang)
+            if title or author:
+                ch = load_artifact(ChaptersFile, book.dir)
+                if ch is not None:
+                    if title:
+                        ch.meta.title = title
+                    if author:
+                        ch.meta.author = author
+                    save_artifact(ch, book.dir)
             typer.echo(f"book id: {book.book_id}")
             if chain:
                 analyze_book(book, cfg)
@@ -252,7 +266,17 @@ def export(
 
         ch = load_artifact(ChaptersFile, book_paths.dir)
         title = (ch.meta.title if ch else book_paths.book_id) or book_paths.book_id
-        out = build_media_epub(book_paths, book_paths.export / f"{title}-read-along.epub")
+        only = _chapter_range(chapters)
+        label = ""
+        if only is not None:
+            from ..audio import _range_label
+
+            label = f"-{_range_label(sorted(only))}"
+        out = build_media_epub(
+            book_paths,
+            book_paths.export / f"{title}-read-along{label}.epub",
+            only=only,
+        )
         typer.echo(f"wrote {out}")
 
 
@@ -283,6 +307,78 @@ def transcript(
     typer.echo(
         f"wrote {len(written)} transcript file(s) to {written[0].parent if written else out}"
     )
+
+
+@app.command()
+def log(
+    book: str,
+    lines: Annotated[int, typer.Option("--lines", "-n")] = 30,
+    follow: Annotated[bool, typer.Option("--follow", "-f")] = False,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Tail the book's job log."""
+    import time as _time
+
+    b = _book(_cfg(config), book)
+    path = b.dir / "job.log"
+    if not path.exists():
+        typer.echo("no job log yet")
+        raise typer.Exit(1)
+    typer.echo("\n".join(path.read_text().splitlines()[-lines:]))
+    while follow:
+        size = path.stat().st_size
+        _time.sleep(1)
+        if path.exists() and path.stat().st_size > size:
+            with path.open() as f:
+                f.seek(size)
+                typer.echo(f.read(), nl=False)
+
+
+@app.command()
+def info(
+    book: str,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Detailed status for one book: meta, chapters, render state, exports."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    ch = load_artifact(ChaptersFile, b.dir)
+    if ch is None:
+        typer.echo("not imported yet")
+        raise typer.Exit(1)
+    attrib = load_artifact(AttributionFile, b.dir)
+    manifest = load_artifact(AudioManifest, b.dir)
+    m = ch.meta
+    typer.echo(f"{m.title or b.book_id} ({b.book_id})")
+    typer.echo(f"  by {m.author or '?'} · lang {m.language} · {len(ch.chapters)} chapters")
+    if attrib:
+        speakers = {u.speaker for u in attrib.units}
+        typer.echo(
+            f"  {len(attrib.units)} units · {len(speakers)} speakers"
+            f" · {len(attrib.needs_review)} to review"
+        )
+    if manifest:
+        done = sum(1 for e in manifest.units.values() if e.status == UnitStatus.done)
+        failed = sum(1 for e in manifest.units.values() if e.status == UnitStatus.failed)
+        mins = sum(e.duration_s for e in manifest.units.values()) / 60
+        typer.echo(
+            f"  rendered {done} units ({mins:.1f} min)" + (f" · {failed} failed" if failed else "")
+        )
+        gaps = [
+            str(c.index)
+            for c in ch.chapters
+            if manifest.chapters.get(str(c.index)) is None
+            or manifest.chapters[str(c.index)].status != ChapterStatus.done
+        ]
+        if attrib:
+            typer.echo(f"  unrendered chapters: {','.join(gaps[:20]) or 'none'}")
+    exports = (
+        sorted(str(p.relative_to(b.export)) for p in b.export.rglob("*") if p.is_file())
+        if b.export.is_dir()
+        else []
+    )
+    if exports:
+        typer.echo(f"  exports: {', '.join(exports)}")
 
 
 @app.command()
@@ -386,9 +482,48 @@ def estimate(
 @app.command("config")
 def show_config(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    set_: Annotated[
+        list[str] | None,
+        typer.Option("--set", help="persist section.key=value into config.toml"),
+    ] = None,
 ) -> None:
     """Show the effective configuration and where it came from."""
     cfg = _cfg(config)
+    if set_:
+        from ..config import Settings
+
+        for item in set_:
+            key, eq, raw = item.partition("=")
+            sec, dot, field = key.partition(".")
+            if not eq or not dot or sec not in ("llm", "tts", "export"):
+                typer.echo(f"bad --set {item!r} — use section.key=value")
+                raise typer.Exit(1)
+            section = getattr(cfg, sec)
+            if field not in section.model_fields:
+                typer.echo(f"unknown setting {key!r} (have: {', '.join(section.model_fields)})")
+                raise typer.Exit(1)
+            ann = section.model_fields[field].annotation
+            import collections.abc as _abc
+
+            coercers: dict[str, _abc.Callable[[str], object]] = {
+                "float": float,
+                "int": int,
+                "bool": lambda x: x in ("1", "true", "yes"),
+            }
+            coerce = coercers.get(getattr(ann, "__name__", ""), str)
+            try:
+                val = coerce(raw)
+            except ValueError:
+                typer.echo(f"{key}: {raw!r} is not a valid value")
+                raise typer.Exit(1) from None
+            setattr(section, field, val)
+        try:
+            Settings.model_validate(cfg.model_dump())
+        except Exception as e:
+            typer.echo(f"invalid settings: {e}")
+            raise typer.Exit(1) from e
+        path = cfg.save()
+        typer.echo(f"saved {', '.join(set_)} → {path}")
     src = getattr(cfg, "_config_path", None)
     typer.echo(f"file:      {src if src and src.exists() else '(defaults — no config.toml)'}")
     typer.echo(f"data_dir:  {cfg.data_dir}")
@@ -488,8 +623,14 @@ def watch(
     interval: Annotated[float, typer.Option("--interval", help="poll seconds")] = 5.0,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     lang: Annotated[str | None, typer.Option("--lang", help="override detected language")] = None,
+    move_to: Annotated[
+        Path | None,
+        typer.Option("--move-to", help="move files here after a successful import"),
+    ] = None,
 ) -> None:
     """Watch a folder: import (and optionally analyze/cast) every ebook dropped in."""
+    if move_to is not None:
+        move_to.mkdir(parents=True, exist_ok=True)
     from ..net import supported_suffixes
 
     cfg = _cfg(config)
@@ -524,6 +665,13 @@ def watch(
                     sizes.pop(p, None)
                     seen.add(p)
                     typer.echo(f"imported {p.name} → {book.book_id}")
+                    if move_to is not None:
+                        dest = move_to / p.name
+                        n = 2
+                        while dest.exists():
+                            dest = move_to / f"{p.stem}-{n}{p.suffix}"
+                            n += 1
+                        p.rename(dest)
                     if chain:
                         try:
                             analyze_book(book, cfg)
@@ -551,8 +699,15 @@ def open_book(
     cfg = _cfg(config)
     b = _book(cfg, book)
     url = f"http://localhost:{port}/reader/{b.book_id}"
+    qs: list[str] = []
+    import os
+
+    if t := os.environ.get("CASTBOOK_TOKEN"):
+        qs.append(f"token={t}")
     if chapter is not None:
-        url += f"?ch={chapter}"
+        qs.append(f"ch={chapter}")
+    if qs:
+        url += "?" + "&".join(qs)
     import socket
 
     listening = False
@@ -937,7 +1092,12 @@ def books(
         review = (
             f" · {len(attrib.needs_review)} to review" if attrib and attrib.needs_review else ""
         )
-        typer.echo(f"{d.name:30} {title}{rendered}{review}")
+        lang = (
+            f" · {chapters.meta.language}"
+            if chapters and not chapters.meta.language.startswith("en")
+            else ""
+        )
+        typer.echo(f"{d.name:30} {title}{lang}{rendered}{review}")
     if json_:
         typer.echo(json.dumps(rows, indent=2))
 
@@ -1065,8 +1225,12 @@ def chapters(
     if ch is None:
         typer.echo("not imported yet")
         raise typer.Exit(1)
+    manifest = load_artifact(AudioManifest, b.dir)
     for c in ch.chapters:
-        typer.echo(f"{c.index:<5} {c.word_count:>7}  {c.title}")
+        entry = manifest.chapters.get(str(c.index)) if manifest else None
+        mark = "✓" if entry and entry.status == ChapterStatus.done else " "
+        dur = f" {entry.duration_s / 60:5.1f}m" if entry and entry.duration_s else ""
+        typer.echo(f"{mark} {c.index:<5} {c.word_count:>7}  {c.title}{dur}")
 
 
 @app.command()

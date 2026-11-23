@@ -26,13 +26,15 @@ def silence(seconds: float) -> npt.NDArray[np.float32]:
     return np.zeros(int(seconds * SAMPLE_RATE), dtype=np.float32)
 
 
-def pause_after(prev: Unit, nxt: Unit) -> float:
+def pause_after(prev: Unit, nxt: Unit, scale: float = 1.0) -> float:
     if SCENE_BREAK.search(prev.text.rstrip()[-12:]):
-        return PAUSE_SCENE
-    return PAUSE_SPEAKER if prev.speaker != nxt.speaker else PAUSE_SAME
+        return PAUSE_SCENE * scale
+    return (PAUSE_SPEAKER if prev.speaker != nxt.speaker else PAUSE_SAME) * scale
 
 
-def assemble(units: list[Unit], wav_for: dict[str, Path]) -> npt.NDArray[np.float32]:
+def assemble(
+    units: list[Unit], wav_for: dict[str, Path], pause_scale: float = 1.0
+) -> npt.NDArray[np.float32]:
     parts: list[npt.NDArray[np.float32]] = []
     prev: Unit | None = None
     for u in units:
@@ -40,7 +42,7 @@ def assemble(units: list[Unit], wav_for: dict[str, Path]) -> npt.NDArray[np.floa
         if wav is None or not wav.exists():
             continue
         if prev is not None:
-            parts.append(silence(pause_after(prev, u)))
+            parts.append(silence(pause_after(prev, u) * pause_scale))
         data, sr = sf.read(str(wav), dtype="float32")
         if sr != SAMPLE_RATE:
             raise ValueError(f"{wav}: sample rate {sr}, expected {SAMPLE_RATE}")

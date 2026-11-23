@@ -159,6 +159,7 @@ class ChapterAudio(BaseModel):
     path: str
     duration_s: float
     status: ChapterStatus
+    pause_scale: float = 1.0
 
 
 class AudioManifest(BaseModel):

@@ -49,7 +49,7 @@ def assemble_chapters(book: BookPaths, cfg: Settings, log: Callable[[str], None]
         out = book.chapter_wav(index)
         done = manifest.chapters.get(str(index))
         if done and done.status == ChapterStatus.done and out.exists():
-            stale = False
+            stale = done.pause_scale != cfg.tts.pause_scale
             for u in units:
                 entry = manifest.units.get(u.id)
                 if entry and out.stat().st_mtime < (book.audio / entry.path).stat().st_mtime:
@@ -68,7 +68,7 @@ def assemble_chapters(book: BookPaths, cfg: Settings, log: Callable[[str], None]
             )
             continue
         raw = out.with_suffix(".raw.wav")
-        data = pacing.assemble(units, wav_for)
+        data = pacing.assemble(units, wav_for, pause_scale=cfg.tts.pause_scale)
         sf.write(str(raw), data, SAMPLE_RATE)
         loudnorm(raw, out)
         raw.unlink(missing_ok=True)
@@ -76,6 +76,7 @@ def assemble_chapters(book: BookPaths, cfg: Settings, log: Callable[[str], None]
             path=out.name,
             duration_s=round(len(data) / SAMPLE_RATE, 3),
             status=ChapterStatus.done,
+            pause_scale=cfg.tts.pause_scale,
         )
         log(f"[audio] chapter {index}: {len(data) / SAMPLE_RATE / 60:.1f} min")
 
