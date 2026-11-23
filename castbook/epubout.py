@@ -109,6 +109,8 @@ def build_media_epub(book: BookPaths, out: Path, only: set[int] | None = None) -
                     f'<item id="smil-{cid}" href="{cid}.smil" media-type="application/smil+xml"/>'
                 )
 
+            ch_audio = manifest.chapters.get(str(c.index)) if manifest else None
+            pscale = ch_audio.pause_scale if ch_audio is not None else 1.0
             pars, t, prev = [], 0.0, None
             body_parts = []
             for u in units_by_ch.get(c.index, []):
@@ -117,7 +119,7 @@ def build_media_epub(book: BookPaths, out: Path, only: set[int] | None = None) -
                 if u not in units or entry is None:
                     continue
                 if prev is not None:
-                    t += pause_after(prev, u)
+                    t += pause_after(prev, u, pscale)
                 pars.append(
                     f'<par id="p-{u.id}"><text src="{cid}.xhtml#u-{u.id}"/>'
                     f'<audio src="{audio_rel}" clipBegin="{_smil_time(t)}" '

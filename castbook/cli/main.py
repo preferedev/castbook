@@ -667,8 +667,10 @@ def watch(
                     typer.echo(f"imported {p.name} → {book.book_id}")
                     if move_to is not None:
                         dest = move_to / p.name
-                        if dest.exists():
-                            dest = move_to / f"{p.stem}-{book.book_id}{p.suffix}"
+                        n = 2
+                        while dest.exists():
+                            dest = move_to / f"{p.stem}-{n}{p.suffix}"
+                            n += 1
                         p.rename(dest)
                     if chain:
                         try:

@@ -1304,8 +1304,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
 
                 ch = load_artifact(ChaptersFile, book.dir)
                 title = (ch.meta.title if ch else book_id) or book_id
+                if only:
+                    from ..audio import _range_label
+
+                    label = f"-{_range_label(sorted(only))}"
+                else:
+                    label = ""
                 outs.append(
-                    build_media_epub(book, book.export / f"{title}-read-along.epub", only=only)
+                    build_media_epub(
+                        book, book.export / f"{title}-read-along{label}.epub", only=only
+                    )
                 )
             log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
@@ -1362,7 +1370,10 @@ def _chapter_sel(chapters: str | None) -> set[int]:
             part = part.strip()
             if "-" in part:
                 a, b = (int(x) for x in part.split("-", 1))
-                sel.update(range(min(a, b), max(a, b) + 1))
+                lo, hi = min(a, b), max(a, b)
+                if hi - lo + 1 > 2000 or len(sel) + hi - lo + 1 > 2000:
+                    raise HTTPException(422, f"bad chapters {chapters!r}")
+                sel.update(range(lo, hi + 1))
             elif part:
                 sel.add(int(part))
     except ValueError:

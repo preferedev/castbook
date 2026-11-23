@@ -26,10 +26,10 @@ def silence(seconds: float) -> npt.NDArray[np.float32]:
     return np.zeros(int(seconds * SAMPLE_RATE), dtype=np.float32)
 
 
-def pause_after(prev: Unit, nxt: Unit) -> float:
+def pause_after(prev: Unit, nxt: Unit, scale: float = 1.0) -> float:
     if SCENE_BREAK.search(prev.text.rstrip()[-12:]):
-        return PAUSE_SCENE
-    return PAUSE_SPEAKER if prev.speaker != nxt.speaker else PAUSE_SAME
+        return PAUSE_SCENE * scale
+    return (PAUSE_SPEAKER if prev.speaker != nxt.speaker else PAUSE_SAME) * scale
 
 
 def assemble(
