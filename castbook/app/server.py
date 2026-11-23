@@ -1376,10 +1376,10 @@ def _chapter_sel(chapters: str | None) -> set[int]:
                 sel.update(range(lo, hi + 1))
             elif part:
                 sel.add(int(part))
+            if len(sel) > 2000:
+                raise HTTPException(422, f"bad chapters {chapters!r}")
     except ValueError:
         raise HTTPException(422, f"bad chapters {chapters!r}") from None
-    if len(sel) > 2000:
-        raise HTTPException(422, f"bad chapters {chapters!r}")
     return sel
 
 
