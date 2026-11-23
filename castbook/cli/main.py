@@ -1216,8 +1216,12 @@ def chapters(
     if ch is None:
         typer.echo("not imported yet")
         raise typer.Exit(1)
+    manifest = load_artifact(AudioManifest, b.dir)
     for c in ch.chapters:
-        typer.echo(f"{c.index:<5} {c.word_count:>7}  {c.title}")
+        entry = manifest.chapters.get(str(c.index)) if manifest else None
+        mark = "✓" if entry and entry.status == ChapterStatus.done else " "
+        dur = f" {entry.duration_s / 60:5.1f}m" if entry and entry.duration_s else ""
+        typer.echo(f"{mark} {c.index:<5} {c.word_count:>7}  {c.title}{dur}")
 
 
 @app.command()
