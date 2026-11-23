@@ -505,11 +505,12 @@ def show_config(
             ann = section.model_fields[field].annotation
             import collections.abc as _abc
 
-            coerce: _abc.Callable[[str], object] = {
+            coercers: dict[str, _abc.Callable[[str], object]] = {
                 "float": float,
                 "int": int,
                 "bool": lambda x: x in ("1", "true", "yes"),
-            }.get(getattr(ann, "__name__", ""), str)
+            }
+            coerce = coercers.get(getattr(ann, "__name__", ""), str)
             try:
                 val = coerce(raw)
             except ValueError:
