@@ -735,6 +735,8 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                     if not cancel.is_set():
                         outs = export_book(book, job_cfg, log=log)
                         log(f"[run-all] {bid}: {', '.join(p.name for p in outs)}")
+                except Exception as exc:
+                    log(f"[run-all] {bid} failed: {exc} — continuing")
                 finally:
                     _run_all_current = None
             log("[run-all] library complete")
