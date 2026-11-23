@@ -623,8 +623,14 @@ def watch(
     interval: Annotated[float, typer.Option("--interval", help="poll seconds")] = 5.0,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
     lang: Annotated[str | None, typer.Option("--lang", help="override detected language")] = None,
+    move_to: Annotated[
+        Path | None,
+        typer.Option("--move-to", help="move files here after a successful import"),
+    ] = None,
 ) -> None:
     """Watch a folder: import (and optionally analyze/cast) every ebook dropped in."""
+    if move_to is not None:
+        move_to.mkdir(parents=True, exist_ok=True)
     from ..net import supported_suffixes
 
     cfg = _cfg(config)
@@ -659,6 +665,11 @@ def watch(
                     sizes.pop(p, None)
                     seen.add(p)
                     typer.echo(f"imported {p.name} → {book.book_id}")
+                    if move_to is not None:
+                        dest = move_to / p.name
+                        if dest.exists():
+                            dest = move_to / f"{p.stem}-{book.book_id}{p.suffix}"
+                        p.rename(dest)
                     if chain:
                         try:
                             analyze_book(book, cfg)
