@@ -304,6 +304,31 @@ def transcript(
 
 
 @app.command()
+def log(
+    book: str,
+    lines: Annotated[int, typer.Option("--lines", "-n")] = 30,
+    follow: Annotated[bool, typer.Option("--follow", "-f")] = False,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Tail the book's job log."""
+    import time as _time
+
+    b = _book(_cfg(config), book)
+    path = b.dir / "job.log"
+    if not path.exists():
+        typer.echo("no job log yet")
+        raise typer.Exit(1)
+    typer.echo("\n".join(path.read_text().splitlines()[-lines:]))
+    while follow:
+        size = path.stat().st_size
+        _time.sleep(1)
+        if path.exists() and path.stat().st_size > size:
+            with path.open() as f:
+                f.seek(size)
+                typer.echo(f.read(), nl=False)
+
+
+@app.command()
 def info(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
