@@ -156,6 +156,8 @@ def export_book(
     only: set[int] | None = None,
     split_hours: float | None = None,
 ) -> list[Path]:
+    if layout is not None and layout != "abs":
+        raise ValueError(f"unknown layout {layout!r} (only 'abs' exists)")
     return audio.export(
         book, cfg, log, format=format, layout=layout, only=only, split_hours=split_hours
     )

@@ -291,6 +291,7 @@ def transcript(
     merge: Annotated[
         bool, typer.Option("--merge", help="one file with continuous timestamps")
     ] = False,
+    chapters: Annotated[str | None, typer.Option("--chapters")] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Write per-chapter speaker-labeled transcripts (needs analyze + generate)."""
@@ -300,10 +301,19 @@ def transcript(
     book_paths = _book(cfg, book)
     if fmt not in ("srt", "vtt", "txt"):
         raise typer.BadParameter("fmt must be srt, vtt or txt")
+    only = _chapter_range(chapters)
+    if merge and only:
+        from ..audio import _range_label
+
+        label = f"-{_range_label(sorted(only))}"
+    else:
+        label = ""
     dest = out or (
-        book_paths.dir / "transcript" / f"full.{fmt}" if merge else book_paths.dir / "transcript"
+        book_paths.dir / "transcript" / f"full{label}.{fmt}"
+        if merge
+        else book_paths.dir / "transcript"
     )
-    written = write_transcript(book_paths, dest, fmt, speaker=speaker)
+    written = write_transcript(book_paths, dest, fmt, speaker=speaker, only=only)
     typer.echo(
         f"wrote {len(written)} transcript file(s) to {written[0].parent if written else out}"
     )
@@ -462,13 +472,14 @@ def voices(
 def estimate(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    chapters: Annotated[str | None, typer.Option("--chapters")] = None,
 ) -> None:
     """Estimate render time for the configured backend (rough, CPU-measured)."""
     from ..tts import estimate_render
 
     cfg = _cfg(config)
     try:
-        e = estimate_render(_book(cfg, book), cfg)
+        e = estimate_render(_book(cfg, book), cfg, chapters=_chapter_range(chapters))
     except FileNotFoundError as err:
         typer.echo(str(err))
         raise typer.Exit(1) from err
