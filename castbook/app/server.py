@@ -930,7 +930,11 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
 
     @app.post("/api/books/{book_id}/transcript")
     def make_transcript(
-        book_id: str, fmt: str = "srt", speaker: str | None = None, merged: bool = False
+        book_id: str,
+        fmt: str = "srt",
+        speaker: str | None = None,
+        merged: bool = False,
+        chapters: str | None = None,
     ) -> dict[str, Any]:
         from ..transcript import write_transcript
 
@@ -939,7 +943,9 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             raise HTTPException(400, "fmt must be srt, vtt or txt")
         out = book.dir / "transcript" / f"full.{fmt}" if merged else book.dir / "transcript"
         try:
-            written = write_transcript(book, out, fmt, speaker=speaker)
+            written = write_transcript(
+                book, out, fmt, speaker=speaker, only=_chapter_sel(chapters) or None
+            )
         except ValueError as e:
             raise HTTPException(422, str(e)) from e
         first = int(written[0].stem[2:]) if written and not merged else None

@@ -26,7 +26,11 @@ def _stamp(seconds: float, sep: str = ",") -> str:
 
 
 def write_transcript(
-    book: BookPaths, out_dir: Path, fmt: str = "srt", speaker: str | None = None
+    book: BookPaths,
+    out_dir: Path,
+    fmt: str = "srt",
+    speaker: str | None = None,
+    only: set[int] | None = None,
 ) -> list[Path]:
     """One transcript file per rendered chapter. Returns the written paths."""
     attribution = load_artifact(AttributionFile, book.dir)
@@ -49,6 +53,8 @@ def write_transcript(
     merged: list[tuple[float, float, str, str]] = []
     offset = 0.0
     for ch_index, units in sorted(by_chapter.items()):
+        if only is not None and ch_index not in only:
+            continue
         ch_audio = manifest.chapters.get(str(ch_index))
         if ch_audio is not None and ch_audio.status != ChapterStatus.done:
             continue
