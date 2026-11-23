@@ -465,13 +465,14 @@ def voices(
 def estimate(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    chapters: Annotated[str | None, typer.Option("--chapters")] = None,
 ) -> None:
     """Estimate render time for the configured backend (rough, CPU-measured)."""
     from ..tts import estimate_render
 
     cfg = _cfg(config)
     try:
-        e = estimate_render(_book(cfg, book), cfg)
+        e = estimate_render(_book(cfg, book), cfg, chapters=_chapter_range(chapters))
     except FileNotFoundError as err:
         typer.echo(str(err))
         raise typer.Exit(1) from err

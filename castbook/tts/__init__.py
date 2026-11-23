@@ -270,7 +270,9 @@ _EST_RATE = {"pocket": 6.0, "kokoro": 1.0, "qwen": 0.3}
 _CPS = 15.0
 
 
-def estimate_render(book: BookPaths, cfg: Settings) -> dict[str, float | int | str]:
+def estimate_render(
+    book: BookPaths, cfg: Settings, chapters: set[int] | None = None
+) -> dict[str, float | int | str]:
     """Pending units + a rough render-time estimate for the configured backend."""
     attribution = load_artifact(AttributionFile, book.dir)
     casting = load_artifact(CastingFile, book.dir)
@@ -284,6 +286,8 @@ def estimate_render(book: BookPaths, cfg: Settings) -> dict[str, float | int | s
     language = chapters_file.meta.language if chapters_file else "en"
     pending: list[Unit] = []
     for unit in attribution.units:
+        if chapters is not None and unit.chapter not in chapters:
+            continue
         base = casting.map.get(unit.speaker) or casting.map["narrator"]
         voice = _unit_voice(base, unit.emotion, 1.0, cfg.tts.emotion_strength)
         text = _apply_lexicon(unit.text, lexicon)

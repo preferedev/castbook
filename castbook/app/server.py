@@ -393,12 +393,12 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         }
 
     @app.get("/api/books/{book_id}/estimate")
-    def estimate(book_id: str) -> dict[str, Any]:
+    def estimate(book_id: str, chapters: str | None = None) -> dict[str, Any]:
         from ..tts import estimate_render
 
         book = _require_book(cfg, book_id)
         try:
-            return estimate_render(book, cfg)
+            return estimate_render(book, cfg, chapters=_chapter_sel(chapters) or None)
         except FileNotFoundError as e:
             raise HTTPException(400, str(e)) from e
 

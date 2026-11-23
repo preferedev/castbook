@@ -249,6 +249,7 @@ document.addEventListener("keydown", e => {
   if (e.code === "Space") { e.preventDefault(); $("play").click(); }
   else if (e.code === "ArrowRight") $("next").click();
   else if (e.code === "ArrowLeft") $("prev").click();
+  else if (e.code === "KeyS") $("sleep").click();
   else if (e.code === "ArrowUp" || e.code === "ArrowDown") {
     e.preventDefault();
     const opts = [...$("spd").options].map(o => +o.value);
