@@ -238,6 +238,8 @@ $("sleep").onclick = () => {
   $("sleep").style.color = "#ffd54d";
 };
 setInterval(() => {
+  if (sleepIdx >= 0 && SLEEP_OPTS[sleepIdx] === "ch" && sleepCh === -1 && cur >= 0)
+    sleepCh = units[cur].chapter;
   const hitTime = sleepAt && Date.now() > sleepAt;
   const hitCh = sleepCh >= 0 && cur >= 0 && units[cur].chapter !== sleepCh;
   if (hitTime || hitCh) { audio.pause(); sleepOff(); $("play").textContent = "▶"; }
