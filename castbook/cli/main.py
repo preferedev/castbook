@@ -266,7 +266,11 @@ def export(
 
         ch = load_artifact(ChaptersFile, book_paths.dir)
         title = (ch.meta.title if ch else book_paths.book_id) or book_paths.book_id
-        out = build_media_epub(book_paths, book_paths.export / f"{title}-read-along.epub")
+        out = build_media_epub(
+            book_paths,
+            book_paths.export / f"{title}-read-along.epub",
+            only=_chapter_range(chapters),
+        )
         typer.echo(f"wrote {out}")
 
 

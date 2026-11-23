@@ -1328,7 +1328,9 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
 
                 ch = load_artifact(ChaptersFile, book.dir)
                 title = (ch.meta.title if ch else book_id) or book_id
-                outs.append(build_media_epub(book, book.export / f"{title}-read-along.epub"))
+                outs.append(
+                    build_media_epub(book, book.export / f"{title}-read-along.epub", only=only)
+                )
             log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
         _spawn(f"job:{book_id}", work, log)
