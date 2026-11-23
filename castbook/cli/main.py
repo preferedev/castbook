@@ -264,6 +264,9 @@ def transcript(
     speaker: Annotated[
         str | None, typer.Option("--speaker", help="only this speaker's lines (id or name)")
     ] = None,
+    merge: Annotated[
+        bool, typer.Option("--merge", help="one file with continuous timestamps")
+    ] = False,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Write per-chapter speaker-labeled transcripts (needs analyze + generate)."""
@@ -273,9 +276,10 @@ def transcript(
     book_paths = _book(cfg, book)
     if fmt not in ("srt", "vtt", "txt"):
         raise typer.BadParameter("fmt must be srt, vtt or txt")
-    written = write_transcript(
-        book_paths, out or book_paths.dir / "transcript", fmt, speaker=speaker
+    dest = out or (
+        book_paths.dir / "transcript" / f"full.{fmt}" if merge else book_paths.dir / "transcript"
     )
+    written = write_transcript(book_paths, dest, fmt, speaker=speaker)
     typer.echo(
         f"wrote {len(written)} transcript file(s) to {written[0].parent if written else out}"
     )
@@ -390,7 +394,7 @@ def show_config(
     typer.echo(f"data_dir:  {cfg.data_dir}")
     typer.echo(f"models:    {cfg.models_dir}")
     typer.echo(f"llm:       {cfg.llm.backend}")
-    typer.echo(f"tts:       {cfg.tts.backend}")
+    typer.echo(f"tts:       {cfg.tts.backend} (emotion_strength={cfg.tts.emotion_strength})")
     typer.echo(f"export:    {cfg.export.format}")
 
 
@@ -464,6 +468,7 @@ def meta(
             manifest = load_artifact(AudioManifest, b.dir)
             if manifest is not None:
                 manifest.units.clear()
+                manifest.chapters.clear()
                 save_artifact(manifest, b.dir)
                 typer.echo("audio invalidated — re-render with `castbook generate`")
         ch.meta.language = language
@@ -472,6 +477,102 @@ def meta(
     typer.echo(f"title:    {ch.meta.title}")
     typer.echo(f"author:   {ch.meta.author}")
     typer.echo(f"language: {ch.meta.language}")
+
+
+@app.command()
+def watch(
+    folder: Annotated[Path, typer.Argument(help="directory to watch for new ebooks")],
+    chain: Annotated[
+        bool, typer.Option("--chain", help="also run analyze + cast on each import")
+    ] = False,
+    interval: Annotated[float, typer.Option("--interval", help="poll seconds")] = 5.0,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    lang: Annotated[str | None, typer.Option("--lang", help="override detected language")] = None,
+) -> None:
+    """Watch a folder: import (and optionally analyze/cast) every ebook dropped in."""
+    from ..net import supported_suffixes
+
+    cfg = _cfg(config)
+    if not folder.is_dir():
+        typer.echo(f"{folder}: not a directory")
+        raise typer.Exit(1)
+    exts = set(supported_suffixes())
+    seen = {p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in exts}
+    sizes: dict[Path, int] = {}
+    typer.echo(f"watching {folder} ({len(seen)} existing ebook(s) skipped) — Ctrl-C to stop")
+    try:
+        while True:
+            for p in sorted(folder.iterdir()):
+                if (
+                    p not in seen
+                    and p.is_file()
+                    and p.suffix.lower() in exts
+                    and not p.name.endswith(".part")
+                ):
+                    size = p.stat().st_size
+                    if sizes.get(p) != size:
+                        sizes[p] = size  # still copying — try again next poll
+                        continue
+                    try:
+                        book = import_book(p, cfg, lang=lang)
+                    except Exception as e:
+                        # stable size + failed import: the file is bad, not mid-copy
+                        sizes.pop(p, None)
+                        seen.add(p)
+                        typer.echo(f"{p.name}: import failed: {e}")
+                        continue
+                    sizes.pop(p, None)
+                    seen.add(p)
+                    typer.echo(f"imported {p.name} → {book.book_id}")
+                    if chain:
+                        try:
+                            analyze_book(book, cfg)
+                            cast_book(book, cfg)
+                            typer.echo(f"{book.book_id}: analyzed + cast")
+                        except Exception as e:
+                            typer.echo(f"{book.book_id}: {e}")
+            import time as _t
+
+            _t.sleep(interval)
+    except KeyboardInterrupt:
+        typer.echo("stopped")
+
+
+@app.command(name="open")
+def open_book(
+    book: str,
+    port: Annotated[int, typer.Option("--port", "-p")] = 8484,
+    chapter: Annotated[int | None, typer.Option("--chapter")] = None,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Open a book's read-along page in the browser (server must be running)."""
+    import webbrowser
+
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    url = f"http://localhost:{port}/reader/{b.book_id}"
+    if chapter is not None:
+        url += f"?ch={chapter}"
+    import socket
+
+    listening = False
+    for family, host in (
+        (socket.AF_INET, "127.0.0.1"),
+        (socket.AF_INET6, "::1"),
+    ):
+        try:
+            with socket.socket(family) as sock:
+                sock.settimeout(0.5)
+                if sock.connect_ex((host, port)) == 0:
+                    listening = True
+                    break
+        except OSError:
+            continue
+    if not listening:
+        typer.echo(f"nothing listening on :{port} — run `castbook serve` first")
+        raise typer.Exit(1)
+    typer.echo(url)
+    webbrowser.open(url)
 
 
 @app.command()
@@ -504,6 +605,9 @@ def clean(
 @app.command()
 def verify(
     book: str,
+    fix: Annotated[
+        bool, typer.Option("--fix", help="drop manifest entries whose wav files vanished")
+    ] = False,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
 ) -> None:
     """Health-check a book: coverage, failed units, chapter gaps, stale export."""
@@ -542,6 +646,22 @@ def verify(
         )
         if gaps:
             problems.append(f"missing chapter wavs: {','.join(sorted(gaps, key=int)[:10])}")
+        orphans = [
+            uid
+            for uid, e in manifest.units.items()
+            if e.status == UnitStatus.done and not (b.audio / e.path).exists()
+        ]
+        if orphans:
+            problems.append(
+                f"{len(orphans)} done units lost their wav file"
+                + (" — dropped, rerun generate" if fix else " (verify --fix to drop)")
+            )
+        if (orphans or gaps) and fix:
+            for uid in orphans:
+                del manifest.units[uid]
+            for c in gaps:
+                manifest.chapters.pop(c, None)
+            save_artifact(manifest, b.dir)
         export_dir = b.dir / "export"
         if not export_dir.is_dir() or not any(export_dir.iterdir()):
             problems.append("no exports — run export")
@@ -607,6 +727,14 @@ def doctor(
     mi = detect()
     typer.echo(f"machine:     {mi.tier} · {mi.cores} cores · {mi.ram_gb} GB RAM")
     typer.echo(mi.verdict)
+    free_gb = (
+        shutil.disk_usage(cfg.data_dir.parent if cfg.data_dir.parent.is_dir() else Path.home()).free
+        / 1e9
+    )
+    typer.echo(
+        f"disk free    {free_gb:.1f} GB"
+        + (" — low: a full novel render wants ~2 GB" if free_gb < 2 else "")
+    )
     if cfg.data_dir.is_dir():
         junk = sum(
             1
@@ -704,6 +832,9 @@ def run_cmd(
     epub: Annotated[
         bool, typer.Option("--epub", help="also write a read-along EPUB3 (media overlay)")
     ] = False,
+    chapters: Annotated[
+        str | None, typer.Option("--chapters", help="render+export a subset, e.g. 1-3")
+    ] = None,
 ) -> None:
     """Full pipeline: import → analyze → cast → generate → export."""
     cfg = _cfg(config)
@@ -726,6 +857,7 @@ def run_cmd(
                 lang=lang,
                 split_hours=split,
                 epub=epub,
+                chapters=_chapter_range(chapters),
             )
             typer.echo(f"done: {book.export}")
     finally:
@@ -736,14 +868,18 @@ def run_cmd(
 @app.command()
 def books(
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    json_: Annotated[bool, typer.Option("--json", help="machine-readable output")] = False,
 ) -> None:
     """List imported books."""
     cfg = _cfg(config)
     if not cfg.data_dir.exists():
         typer.echo("(no books yet)")
         return
+    import json
+
     from ..artifacts import load_artifact
 
+    rows = []
     for d in sorted(cfg.data_dir.iterdir()):
         if not d.is_dir() or not (d / "chapters.json").exists():
             continue
@@ -762,12 +898,48 @@ def books(
             else 0
         )
         total = len(attrib.units) if attrib else 0
+        if json_:
+            stage = (
+                "imported"
+                if attrib is None
+                else (
+                    "rendered"
+                    if manifest
+                    and chapters
+                    and len(
+                        [c for c in manifest.chapters.values() if c.status == ChapterStatus.done]
+                    )
+                    == len(chapters.chapters)
+                    else "analyzed"
+                )
+            )
+            rows.append(
+                {
+                    "book_id": d.name,
+                    "title": title,
+                    "language": chapters.meta.language if chapters else None,
+                    "stage": stage,
+                    "chapters": len(chapters.chapters) if chapters else 0,
+                    "chapters_rendered": sum(
+                        1 for c in manifest.chapters.values() if c.status == ChapterStatus.done
+                    )
+                    if manifest
+                    else 0,
+                    "units": total,
+                    "rendered": done,
+                    "failed": failed,
+                    "to_review": len(attrib.needs_review) if attrib else 0,
+                }
+            )
+            continue
         rendered = f" · {done}/{total} rendered" if manifest else " · not rendered"
         rendered += f" · {failed} failed" if failed else ""
         review = (
             f" · {len(attrib.needs_review)} to review" if attrib and attrib.needs_review else ""
         )
         typer.echo(f"{d.name:30} {title}{rendered}{review}")
+    if json_:
+        typer.echo(json.dumps(rows, indent=2))
 
 
 @models_app.command("list")
@@ -819,6 +991,15 @@ def serve(
     shown = f"[{host}]" if ":" in host else host
     tqs = f"?token={token}" if token else ""
     typer.echo(f"OPDS catalog (e-reader apps): http://{shown}:{port}/api/opds{tqs}")
+    if token and host not in ("0.0.0.0", "::"):
+        try:
+            import segno
+
+            url = f"http://{shown}:{port}/?token={token}"
+            typer.echo("scan to open on this network:")
+            segno.make(url).terminal(compact=True)
+        except ImportError:
+            pass
     uvicorn.run(create_app(cfg, token=token), host=host, port=port, log_level="info")
 
 
@@ -826,12 +1007,13 @@ def serve(
 def align(
     book: str,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    chapters: Annotated[str | None, typer.Option("--chapters")] = None,
 ) -> None:
     """Word-level timestamps via faster-whisper (needs castbook[align])."""
     from ..audio import align as align_mod
 
     cfg = _cfg(config)
-    align_mod.run(_book(cfg, book), cfg)
+    align_mod.run(_book(cfg, book), cfg, chapters=_chapter_range(chapters))
 
 
 @app.command()
@@ -923,6 +1105,15 @@ def clone(
         raise typer.Exit(1)
     if not clip.exists():
         typer.echo(f"no such file: {clip}")
+        raise typer.Exit(1)
+    import subprocess
+
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", str(clip)],
+        capture_output=True,
+    )
+    if probe.returncode != 0 or b"duration=" not in probe.stdout:
+        typer.echo(f"{clip.name}: not a readable audio file")
         raise typer.Exit(1)
     cfg = _cfg(config)
     if cfg.tts.backend != "pocket":

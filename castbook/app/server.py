@@ -123,6 +123,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     def webmanifest() -> FileResponse:
         return FileResponse(STATIC / "manifest.json", media_type="application/manifest+json")
 
+    @app.get("/favicon.ico")
+    def favicon() -> FileResponse:
+        return FileResponse(STATIC / "icon-192.png")
+
+    @app.get("/static/icon-{size}.png")
+    def app_icon(size: int) -> FileResponse:
+        if size not in (192, 512):
+            raise HTTPException(404)
+        return FileResponse(STATIC / f"icon-{size}.png")
+
     @app.get("/", response_class=HTMLResponse)
     def index() -> str:
         return _page("index.html")
@@ -149,9 +159,19 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     def put_config(patch: dict[str, Any]) -> dict[str, Any]:
         tts = patch.get("tts") or {}
         backend = tts.get("backend")
+        strength = tts.get("emotion_strength")
+        if backend is not None and backend not in ("kokoro", "pocket", "qwen"):
+            raise HTTPException(422, f"unknown tts backend: {backend}")
+        v: float | None = None
+        if strength is not None:
+            try:
+                v = float(strength)
+            except (TypeError, ValueError):
+                raise HTTPException(422, "emotion_strength must be a number") from None
+            if not 0.0 <= v <= 2.0:
+                raise HTTPException(422, "emotion_strength must be 0..2")
+        # validate first, mutate second — a 422 must not touch config or casting
         if backend is not None:
-            if backend not in ("kokoro", "pocket", "qwen"):
-                raise HTTPException(422, f"unknown tts backend: {backend}")
             cfg.tts.backend = backend
             recast = _drop_mismatched_casting(cfg)
             global _backend
@@ -159,6 +179,8 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
                 _backend = None
         else:
             recast = []
+        if v is not None:
+            cfg.tts.emotion_strength = v
         cfg.save()
         out = cfg.model_dump(mode="json")
         out["recast"] = recast
@@ -743,9 +765,22 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/books/{book_id}/regenerate")
-    def regenerate(book_id: str, chapters: str) -> dict[str, Any]:
+    def regenerate(book_id: str, chapters: str = "", failed: bool = False) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         sel: set[int] = set()
+        if failed:
+            manifest0 = load_artifact(AudioManifest, book.dir)
+            attrib0 = load_artifact(AttributionFile, book.dir)
+            if manifest0 is None or attrib0 is None:
+                raise HTTPException(409, "nothing to regenerate")
+            ch_by_unit = {u.id: u.chapter for u in attrib0.units}
+            sel = {
+                ch_by_unit[uid]
+                for uid, e in manifest0.units.items()
+                if e.status == UnitStatus.failed and uid in ch_by_unit
+            }
+            if not sel:
+                raise HTTPException(404, "no failed units")
         try:
             for part in chapters.split(","):
                 part = part.strip()
@@ -762,7 +797,16 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         manifest = load_artifact(AudioManifest, book.dir)
         if attribution is None or manifest is None:
             raise HTTPException(409, "nothing to regenerate")
-        unit_ids = {u.id for u in attribution.units if u.chapter in sel}
+        if failed:
+            unit_ids = {
+                u.id
+                for u in attribution.units
+                if u.chapter in sel
+                and manifest.units.get(u.id) is not None
+                and manifest.units[u.id].status == UnitStatus.failed
+            }
+        else:
+            unit_ids = {u.id for u in attribution.units if u.chapter in sel}
         popped = sum(1 for uid in unit_ids if uid in manifest.units)
 
         def work() -> None:
@@ -826,6 +870,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             if manifest is not None:
                 popped = len(manifest.units)
                 manifest.units.clear()
+                manifest.chapters.clear()
                 save_artifact(manifest, book.dir)
         return {"ok": True, "meta": m.model_dump(), "audio_invalidated": popped}
 
@@ -912,17 +957,24 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         speed = float(spec.get("speed") or 1.0)
         speed = speed if 0 < speed <= 2 else 1.0
         emotion = str(spec.get("emotion", "neutral"))
-        text = str(spec.get("text") or "A quick preview of this voice.")
-        text_key = hashlib.sha256(text[:300].encode()).hexdigest()[:16]
-        out = cfg.data_dir / ".previews" / f"{voice}-{speed}-{emotion}-{text_key}.wav"
+        text = str(spec.get("text") or "A quick preview of this voice.")[:2000]
+        text_key = hashlib.sha256(text.encode()).hexdigest()[:16]
+        out = (
+            cfg.data_dir
+            / ".previews"
+            / f"{voice}-{speed}-{emotion}-{cfg.tts.backend}-{text_key}.wav"
+        )
         out.parent.mkdir(parents=True, exist_ok=True)
         if not out.exists():
             backend = _preview_backend(cfg)
             backend.synthesize(
-                text[:300],
+                text,
                 VoiceSpec(backend=cfg.tts.backend, voice=voice, speed=speed, emotion=emotion),
                 out,
             )
+            cached = sorted(out.parent.glob("*.wav"), key=lambda f: f.stat().st_mtime)
+            for stale in cached[: max(0, len(cached) - 64)]:
+                stale.unlink(missing_ok=True)
         return FileResponse(out, media_type="audio/wav")
 
     @app.post("/api/read")
@@ -1209,15 +1261,28 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         return {"cancelled": True}
 
     @app.post("/api/books/{book_id}/align")
-    def align_words(book_id: str) -> dict[str, Any]:
+    def align_words(book_id: str, chapters: str | None = None) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
         try:
             from ..audio import align as align_mod
         except ImportError:
             raise HTTPException(422, "install castbook[align] for word timestamps") from None
+        sel: set[int] | None = None
+        if chapters:
+            try:
+                sel = set()
+                for part in chapters.split(","):
+                    lo, _, hi = part.partition("-")
+                    sel.update(range(int(lo), int(hi) + 1) if hi else [int(lo)])
+            except ValueError:
+                raise HTTPException(422, f"bad chapters {chapters!r}") from None
         log = _log_to(book.dir / "job.log")
         log("[align] started")
-        _spawn(f"job:{book_id}", lambda: align_mod.run(book, cfg, log=log), log)
+        _spawn(
+            f"job:{book_id}",
+            lambda: align_mod.run(book, cfg, log=log, chapters=sel),
+            log,
+        )
         return {"started": True}
 
     @app.post("/api/books/{book_id}/export")
@@ -1317,6 +1382,7 @@ def _status(d: Path, ch: ChaptersFile) -> dict[str, Any]:
         "book_id": ch.book_id,
         "title": ch.meta.title,
         "author": ch.meta.author,
+        "language": ch.meta.language,
         "chapters": len(ch.chapters),
         "chapters_rendered": done,
         "stages": stages,

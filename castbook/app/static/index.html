@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#7c3aed">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="manifest" href="/static/manifest.json">
 <title>Castbook</title>
 <style>
@@ -31,10 +32,16 @@
   pre { background:#111; color:#d4d4d4; padding:.75rem; border-radius:8px;
         font-size:.78rem; max-height:220px; overflow:auto; white-space:pre-wrap; }
   .book-head { display:flex; justify-content:space-between; align-items:baseline; }
+  body.dark { --ink:#d8dade; --muted:#8b93a1; --line:#2e333d; --accent:#a78bfa;
+              background:#16181d; }
+  body.dark section, body.dark button.ghost, body.dark input, body.dark select,
+  body.dark textarea { background:#1e2129; color:var(--ink); border-color:var(--line); }
+  body.dark pre { background:#101218; }
 </style>
 </head>
 <body>
-<h1>Castbook <small>— ebooks in, full-cast audiobooks out</small></h1>
+<h1>Castbook <small>— ebooks in, full-cast audiobooks out</small>
+  <button id="thm" class="ghost" style="float:right;font-size:.85rem" title="toggle dark mode">◑</button></h1>
 
 <section>
   <div class="row">
@@ -97,6 +104,7 @@
   </table>
   <div class="row" style="margin-top:.75rem">
     <button id="save-cast" class="ghost">Save casting</button>
+    <button id="audition-all" class="ghost" title="play every voice in turn">▶ all</button>
     <label class="muted" style="font-size:.8rem" title="single-voice: everyone reads as the narrator"><input type="checkbox" id="flat-cast"> 1 voice</label>
     <button id="pack-export" class="ghost" title="download casting as a shareable voice pack">⤓ pack</button>
     <button id="pack-import" class="ghost" title="apply a voice pack file">⤒ pack</button>
@@ -118,6 +126,7 @@
     <input id="gen-chapters" placeholder="ch 1-3,7" style="width:5.5rem" title="chapter range">
     <button id="generate">Generate</button>
     <button id="regen" class="ghost" title="re-render these chapters">↻</button>
+    <button id="retry-failed" class="ghost" style="display:none" title="re-render chapters containing failed units">retry failed</button>
     <button id="play-ch" class="ghost" title="play rendered chapter audio">▶ audio</button>
     <button id="preview-gen" class="ghost">Preview 50</button>
     <select id="export-fmt" title="export format"><option value="m4b">m4b</option><option>mp3</option><option>both</option></select>
@@ -179,6 +188,11 @@
 <script>
 const $ = (id) => document.getElementById(id);
 let current = null, voices = [], pollTimer = null, wasBusy = false;
+if (localStorage.getItem("castbook-dark") === "1") document.body.classList.add("dark");
+$("thm").onclick = () => {
+  document.body.classList.toggle("dark");
+  localStorage.setItem("castbook-dark", document.body.classList.contains("dark") ? "1" : "0");
+};
 
 const CB_TOKEN = document.querySelector('meta[name="cb-token"]')?.content || "";
 const tok = p => CB_TOKEN ? p + (p.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(CB_TOKEN) : p;
@@ -272,6 +286,7 @@ async function loadBooks() {
       <div class="book-head">
         <img src="${tok(`/api/books/${b.book_id}/cover`)}" onerror="this.remove()" style="width:2.2rem;height:2.9rem;object-fit:cover;margin-right:.6rem;border-radius:2px;vertical-align:middle">
         <strong>${esc(b.title)}</strong>
+        ${b.language && b.language !== "en" ? `<span class="muted" style="border:1px solid var(--line);border-radius:4px;padding:0 .3rem;font-size:.7rem">${esc(b.language)}</span>` : ""}
         <span class="muted">${esc(b.author)} · ${b.chapters} ch · ${b.chapters_rendered} rendered</span>
       </div>
       <div class="row" style="margin-top:.5rem">
@@ -365,6 +380,11 @@ async function openBook(id) {
     new Audio(URL.createObjectURL(blob)).play();
     b.textContent = "▶";
   });
+  $("audition-all").onclick = async () => {
+    $("audition-all").disabled = true;
+    for (const b of document.querySelectorAll("[data-preview]")) { await b.onclick(); }
+    $("audition-all").disabled = false;
+  };
   document.querySelectorAll("[data-clone]").forEach(b => b.onclick = () => {
     const inp = document.createElement("input");
     inp.type = "file"; inp.accept = ".wav,.mp3,.flac";
@@ -420,6 +440,7 @@ async function refreshProgress() {
     $("prog-label").textContent = `${p.done}/${p.total} units rendered` + (p.failed ? ` · ${p.failed} failed` : "") + eta;
     if (p.failed && p.failed_units)
       $("prog-label").textContent += ` — ${p.failed_units.slice(0, 5).join(", ")}${p.failed > 5 ? "…" : ""}`;
+    $("retry-failed").style.display = p.failed ? "" : "none";
     if (p.audio_chapters && p.audio_chapters.length) {
       $("ch-play").innerHTML = "listen so far: " + p.audio_chapters.map(n =>
         `<a href="#" data-ch="${n}" style="margin-right:.4rem">▶ ch${n}</a>`).join("");
@@ -538,7 +559,8 @@ async function runSearch() {
   if (!q) return;
   const r = await api(`/api/books/${current}/search?q=` + encodeURIComponent(q));
   $("q-results").innerHTML = r.matches.length
-    ? r.matches.map(m => `<div>ch${m.chapter} · <b>${esc(m.speaker)}</b> — “${esc(m.excerpt)}”</div>`).join("")
+    ? r.matches.map(m => `<div>ch${m.chapter} · <b>${esc(m.speaker)}</b> — “${esc(m.excerpt)}”
+        <a href="${tok(`/api/books/${current}/audio/${m.unit_id}`)}" target="_blank" title="play this unit">▶</a></div>`).join("")
     : "no matches";
 }
 $("q-btn").onclick = runSearch;
@@ -685,6 +707,8 @@ $("generate").onclick = () => {
   const ch = $("gen-chapters").value.trim();
   api(`/api/books/${current}/generate${ch ? `?chapters=${encodeURIComponent(ch)}` : ""}`, {method: "POST"}).then(refreshProgress);
 };
+$("retry-failed").onclick = () =>
+  api(`/api/books/${current}/regenerate?failed=1`, {method: "POST"}).then(refreshProgress);
 $("regen").onclick = () => {
   const ch = $("gen-chapters").value.trim();
   if (!ch) return;

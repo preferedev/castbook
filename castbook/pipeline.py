@@ -171,18 +171,19 @@ def run_book(
     lang: str | None = None,
     split_hours: float | None = None,
     epub: bool = False,
+    chapters: set[int] | None = None,
 ) -> BookPaths:
     book = import_book(src, cfg, log, lang=lang)
     analyze_book(book, cfg, log)
     cast_book(book, cfg, log=log)
-    generate_book(book, cfg, log=log, speed=speed, workers=workers)
-    export_book(book, cfg, log, layout=layout, split_hours=split_hours)
+    generate_book(book, cfg, log=log, speed=speed, workers=workers, chapters=chapters)
+    export_book(book, cfg, log, layout=layout, only=chapters, split_hours=split_hours)
     if epub:
         from .epubout import build_media_epub
 
         ch = load_artifact(ChaptersFile, book.dir)
         title = (ch.meta.title if ch else book.book_id) or book.book_id
-        out = build_media_epub(book, book.export / f"{title}-read-along.epub")
+        out = build_media_epub(book, book.export / f"{title}-read-along.epub", only=chapters)
         log(f"[export] {out.name}")
     return book
 
@@ -207,6 +208,7 @@ def search_units(book_dir: Path, query: str, limit: int = 50) -> list[dict[str, 
         )
         out.append(
             {
+                "unit_id": u.id,
                 "chapter": u.chapter,
                 "speaker_id": u.speaker,
                 "speaker": names.get(u.speaker, u.speaker),

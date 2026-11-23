@@ -2,10 +2,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#7c3aed">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="manifest" href="/static/manifest.json">
 <title>Castbook reader</title>
 <style>
-  body { font:16px/1.7 Georgia, serif; max-width:44rem; margin:2rem auto; padding:0 1rem; color:#1a1a1a; }
+  body { font:16px/1.7 Georgia, serif; max-width:44rem; margin:2rem auto; padding:0 1rem; color:#1a1a1a; background:#fff; transition:background .2s,color .2s; }
+  body.sepia { background:#f6f0e0; color:#4a3f2a; }
+  body.dark { background:#16181d; color:#d8dade; }
+  body.dark .who, body.dark header a { color:#7a8190; }
+  body.dark .u.playing { background:#3d3520; }
+  body.dark .w.playing { background:#6b5a14; }
+  body.sepia .u.playing { background:#f0dcae; }
+  body.sepia .w.playing { background:#e3c078; }
   .u { display:block; margin:0 0 .6rem; padding:.1rem .3rem; border-radius:.2rem; cursor:default; }
   .u[data-audio] { cursor:pointer; }
   .u.playing { background:#fff3c4; }
@@ -23,10 +31,13 @@
 <div id="body"></div>
 <div id="bar">
   <button id="prev">⏮</button><button id="back">−15s</button><button id="play">▶</button><button id="fwd">+15s</button><button id="next">⏭</button>
+  <button id="thm" class="ghost" style="color:#aaa" title="theme">◑</button>
   <button id="sleep" class="ghost" style="color:#aaa">☾</button>
   <button id="bmk" class="ghost" title="bookmark this spot">☆</button>
   <select id="bmks" style="max-width:8rem;display:none"></select>
   <span id="pos" style="font-size:.8rem;color:#aaa"></span>
+  <button id="fminus" class="ghost" style="color:#aaa" title="smaller text">A−</button>
+  <button id="fplus" class="ghost" style="color:#aaa" title="larger text">A+</button>
   <select id="spd"><option>1</option><option>1.25</option><option>1.5</option><option>2</option></select>
   <select id="chap" style="max-width:9rem"></select>
 </div>
@@ -37,6 +48,24 @@ const esc = (s) => s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}
 let units = [], cur = -1, align = {}, curWord = -1;
 const CB_TOKEN = document.querySelector('meta[name="cb-token"]')?.content || "";
 const tok = p => CB_TOKEN ? p + (p.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(CB_TOKEN) : p;
+const FONT_KEY = "castbook-font";
+document.getElementById("body").style.fontSize = localStorage.getItem(FONT_KEY) || "";
+const setFont = d => {
+  const el = document.getElementById("body");
+  const cur = parseFloat(getComputedStyle(el).fontSize);
+  const next = Math.min(28, Math.max(12, cur + d));
+  el.style.fontSize = next + "px";
+  localStorage.setItem(FONT_KEY, next + "px");
+};
+$("fminus").onclick = () => setFont(-1);
+$("fplus").onclick = () => setFont(1);
+const THEMES = ["", "sepia", "dark"];
+document.body.className = localStorage.getItem("castbook-theme") || "";
+$("thm").onclick = () => {
+  const i = (THEMES.indexOf(document.body.className) + 1) % THEMES.length;
+  document.body.className = THEMES[i];
+  localStorage.setItem("castbook-theme", THEMES[i]);
+};
 if (CB_TOKEN) document.getElementById("home-link").href = tok("/");
 const audio = new Audio();
 audio.onended = () => playAt(nextPlayable(cur));
@@ -69,6 +98,16 @@ async function boot() {
     const i = units.findIndex(u => u.chapter === +e.target.value);
     if (i >= 0) { $(`u${i}`).scrollIntoView({block: "start"}); if (units[i].has_audio) playAt(i); }
   };
+  const wantCh = new URLSearchParams(location.search).get("ch");
+  if (wantCh !== null) {
+    const i = units.findIndex(u => u.chapter === +wantCh);
+    if (i >= 0) {
+      $(`u${i}`).scrollIntoView({block: "start"});
+      $("chap").value = String(units[i].chapter);
+      if (units[i].has_audio) playAt(i);
+    }
+    return;
+  }
   const saved = localStorage.getItem(`castbook-pos-${BOOK}`);
   if (saved) {
     const {i, t} = JSON.parse(saved);

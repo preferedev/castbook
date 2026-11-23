@@ -61,11 +61,15 @@ EMOTION_SPEED = {
 }
 
 
-def _unit_voice(voice: VoiceSpec, emotion: str, speed: float = 1.0) -> VoiceSpec:
+def _unit_voice(
+    voice: VoiceSpec, emotion: str, speed: float = 1.0, strength: float = 1.0
+) -> VoiceSpec:
     if voice.speed <= 0:
         return voice
     out = voice if emotion == "neutral" else voice.model_copy(update={"emotion": emotion})
-    factor = EMOTION_SPEED.get(emotion, 1.0) * speed
+    factor = EMOTION_SPEED.get(emotion, 1.0)
+    factor = 1.0 + (factor - 1.0) * max(0.0, strength)
+    factor *= speed
     if factor == 1.0:
         return out
     # clamp the factor to what keeps voice.speed * factor inside the backend's
@@ -136,7 +140,7 @@ def run(
 
     def render(unit: Unit, be: Backend) -> tuple[str, float, str, str, str]:
         base = casting.map.get(unit.speaker) or casting.map["narrator"]
-        voice = _unit_voice(base, unit.emotion, speed)
+        voice = _unit_voice(base, unit.emotion, speed, cfg.tts.emotion_strength)
         text = _apply_lexicon(unit.text, lexicon)
         unit_hash = text_hash(text + voice.model_dump_json() + language)
         wav = book.unit_wav(unit.id)
@@ -146,7 +150,7 @@ def run(
     pending = []
     for unit in units:
         base = casting.map.get(unit.speaker) or casting.map["narrator"]
-        voice = _unit_voice(base, unit.emotion, speed)
+        voice = _unit_voice(base, unit.emotion, speed, cfg.tts.emotion_strength)
         text = _apply_lexicon(unit.text, lexicon)
         unit_hash = text_hash(text + voice.model_dump_json() + language)
         existing = manifest.units.get(unit.id)
@@ -240,7 +244,7 @@ def run(
                 rendered += 1
             except Exception as e:
                 base = casting.map.get(unit.speaker) or casting.map["narrator"]
-                voice = _unit_voice(base, unit.emotion, speed)
+                voice = _unit_voice(base, unit.emotion, speed, cfg.tts.emotion_strength)
                 uh = text_hash(_apply_lexicon(unit.text, lexicon) + voice.model_dump_json())
                 manifest.units[unit.id] = AudioEntry(
                     path="", duration_s=0.0, status=UnitStatus.failed, unit_hash=uh
@@ -281,7 +285,7 @@ def estimate_render(book: BookPaths, cfg: Settings) -> dict[str, float | int | s
     pending: list[Unit] = []
     for unit in attribution.units:
         base = casting.map.get(unit.speaker) or casting.map["narrator"]
-        voice = _unit_voice(base, unit.emotion, 1.0)
+        voice = _unit_voice(base, unit.emotion, 1.0, cfg.tts.emotion_strength)
         text = _apply_lexicon(unit.text, lexicon)
         unit_hash = text_hash(text + voice.model_dump_json() + language)
         existing = manifest.units.get(unit.id)

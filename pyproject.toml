@@ -41,6 +41,10 @@ pocket = [
     "torch>=2.2",
     "pocket-tts>=4.0",
 ]
+qr = [
+    # terminal QR for `castbook serve --host` LAN URLs
+    "segno>=1.6",
+]
 qwen = [
     # quality tier — VoiceDesign needs a GPU (CUDA/MPS); see `castbook doctor`
     "qwen-tts>=0.1",
@@ -77,6 +81,8 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = [
+    "docx.*",
+    "segno.*",
     "ebooklib.*",
     "kokoro_onnx.*",
     "llama_cpp.*",
