@@ -697,8 +697,15 @@ def open_book(
     cfg = _cfg(config)
     b = _book(cfg, book)
     url = f"http://localhost:{port}/reader/{b.book_id}"
+    qs: list[str] = []
+    import os
+
+    if t := os.environ.get("CASTBOOK_TOKEN"):
+        qs.append(f"token={t}")
     if chapter is not None:
-        url += f"?ch={chapter}"
+        qs.append(f"ch={chapter}")
+    if qs:
+        url += "?" + "&".join(qs)
     import socket
 
     listening = False
