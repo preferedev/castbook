@@ -324,7 +324,9 @@ def info(
         if attrib:
             typer.echo(f"  unrendered chapters: {','.join(gaps[:20]) or 'none'}")
     exports = (
-        sorted(p.name for p in b.export.rglob("*") if p.is_file()) if b.export.is_dir() else []
+        sorted(str(p.relative_to(b.export)) for p in b.export.rglob("*") if p.is_file())
+        if b.export.is_dir()
+        else []
     )
     if exports:
         typer.echo(f"  exports: {', '.join(exports)}")
