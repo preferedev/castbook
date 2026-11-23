@@ -91,6 +91,12 @@ def import_cmd(
     lang: Annotated[
         str | None, typer.Option("--lang", help="override detected language (e.g. fr, de)")
     ] = None,
+    title: Annotated[
+        str | None, typer.Option("--title", help="override the detected title")
+    ] = None,
+    author: Annotated[
+        str | None, typer.Option("--author", help="override the detected author")
+    ] = None,
 ) -> None:
     """Copy books into the library and parse them into chapters."""
     cfg = _cfg(config)
@@ -98,6 +104,14 @@ def import_cmd(
     try:
         for path in paths:
             book = import_book(path, cfg, lang=lang)
+            if title or author:
+                ch = load_artifact(ChaptersFile, book.dir)
+                if ch is not None:
+                    if title:
+                        ch.meta.title = title
+                    if author:
+                        ch.meta.author = author
+                    save_artifact(ch, book.dir)
             typer.echo(f"book id: {book.book_id}")
             if chain:
                 analyze_book(book, cfg)
