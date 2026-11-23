@@ -33,8 +33,9 @@
   <button id="prev">⏮</button><button id="back">−15s</button><button id="play">▶</button><button id="fwd">+15s</button><button id="next">⏭</button>
   <button id="thm" class="ghost" style="color:#aaa" title="theme">◑</button>
   <button id="sleep" class="ghost" style="color:#aaa">☾</button>
-  <button id="bmk" class="ghost" title="bookmark this spot">☆</button>
+  <button id="bmk" class="ghost" title="bookmark this spot (b)">☆</button>
   <select id="bmks" style="max-width:8rem;display:none"></select>
+  <button id="bmk-dl" class="ghost" title="download bookmarks as Markdown" style="display:none">⤓</button>
   <span id="pos" style="font-size:.8rem;color:#aaa"></span>
   <button id="fminus" class="ghost" style="color:#aaa" title="smaller text">A−</button>
   <button id="fplus" class="ghost" style="color:#aaa" title="larger text">A+</button>
@@ -160,6 +161,17 @@ function renderBmks() {
   sel.innerHTML = `<option value="">bookmarks (${b.length})</option>` +
     b.map((x, i) => `<option value="${i}">★ ch${x.c + 1} — ${esc((x.t || "").slice(0, 34))}</option>`).join("");
   sel.style.display = b.length ? "" : "none";
+  $("bmk-dl").style.display = b.length ? "" : "none";
+}
+$("bmk-dl").onclick = () => {
+  const b = getBmks();
+  const fmt = t => `${String(Math.floor(t / 60))}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+  const md = "# " + (document.title || "bookmarks") + "\n\n" +
+    b.map(x => `- **ch${x.c + 1} ${fmt(x.at || 0)}** — ${x.t || ""}`).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([md], {type: "text/markdown"}));
+  a.download = "bookmarks.md";
+  a.click();
 }
 $("bmk").onclick = () => {
   if (cur < 0) return;
