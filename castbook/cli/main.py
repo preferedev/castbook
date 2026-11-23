@@ -266,10 +266,16 @@ def export(
 
         ch = load_artifact(ChaptersFile, book_paths.dir)
         title = (ch.meta.title if ch else book_paths.book_id) or book_paths.book_id
+        only = _chapter_range(chapters)
+        label = ""
+        if only is not None:
+            from ..audio import _range_label
+
+            label = f"-{_range_label(sorted(only))}"
         out = build_media_epub(
             book_paths,
-            book_paths.export / f"{title}-read-along.epub",
-            only=_chapter_range(chapters),
+            book_paths.export / f"{title}-read-along{label}.epub",
+            only=only,
         )
         typer.echo(f"wrote {out}")
 
