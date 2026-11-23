@@ -59,8 +59,8 @@ un-rendered units are synthesized.
 | `castbook books` | list books with render progress |
 | `castbook models list\|pull` | model management |
 | `castbook serve -p 8484` | local web UI (`--host 0.0.0.0` shares on LAN behind a printed token) |
-| `castbook transcript <book>` | per-chapter SRT/VTT/TXT with speaker labels (`--fmt`, `-o`, `--speaker name` for one character) |
-| `castbook estimate <book>` | rough render-time estimate for the configured backend |
+| `castbook transcript <book>` | per-chapter SRT/VTT/TXT with speaker labels (`--fmt`, `-o`, `--speaker name` for one character, `--chapters` for a subset) |
+| `castbook estimate <book>` | rough render-time estimate for the configured backend (`--chapters` subsets it) |
 | `castbook cover <book> <img>` | set custom cover art (any ffmpeg-decodable image → normalized PNG) |
 | `castbook voicepack export\|import` | shareable JSON casting presets across books |
 | `castbook stats <book>` | book metrics + per-speaker units/words/~minutes table |

@@ -85,6 +85,7 @@ class Settings(BaseModel):
             cfg = cls.model_validate({**tomllib.loads(path.read_text()), **overrides})
         else:
             cfg = cls.model_validate(overrides)
+        cfg.clamp()
         cfg._config_path = path
         return cfg
 
@@ -92,8 +93,13 @@ class Settings(BaseModel):
         path.write_text(DEFAULT_CONFIG)
         return path
 
+    def clamp(self) -> None:
+        self.tts.emotion_strength = min(2.0, max(0.0, self.tts.emotion_strength))
+        self.tts.pause_scale = min(3.0, max(0.0, self.tts.pause_scale))
+
     def save(self, path: Path | None = None) -> Path:
         path = path or self._config_path or Path(os.environ.get("CASTBOOK_CONFIG", "config.toml"))
+        self.clamp()
         lines = [
             f"data_dir = {_toml_val(str(self.data_dir))}",
             f"models_dir = {_toml_val(str(self.models_dir))}",
