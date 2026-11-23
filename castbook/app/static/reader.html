@@ -226,13 +226,22 @@ $("next").onclick = () => playAt(nextPlayable(cur));
 $("prev").onclick = () => playAt(prevPlayable(cur));
 $("back").onclick = () => audio.currentTime = Math.max(0, audio.currentTime - 15);
 $("fwd").onclick = () => audio.currentTime += 15;
-let sleepAt = null;
+const SLEEP_OPTS = [15, 30, 45, "ch"];
+let sleepAt = null, sleepIdx = -1, sleepCh = -1;
+const sleepOff = () => { sleepAt = null; sleepIdx = -1; sleepCh = -1; $("sleep").textContent = "☾"; $("sleep").style.color = "#aaa"; };
 $("sleep").onclick = () => {
-  sleepAt = sleepAt ? null : Date.now() + 15 * 60e3;
-  $("sleep").style.color = sleepAt ? "#ffd54d" : "#aaa";
-  $("sleep").textContent = sleepAt ? "☾ 15m" : "☾";
+  sleepIdx = (sleepIdx + 1) % (SLEEP_OPTS.length + 1);
+  if (sleepIdx === SLEEP_OPTS.length) { sleepOff(); return; }
+  const opt = SLEEP_OPTS[sleepIdx];
+  if (opt === "ch") { sleepAt = null; sleepCh = cur >= 0 ? units[cur].chapter : -1; $("sleep").textContent = "☾ ch"; }
+  else { sleepAt = Date.now() + opt * 60e3; sleepCh = -1; $("sleep").textContent = `☾ ${opt}m`; }
+  $("sleep").style.color = "#ffd54d";
 };
-setInterval(() => { if (sleepAt && Date.now() > sleepAt) { audio.pause(); sleepAt = null; $("sleep").textContent = "☾"; $("sleep").style.color = "#aaa"; $("play").textContent = "▶"; } }, 5000);
+setInterval(() => {
+  const hitTime = sleepAt && Date.now() > sleepAt;
+  const hitCh = sleepCh >= 0 && cur >= 0 && units[cur].chapter !== sleepCh;
+  if (hitTime || hitCh) { audio.pause(); sleepOff(); $("play").textContent = "▶"; }
+}, 3000);
 document.addEventListener("keydown", e => {
   if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
   if (e.code === "Space") { e.preventDefault(); $("play").click(); }
