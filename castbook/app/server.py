@@ -604,21 +604,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         export: bool = False,
     ) -> dict[str, Any]:
         book = _require_book(cfg, book_id)
-        sel: set[int] | None = None
-        if chapters:
-            try:
-                sel = set()
-                for part in chapters.split(","):
-                    part = part.strip()
-                    if "-" in part:
-                        a, b = (int(x) for x in part.split("-", 1))
-                        sel.update(range(min(a, b), max(a, b) + 1))
-                    elif part:
-                        sel.add(int(part))
-                if len(sel) > 2000:
-                    raise ValueError("range too wide")
-            except ValueError as e:
-                raise HTTPException(422, f"bad chapters {chapters!r}") from e
+        sel = _chapter_sel(chapters) or None
         if export and limit is not None:
             raise HTTPException(422, "export needs chapter assembly — drop limit or export after")
         log = _log_to(book.dir / "job.log")
@@ -648,9 +634,11 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         quality: str | None = None,
         epub: bool = False,
         split: float | None = None,
+        chapters: str | None = None,
     ) -> dict[str, Any]:
         """Full pipeline in one job: analyze → cast → generate → export."""
         book = _require_book(cfg, book_id)
+        only = _chapter_sel(chapters) or None
         log = _log_to(book.dir / "job.log")
         job_cfg = cfg
         if quality is not None:
@@ -669,16 +657,18 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             cast_book(book, job_cfg, log=log)
             if cancel.is_set():
                 return
-            generate_book(book, job_cfg, log=log, cancel=cancel)
+            generate_book(book, job_cfg, log=log, cancel=cancel, chapters=only)
             if not cancel.is_set():
                 log("[export] started")
-                outs = export_book(book, job_cfg, log=log, split_hours=split)
+                outs = export_book(book, job_cfg, log=log, split_hours=split, only=only)
                 if epub:
                     from ..epubout import build_media_epub
 
                     ch = load_artifact(ChaptersFile, book.dir)
                     title = (ch.meta.title if ch else book_id) or book_id
-                    outs.append(build_media_epub(book, book.export / f"{title}-read-along.epub"))
+                    outs.append(
+                        build_media_epub(book, book.export / f"{title}-read-along.epub", only=only)
+                    )
                 log(f"[export] wrote {', '.join(p.name for p in outs)}")
 
         _spawn(f"job:{book_id}", work, log)
@@ -783,16 +773,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             }
             if not sel:
                 raise HTTPException(404, "no failed units")
-        try:
-            for part in chapters.split(","):
-                part = part.strip()
-                if "-" in part:
-                    a, b = (int(x) for x in part.split("-", 1))
-                    sel.update(range(min(a, b), max(a, b) + 1))
-                elif part:
-                    sel.add(int(part))
-        except ValueError:
-            raise HTTPException(422, f"bad chapters {chapters!r}") from None
+        sel |= _chapter_sel(chapters)
         if not sel or len(sel) > 2000:
             raise HTTPException(422, f"bad chapters {chapters!r}")
         attribution = load_artifact(AttributionFile, book.dir)
@@ -1269,15 +1250,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             from ..audio import align as align_mod
         except ImportError:
             raise HTTPException(422, "install castbook[align] for word timestamps") from None
-        sel: set[int] | None = None
-        if chapters:
-            try:
-                sel = set()
-                for part in chapters.split(","):
-                    lo, _, hi = part.partition("-")
-                    sel.update(range(int(lo), int(hi) + 1) if hi else [int(lo)])
-            except ValueError:
-                raise HTTPException(422, f"bad chapters {chapters!r}") from None
+        sel = _chapter_sel(chapters) or None
         log = _log_to(book.dir / "job.log")
         log("[align] started")
         _spawn(
@@ -1301,15 +1274,7 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
             raise HTTPException(422, f"bad format {format!r}")
         if layout is not None and layout not in ("abs",):
             raise HTTPException(422, f"bad layout {layout!r}")
-        only: set[int] | None = None
-        if chapters:
-            try:
-                only = set()
-                for part in chapters.split(","):
-                    lo, _, hi = part.strip().partition("-")
-                    only.update(range(int(lo), int(hi) + 1) if hi else [int(lo)])
-            except ValueError:
-                raise HTTPException(422, f"bad chapters {chapters!r}") from None
+        only = _chapter_sel(chapters) or None
         log = _log_to(book.dir / "job.log")
         log(f"[export] started ({format or cfg.export.format})")
 
@@ -1374,6 +1339,26 @@ def _require_book(cfg: Settings, book_id: str) -> BookPaths:
     if d == root or root not in d.parents or not d.is_dir():
         raise HTTPException(404, "unknown book")
     return book
+
+
+def _chapter_sel(chapters: str | None) -> set[int]:
+    """Parse "1-3,7" into chapter indexes; order-normalized, capped."""
+    sel: set[int] = set()
+    if not chapters:
+        return sel
+    try:
+        for part in chapters.split(","):
+            part = part.strip()
+            if "-" in part:
+                a, b = (int(x) for x in part.split("-", 1))
+                sel.update(range(min(a, b), max(a, b) + 1))
+            elif part:
+                sel.add(int(part))
+    except ValueError:
+        raise HTTPException(422, f"bad chapters {chapters!r}") from None
+    if len(sel) > 2000:
+        raise HTTPException(422, f"bad chapters {chapters!r}")
+    return sel
 
 
 def _status(d: Path, ch: ChaptersFile) -> dict[str, Any]:
