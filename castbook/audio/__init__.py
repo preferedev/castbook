@@ -68,7 +68,7 @@ def assemble_chapters(book: BookPaths, cfg: Settings, log: Callable[[str], None]
             )
             continue
         raw = out.with_suffix(".raw.wav")
-        data = pacing.assemble(units, wav_for)
+        data = pacing.assemble(units, wav_for, pause_scale=cfg.tts.pause_scale)
         sf.write(str(raw), data, SAMPLE_RATE)
         loudnorm(raw, out)
         raw.unlink(missing_ok=True)
