@@ -286,6 +286,51 @@ def transcript(
 
 
 @app.command()
+def info(
+    book: str,
+    config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+) -> None:
+    """Detailed status for one book: meta, chapters, render state, exports."""
+    cfg = _cfg(config)
+    b = _book(cfg, book)
+    ch = load_artifact(ChaptersFile, b.dir)
+    if ch is None:
+        typer.echo("not imported yet")
+        raise typer.Exit(1)
+    attrib = load_artifact(AttributionFile, b.dir)
+    manifest = load_artifact(AudioManifest, b.dir)
+    m = ch.meta
+    typer.echo(f"{m.title or b.book_id} ({b.book_id})")
+    typer.echo(f"  by {m.author or '?'} · lang {m.language} · {len(ch.chapters)} chapters")
+    if attrib:
+        speakers = {u.speaker for u in attrib.units}
+        typer.echo(
+            f"  {len(attrib.units)} units · {len(speakers)} speakers"
+            f" · {len(attrib.needs_review)} to review"
+        )
+    if manifest:
+        done = sum(1 for e in manifest.units.values() if e.status == UnitStatus.done)
+        failed = sum(1 for e in manifest.units.values() if e.status == UnitStatus.failed)
+        mins = sum(e.duration_s for e in manifest.units.values()) / 60
+        typer.echo(
+            f"  rendered {done} units ({mins:.1f} min)" + (f" · {failed} failed" if failed else "")
+        )
+        gaps = [
+            str(c.index)
+            for c in ch.chapters
+            if manifest.chapters.get(str(c.index)) is None
+            or manifest.chapters[str(c.index)].status != ChapterStatus.done
+        ]
+        if attrib:
+            typer.echo(f"  unrendered chapters: {','.join(gaps[:20]) or 'none'}")
+    exports = (
+        sorted(p.name for p in b.export.rglob("*") if p.is_file()) if b.export.is_dir() else []
+    )
+    if exports:
+        typer.echo(f"  exports: {', '.join(exports)}")
+
+
+@app.command()
 def review(
     book: str,
     set_speaker: Annotated[
