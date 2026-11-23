@@ -1371,7 +1371,7 @@ def _chapter_sel(chapters: str | None) -> set[int]:
             if "-" in part:
                 a, b = (int(x) for x in part.split("-", 1))
                 lo, hi = min(a, b), max(a, b)
-                if hi - lo + 1 > 2000 or len(sel) + hi - lo + 1 > 2000:
+                if hi - lo + 1 > 2000:
                     raise HTTPException(422, f"bad chapters {chapters!r}")
                 sel.update(range(lo, hi + 1))
             elif part:
