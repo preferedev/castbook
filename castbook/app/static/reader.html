@@ -69,7 +69,12 @@ $("thm").onclick = () => {
 };
 if (CB_TOKEN) document.getElementById("home-link").href = tok("/");
 const audio = new Audio();
-audio.onended = () => playAt(nextPlayable(cur));
+audio.onended = () => {
+  const n = nextPlayable(cur);
+  const armedCh = sleepIdx >= 0 && SLEEP_OPTS[sleepIdx] === "ch" ? (sleepCh >= 0 ? sleepCh : (cur >= 0 ? units[cur].chapter : -1)) : -1;
+  if (armedCh >= 0 && (n < 0 || units[n].chapter !== armedCh)) { sleepOff(); $("play").textContent = "▶"; return; }
+  playAt(n);
+};
 $("spd").onchange = e => audio.playbackRate = +e.target.value;
 
 async function boot() {
