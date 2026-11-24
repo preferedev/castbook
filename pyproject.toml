@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "castbook"
-version = "0.1.0"
+version = "0.5.0"
 description = "Turn any ebook into a full-cast audiobook — per-character voices, local-first."
 readme = "README.md"
 license = { text = "Apache-2.0" }

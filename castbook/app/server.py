@@ -1178,6 +1178,20 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
         book = _require_book(cfg, book_id)
         return {"matches": search_units(book.dir, q)}
 
+    @app.get("/api/search")
+    def search_all(q: str = Query(min_length=1)) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        if not cfg.data_dir.is_dir():
+            return {"matches": out}
+        for d in sorted(cfg.data_dir.iterdir()):
+            if (
+                d.is_dir()
+                and (d / "chapters.json").exists()
+                and (hits := search_units(d, q, limit=20))
+            ):
+                out[d.name] = hits
+        return {"matches": out}
+
     @app.get("/api/books/{book_id}/units")
     def units(book_id: str) -> dict[str, Any]:
         book = _require_book(cfg, book_id)

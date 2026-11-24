@@ -2,7 +2,9 @@
 
 All notable changes to Castbook. This project is pre-1.0; PRs land on `main` continuously.
 
-## Unreleased — quality tier (PRs #6–#23)
+## 0.5.0 — quality tier (PRs #6–#28)
+
+- **Batch ops (PRs #24–#28)**: `search --all` library-wide "who said it", `/api/search`, transcript/estimate `--chapters` subsets, reader sleep timer (15/30/45/end-of-chapter), config clamping for `emotion_strength`/`pause_scale`, stats failed-unit count, `open` token fix, range-labeled subset transcripts/EPUBs.
 
 - **TTS backends**: `kokoro` (default), `pocket` (fast CPU + voice cloning via `castbook clone`), `qwen` (VoiceDesign, GPU); switch from CLI or the UI backend dropdown.
 - **Attribution**: heuristic engine (quote-run turn tracking, vocatives, pronoun-gender, action beats, multilingual tags/quote styles), `llamacpp` for full-LLM, `hybrid` (LLM only where heuristic is unsure). Eval average ~89% heuristic / ~92% hybrid over 12 gold books.

@@ -1251,19 +1251,38 @@ def chapters(
 
 @app.command()
 def search(
-    book: str,
-    text: Annotated[str, typer.Argument(help="substring to find in unit text")],
+    book_or_text: Annotated[
+        str, typer.Argument(help="book id/name, or the text itself with --all")
+    ],
+    text: Annotated[str | None, typer.Argument(help="substring to find in unit text")] = None,
     config: Annotated[Path | None, typer.Option("--config", "-c")] = None,
+    all_: Annotated[
+        bool, typer.Option("--all", "-a", help="search every book in the library")
+    ] = False,
 ) -> None:
     """Who said it: list (chapter, speaker, excerpt) for every unit containing text."""
     cfg = _cfg(config)
-    b = _book(cfg, book)
-    hits = search_units(b.dir, text)
-    if not hits:
+    if text is None:
+        if not all_:
+            raise typer.BadParameter("give a book and text, or pass --all with just text")
+        text = book_or_text
+    dirs = (
+        [d for d in cfg.data_dir.iterdir() if (d / "chapters.json").exists()]
+        if all_ and cfg.data_dir.is_dir()
+        else [_book(cfg, book_or_text).dir]
+        if not all_
+        else []
+    )
+    found = False
+    for d in sorted(dirs):
+        hits = search_units(d, text)
+        prefix = f"{d.name} " if all_ else ""
+        for h in hits:
+            found = True
+            typer.echo(f"{prefix}ch{h['chapter']:<4} {h['speaker']:24} {h['excerpt']}")
+    if not found:
         typer.echo("no matches")
         raise typer.Exit(1)
-    for h in hits:
-        typer.echo(f"ch{h['chapter']:<4} {h['speaker']:24} {h['excerpt']}")
 
 
 @app.command()
