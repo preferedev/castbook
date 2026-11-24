@@ -16,3 +16,4 @@ config.toml
 
 # eval workdir artifacts
 eval/work/
+castbook.spec
