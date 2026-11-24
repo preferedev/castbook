@@ -153,7 +153,7 @@ the Qwen3-TTS VoiceDesign tier (per-character designed voices); run
 | Engine | Role | Hardware | License |
 |--------|------|----------|---------|
 | Kokoro-82M | default voices | CPU | Apache-2.0 |
-| Pocket-TTS | fast CPU voices + cloning | CPU | MIT |
+| Pocket-TTS | fast CPU voices + cloning | CPU | MIT code / CC-BY-4.0 voices |
 | Qwen3-TTS VoiceDesign | per-character designed voices | GPU | Apache-2.0 |
 | Qwen3-4B (llama.cpp) | speaker attribution | CPU | Apache-2.0 |
 | faster-whisper | word-level karaoke | CPU | MIT |
