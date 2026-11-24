@@ -67,6 +67,16 @@
   <div id="gb-results"></div>
 </details>
 
+<details id="libsearch-details">
+  <summary class="muted">Search your library — who said what, in which book</summary>
+  <div class="row" style="margin-top:.4rem">
+    <input id="ls-q" placeholder="quote or phrase" size="34">
+    <button id="ls-go" class="ghost">Search</button>
+    <span class="muted" id="ls-status"></span>
+  </div>
+  <div id="ls-results"></div>
+</details>
+
 <details id="readnow-details">
   <summary class="muted">Read now — paste text or an article URL, hear it instantly</summary>
   <div style="margin-top:.5rem">
@@ -526,6 +536,34 @@ async function gbSearch() {
 }
 $("gb-go").onclick = gbSearch;
 $("gb-q").onkeydown = (e) => { if (e.key === "Enter") gbSearch(); };
+
+async function libSearch() {
+  const q = $("ls-q").value.trim();
+  if (!q) return;
+  $("ls-status").textContent = "searching…";
+  $("ls-results").innerHTML = "";
+  let r;
+  try { r = await api(`/api/search?q=${encodeURIComponent(q)}`); }
+  catch (e) { $("ls-status").textContent = e.message; return; }
+  const books = Object.entries(r.matches);
+  $("ls-status").textContent = books.length ? "" : "no matches";
+  for (const [bid, hits] of books) {
+    const head = document.createElement("div");
+    head.className = "muted";
+    head.style.marginTop = ".4rem";
+    head.innerHTML = `<b>${esc(bid)}</b> — ${hits.length} hit${hits.length === 1 ? "" : "s"}`;
+    $("ls-results").appendChild(head);
+    for (const h of hits.slice(0, 10)) {
+      const row = document.createElement("div");
+      row.className = "muted";
+      row.style.cssText = "font-size:.85rem;margin-left:.8rem";
+      row.textContent = `ch${h.chapter} · ${h.speaker}: ${h.excerpt}`;
+      $("ls-results").appendChild(row);
+    }
+  }
+}
+$("ls-go").onclick = libSearch;
+$("ls-q").onkeydown = (e) => { if (e.key === "Enter") libSearch(); };
 
 $("import-url-btn").onclick = async () => {
   const url = $("import-url").value.trim();
