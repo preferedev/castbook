@@ -553,7 +553,7 @@ async function libSearch() {
     head.style.marginTop = ".4rem";
     head.innerHTML = `<b>${esc(bid)}</b> — ${hits.length} hit${hits.length === 1 ? "" : "s"}`;
     $("ls-results").appendChild(head);
-    for (const h of hits.slice(0, 10)) {
+    for (const h of hits) {
       const row = document.createElement("div");
       row.className = "muted";
       row.style.cssText = "font-size:.85rem;margin-left:.8rem";

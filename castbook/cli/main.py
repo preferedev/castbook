@@ -1268,8 +1268,10 @@ def search(
         text = book_or_text
     dirs = (
         [d for d in cfg.data_dir.iterdir() if (d / "chapters.json").exists()]
-        if all_
+        if all_ and cfg.data_dir.is_dir()
         else [_book(cfg, book_or_text).dir]
+        if not all_
+        else []
     )
     found = False
     for d in sorted(dirs):

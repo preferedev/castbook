@@ -1181,6 +1181,8 @@ def create_app(cfg: Settings, token: str | None = None) -> FastAPI:
     @app.get("/api/search")
     def search_all(q: str = Query(min_length=1)) -> dict[str, Any]:
         out: dict[str, Any] = {}
+        if not cfg.data_dir.is_dir():
+            return {"matches": out}
         for d in sorted(cfg.data_dir.iterdir()):
             if (
                 d.is_dir()
