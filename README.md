@@ -17,7 +17,17 @@ Same *Pride and Prejudice* passage — once as a flat single voice, once cast:
 ![Cast table — per-speaker voices, mixes, speeds and auditions](demo/cast.png)
 ![Reader mode](demo/reader.png)
 
-## Quickstart
+## Install
+
+Every tagged release ships standalone binaries (no Python needed):
+
+| OS | File | Notes |
+|----|------|-------|
+| Linux | `castbook-linux-x86_64` | `chmod +x` after download; needs `ffmpeg` (`apt install ffmpeg`) |
+| macOS (Apple Silicon) | `castbook-macos-arm64` | unsigned — right-click → Open the first time; needs `ffmpeg` (`brew install ffmpeg`) |
+| Windows | `castbook-windows-x86_64.exe` | needs an ffmpeg build on PATH |
+
+From source (any OS):
 
 ```bash
 uv venv && uv pip install -e '.[dev]'
@@ -138,8 +148,31 @@ all run locally; there is no telemetry.
 the Qwen3-TTS VoiceDesign tier (per-character designed voices); run
 `castbook doctor` for your machine's tier.
 
+## Engines & licenses
+
+| Engine | Role | Hardware | License |
+|--------|------|----------|---------|
+| Kokoro-82M | default voices | CPU | Apache-2.0 |
+| Pocket-TTS | fast CPU voices + cloning | CPU | MIT |
+| Qwen3-TTS VoiceDesign | per-character designed voices | GPU | Apache-2.0 |
+| Qwen3-4B (llama.cpp) | speaker attribution | CPU | Apache-2.0 |
+| faster-whisper | word-level karaoke | CPU | MIT |
+
+`castbook models list` shows every model with its license; nothing ships under
+a copyleft or non-commercial license.
+
 ## Legality
 
 For legally acquired, DRM-free books only. Castbook removes no DRM and uploads
 nothing — everything runs on your machine. Output is for personal use.
-Bundled models: Kokoro (Apache-2.0), Qwen3 (Apache-2.0).
+
+## Contributing
+
+Bug reports and PRs welcome. Dev setup is `uv pip install -e '.[dev]'` +
+`pre-commit install`; CI enforces `ruff`, `mypy --strict`, `pytest` and the
+attribution eval floor. Keep dependencies permissively licensed
+(Apache-2.0/MIT) — that is a hard project rule.
+
+## License
+
+MIT — see `LICENSE`.
